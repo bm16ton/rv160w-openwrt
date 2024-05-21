@@ -1,0 +1,117 @@
+#!/bin/sh
+# 03-03-2017: harry.lin <harry.lin@deltaww.com>
+# Add burn in test for facotry test require
+
+PKTS="/mnt/packages/burn_in/pktsend"
+# The same definition in file factory-check-interface
+IF_STATUS_RESULT="/mnt/packages/burn_in/test_result/if_status_result"
+
+PSD_ARGS=
+pktsd()
+{
+	echo "Start pkt send >>>>"
+	echo "."
+	$PKTS $* -dffffffffffff0011223344550806 &
+
+}
+
+print_interface_status()
+{
+	wantxstatus=`cat $IF_STATUS_RESULT |grep "WAN TX"|sed -n '$p'`
+	[ ! -z "${wantxstatus}" ] && echo "${wantxstatus}"
+
+	wanrxstatus=`cat $IF_STATUS_RESULT |grep "WAN RX"|sed -n '$p'`
+	[ ! -z "${wanrxstatus}" ] && echo "${wanrxstatus}"
+
+	lantxstatus=`cat $IF_STATUS_RESULT |grep "LAN TX"|sed -n '$p'`
+	[ ! -z "${lantxstatus}" ] && echo "${lantxstatus}"
+
+	lanrxstatus=`cat $IF_STATUS_RESULT |grep "LAN RX"|sed -n '$p'`
+	[ ! -z "${lanrxstatus}" ] && echo "${lanrxstatus}"
+
+	wlan0status=`cat $IF_STATUS_RESULT |grep 2.4G|sed -n '$p'`
+	[ ! -z "${wlan0status}" ] && echo "${wlan0status}"
+
+	wlan1status=`cat $IF_STATUS_RESULT |grep 5G|sed -n '$p'`
+	[ ! -z "${wlan1status}" ] && echo "${wlan1status}"
+}
+
+pid=`uci get systeminfo.sysinfo.pid|cut -d "-" -f 1`
+
+case "$1" in
+	"stop")
+		#Stop burn-in
+		time=`cat /proc/uptime | cut -f1 -d' '`
+		echo "Burn-in End Time: $time" >> /mnt/packages/burn_in/test_result/burn-in-status
+		/usr/bin/killall factory-check-interface
+		/usr/bin/killall pktsend
+		print_interface_status >> /mnt/packages/burn_in/test_result/burn-in-status
+		echo 0 > /sys/class/leds/rv160w::vpn-gled/brightness
+		exit 0
+		;;
+	*)
+		;;
+esac
+
+
+case "$pid" in
+	"RV160W"*)
+		IF_LIST="eth0 eth2 wl0 wl1"
+		;;
+	"RV160"*)
+		IF_LIST="eth0 eth2"
+		;;
+	"RV260W"*)
+		IF_LIST="eth0 eth2 wl0 wl1"
+		;;
+	"RV260"*)
+		IF_LIST="eth0 eth2"
+		;;
+	*)
+		echo "INVALID pid: $pid"
+		;;
+esac
+
+for if_name in $IF_LIST
+do
+	ifconfig $if_name up
+	echo "."
+	echo "Check interface $if_name status"
+	if [ `ifconfig $if_name|grep -c RUNNING` -eq 0 ]; then
+		echo "DOWN"
+		continue
+	else
+		echo "UP"
+	fi
+
+	PSD_ARGS="$PSD_ARGS -I $if_name "
+
+done
+
+echo 1 > /sys/class/leds/rv160w::vpn-gled/brightness
+
+#Start burn-in
+mkdir -p /mnt/packages/burn_in/test_result/
+time=`cat /proc/uptime | cut -f1 -d' '`
+echo "Burn-in Start Time: $time" > /mnt/packages/burn_in/test_result/burn-in-status
+
+if [ -n "$PSD_ARGS" ]; then
+	if [ -n "`echo "$PSD_ARGS" | egrep "wl0|wl1"`" ]; then
+		uci set wireless.@wifi-iface[0].encryption=none
+		uci set wireless.@wifi-iface[0].wps=0
+		uci delete wireless.@wifi-iface[0].key
+		uci set wireless.@wifi-iface[1].encryption=none
+		uci set wireless.@wifi-iface[1].wps=0
+		uci delete wireless.@wifi-iface[1].key
+		uci commit wireless
+		wifi
+		sleep 10
+	fi
+
+	pktsd $PSD_ARGS
+else
+	echo "No interface UP!!!!!"
+fi
+
+# Check the Interface Status
+/mnt/packages/burn_in/factory-check-interface &

@@ -1,0 +1,86 @@
+From 86ae826b8b4a6bf349f8472672456a0de527b48d Mon Sep 17 00:00:00 2001
+From: Veeresh Sajjan <veeresh.sajjan@nxp.com>
+Date: Mon, 21 Jan 2019 18:27:02 +0530
+Subject: [PATCH 2/2] SBR-5460: Fix for wlc_scbfindband crash when testing IP
+ group of webfiltering
+
+- The fix is from BRCM CSP #CS7042056
+
+Signed-off-by: Veeresh Sajjan <veeresh.sajjan@nxp.com>
+---
+ main/src/wl/sys/wlc_amsdu.c | 45 ++++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 36 insertions(+), 9 deletions(-)
+
+diff --git a/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+index 3f2f43a..9553274 100755
+--- a/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -375,9 +375,18 @@ wlc_amsdu_pkt_freed(wlc_info_t *wlc, void *pkt, uint txs)
+ 			scb = WLPKTTAGSCBGET(pkt);
+ 			if (scb && SCB_AMSDU(scb)) {
+ #ifndef WLENT_PER_VAP_CONFIG
+-				struct scb *newscb = (scb->bandunit < MAXBANDS)?
+-					wlc_scbfindband(wlc, bsscfg, &scb->ea, scb->bandunit): NULL;
+-				if (newscb == scb) {
++				struct scb     *newscb;
++				struct scb_iter scbiter;
++				int match = 0;
++
++				/* Before using the scb, need to check if this is stale first */
++				FOREACHSCB(wlc->scbstate, &scbiter, newscb) {
++					if (newscb == scb) {
++						match = 1;
++						break;
++					}
++				}
++				if (match){
+ 					wlc_amsdu_dotxstatus(wlc->ami, scb, pkt);
+ 				} else {
+ 					WL_AMSDU(("wl%d:%s: not count scb(%p) pkts\n",
+@@ -389,9 +398,18 @@ wlc_amsdu_pkt_freed(wlc_info_t *wlc, void *pkt, uint txs)
+ #else
+                 if (bsscfg && bsscfg->flag_vap_amsdu_override)
+                 {
+-				struct scb *newscb = (scb->bandunit < MAXBANDS)?
+-					wlc_scbfindband(wlc, bsscfg, &scb->ea, scb->bandunit): NULL;
+-				if (newscb == scb) {
++				struct scb     *newscb;
++				struct scb_iter scbiter;
++				int match = 0;
++
++				/* Before using the scb, need to check if this is stale first */
++				FOREACHSCB(wlc->scbstate, &scbiter, newscb) {
++					if (newscb == scb) {
++						match = 1;
++						break;
++					}
++				}
++				if (match){
+ 					wlc_amsdu_dotxstatus(SCB_BSSCFG(scb)->ami, scb, pkt);
+ 				} else {
+ 					WL_AMSDU(("wl%d:%s: not count scb(%p) pkts\n",
+@@ -403,9 +421,18 @@ wlc_amsdu_pkt_freed(wlc_info_t *wlc, void *pkt, uint txs)
+                 }
+                 else
+                 {
+-				struct scb *newscb;
+-				newscb = wlc_scbfindband(wlc, bsscfg, &scb->ea, scb->bandunit);
+-				if (newscb == scb) {
++				struct scb     *newscb;
++				struct scb_iter scbiter;
++				int match = 0;
++
++				/* Before using the scb, need to check if this is stale first */
++				FOREACHSCB(wlc->scbstate, &scbiter, newscb) {
++					if (newscb == scb) {
++						match = 1;
++						break;
++					}
++				}
++				if (match){
+ 					wlc_amsdu_dotxstatus(wlc->ami, scb, pkt);
+ 				} else {
+ 					WL_AMSDU(("wl%d:%s: not count scb(%p) pkts\n",
+-- 
+2.7.4
+

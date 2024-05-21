@@ -1,0 +1,249 @@
+From 438993c0d7586d9905d2a9e9e176981bf0ea289b Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:16:45 +0800
+Subject: [PATCH 33/63] wps-changes-saving
+Content-Type: text/plain; charset="utf-8"
+
+---
+ .../apps/wps/brcm_apps/linux/wps_linux_main.c      |   96 +++++++++++++++++++-
+ 1 file changed, 95 insertions(+), 1 deletion(-)
+
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index 467d8bc..4387840 100644
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -309,6 +309,7 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	unsigned char psk_mode = 0;
+ 	WpsEnrCred *cred = (WpsEnrCred *)credential;
+ 	char prefix[] = "wlXXXXXXXXXX_";
++	char both_prefix[] = "wlXXXXXXXXXX_";
+ 	bool b_wps_version2 = false;
+ 	char *value;
+ 	int new_auth = 0;
+@@ -316,6 +317,13 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	int new_wsec_restric = 1;
+ 	int new_wsec = 0;
+ 	int new_eap_restric = 0;
++	char update_ssid_profile[256] = {0};
++	char get_ssid_profile[256] = {0};
++	char temp_key[65] = {0};
++	char both_ifname[IFNAMSIZ];
++	int both_mark = 0;
++	FILE *fp = NULL;
++	char radio_result[8] = {0};
+ 
+ 	value = nvram_get("wps_version2");
+ 	if (value && !strcmp(value, "enabled"))
+@@ -330,6 +338,23 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	TUTRACE((TUTRACE_INFO,
+ 		"nvram set key = %s keyMgmt = %s ssid = %s(b_configured)\n",
+ 		cred->nwKey, cred->keyMgmt, cred->ssid));
++	
++	/* get current SSID */
++	wlc_ssid_t cur_ssid;
++	wl_ioctl(ifname, WLC_GET_SSID, &cur_ssid, sizeof(cur_ssid));
++
++	/* If ssid is in Both mode, set another band to same settings */
++	sprintf(get_ssid_profile, "/usr/bin/wps_get_profile.sh %s %s\n", ifname, cur_ssid.SSID);
++	system(get_ssid_profile);
++	if ((fp = popen("nvram get wps_both_ssid", "r")) != NULL) {
++		if (fgets(radio_result, sizeof(radio_result), fp) != NULL) {
++			both_mark = 1;
++			memset(both_ifname, 0, sizeof(both_ifname));
++			strncpy(both_ifname, radio_result, strlen(radio_result)-1);
++		}
++
++		pclose(fp);
++	}
+ 
+ 	/* convert os name to wl name */
+ 	if (osifname_to_nvifname(ifname, prefix, sizeof(prefix)) != 0) {
+@@ -338,6 +363,14 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	}
+ 	strcat(prefix, "_");
+ 
++	if (both_mark) {
++		if (osifname_to_nvifname(both_ifname, both_prefix, sizeof(both_prefix)) != 0) {
++			TUTRACE((TUTRACE_INFO, "Convert to nvname failed\n"));
++			return 0;
++		}
++		strcat(both_prefix, "_");
++	}
++
+ 	/* Check credential */
+ 	if (findstr(cred->keyMgmt, "WPA-PSK"))
+ 		psk_mode |= 1;
+@@ -356,21 +389,29 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	switch (psk_mode) {
+ 	case 1:
+ 		wps_osl_set_conf(strcat_r(prefix, "akm", tmp), "psk ");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "akm", tmp), "psk ");
+ 		new_wpa_auth = 4;
+ 		new_wsec = 2;
+ 		break;
+ 	case 2:
+ 		wps_osl_set_conf(strcat_r(prefix, "akm", tmp), "psk2 ");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "akm", tmp), "psk2 ");
+ 		new_wpa_auth = 128;
+ 		new_wsec = 4;
+ 		break;
+ 	case 3:
+ 		wps_osl_set_conf(strcat_r(prefix, "akm", tmp), "psk psk2 ");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "akm", tmp), "psk psk2 ");
+ 		new_wpa_auth = 132;
+ 		new_wsec = 6;
+ 		break;
+ 	default:
+ 		wps_osl_set_conf(strcat_r(prefix, "akm", tmp), "");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "akm", tmp), "");
+ 		new_wpa_auth = 0;
+ 		new_wsec = 0;
+ 		break;
+@@ -378,25 +419,35 @@ set_wsec(char *ifname, void *credential, int mode)
+ 
+ 	if (findstr(cred->keyMgmt, "SHARED")) {
+ 		wps_osl_set_conf(strcat_r(prefix, "auth", tmp), "1");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "auth", tmp), "1");
+ 		new_auth = 1;
+ 	}
+ 	else {
+ 		wps_osl_set_conf(strcat_r(prefix, "auth", tmp), "0");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "auth", tmp), "0");
+ 		new_auth = 0;
+ 	}
+ 
+ 	/* set SSID */
+ 	wlc_ssid_t ssid;
+ 	wps_osl_set_conf(strcat_r(prefix, "ssid", tmp), cred->ssid);
++	if (both_mark)
++		wps_osl_set_conf(strcat_r(both_prefix, "ssid", tmp), cred->ssid);
+ 	
+ 	ssid.SSID_len = cred->ssidLen;
+ 	strncpy((char *)ssid.SSID, cred->ssid, cred->ssidLen);
+ 
+ 	/* Update SSID */
+ 	wl_ioctl(ifname, WLC_SET_SSID, &ssid, sizeof(ssid));
++	if (both_mark)
++		wl_ioctl(both_ifname, WLC_SET_SSID, &ssid, sizeof(ssid));
+ 
+ 	if (psk_mode) {
+ 		wps_osl_set_conf(strcat_r(prefix, "wep", tmp), "disabled");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "wep", tmp), "disabled");
+ 	}
+ 
+ 	/* for version 2, force aes if tkip is on */
+@@ -407,25 +458,37 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	/* set Encr type */
+ 	if (cred->encrType == WPS_ENCRTYPE_NONE) {
+ 		wps_osl_set_conf(strcat_r(prefix, "wep", tmp), "disabled");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "wep", tmp), "disabled");
+ 	}
+ 	else if (cred->encrType == WPS_ENCRTYPE_WEP) {
+ 		wps_osl_set_conf(strcat_r(prefix, "wep", tmp), "enabled");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "wep", tmp), "enabled");
+ 		new_wsec = 1;
+ 	}
+ 	else if (cred->encrType == WPS_ENCRTYPE_TKIP) {
+ 		wps_osl_set_conf(strcat_r(prefix, "crypto", tmp), "tkip");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "crypto", tmp), "tkip");
+ 		new_wsec = 2;
+ 	}
+ 	else if (cred->encrType == WPS_ENCRTYPE_AES) {
+ 		wps_osl_set_conf(strcat_r(prefix, "crypto", tmp), "aes");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "crypto", tmp), "aes");
+ 		new_wsec = 4;
+ 	}
+ 	else if (cred->encrType == (WPS_ENCRTYPE_TKIP | WPS_ENCRTYPE_AES)) {
+ 		wps_osl_set_conf(strcat_r(prefix, "crypto", tmp), "tkip+aes");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "crypto", tmp), "tkip+aes");
+ 		new_wsec = 6;
+ 	}
+ 	else {
+ 		wps_osl_set_conf(strcat_r(prefix, "crypto", tmp), "tkip");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "crypto", tmp), "tkip");
+ 		new_wsec = 2;
+ 	}
+ 
+@@ -433,19 +496,27 @@ set_wsec(char *ifname, void *credential, int mode)
+ 		char buf[16] = {0};
+ 		sprintf(buf, "%d", cred->wepIndex);
+ 		wps_osl_set_conf(strcat_r(prefix, "key", tmp), buf);
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "key", tmp), buf);
+ 		sprintf(buf, "key%d", cred->wepIndex);
+ 		set_wep_key(strcat_r(prefix, buf, tmp), cred->nwKey, cred->nwKeyLen);
++		if (both_mark)
++			set_wep_key(strcat_r(both_prefix, buf, tmp), cred->nwKey, cred->nwKeyLen);
+ 	}
+ 	else {
+ 		/* set key */
+ 		if (cred->nwKeyLen < 64) {
+ 			wps_osl_set_conf(strcat_r(prefix, "wpa_psk", tmp), cred->nwKey);
++			if (both_mark)
++				wps_osl_set_conf(strcat_r(both_prefix, "wpa_psk", tmp), cred->nwKey);
++			memcpy(temp_key, cred->nwKey, cred->nwKeyLen);
+ 		}
+ 		else {
+-			char temp_key[65] = {0};
+ 			memcpy(temp_key, cred->nwKey, 64);
+ 			temp_key[64] = 0;
+ 			wps_osl_set_conf(strcat_r(prefix, "wpa_psk", tmp), temp_key);
++			if (both_mark)
++				wps_osl_set_conf(strcat_r(both_prefix, "wpa_psk", tmp), temp_key);
+ 		}
+ 	}
+ 
+@@ -463,14 +534,37 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	wl_ioctl(ifname, WLC_SET_WEP_RESTRICT, &new_wsec_restric, sizeof(int));
+ 	wl_ioctl(ifname, WLC_UP, NULL, 0);
+ 
++	if (both_mark) {
++		wl_ioctl(both_ifname, WLC_DOWN, NULL, 0);
++		wl_ioctl(both_ifname, WLC_SET_AUTH, &new_auth, sizeof(int));
++		wl_ioctl(both_ifname, WLC_SET_WPA_AUTH, &new_wpa_auth, sizeof(int));
++		wl_ioctl(both_ifname, WLC_SET_EAP_RESTRICT, &new_eap_restric, sizeof(int));
++		wl_ioctl(both_ifname, WLC_SET_WSEC, &new_wsec, sizeof(int));
++		wl_ioctl(both_ifname, WLC_SET_WEP_RESTRICT, &new_wsec_restric, sizeof(int));
++		wl_ioctl(both_ifname, WLC_UP, NULL, 0);
++	}
++
++	if (both_mark)
++		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 1 %s %s %d %s",
++				ifname, cur_ssid.SSID, cred->ssid, psk_mode, temp_key);
++	else
++		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 0 %s %s %d %s",
++				ifname, cur_ssid.SSID, cred->ssid, psk_mode, temp_key);
++
++	system(update_ssid_profile);
++
+ 	/* Disable nmode for WEP and TKIP for TGN spec */
+ 	switch (cred->encrType) {
+ 	case WPS_ENCRTYPE_WEP:
+ 	case WPS_ENCRTYPE_TKIP:
+ 		wps_osl_set_conf(strcat_r(prefix, "nmode", tmp), "0");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "nmode", tmp), "0");
+ 		break;
+ 	default:
+ 		wps_osl_set_conf(strcat_r(prefix, "nmode", tmp), "-1");
++		if (both_mark)
++			wps_osl_set_conf(strcat_r(both_prefix, "nmode", tmp), "-1");
+ 		break;
+ 	}
+ 
+-- 
+1.7.10
+

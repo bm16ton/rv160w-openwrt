@@ -1,0 +1,18 @@
+#!/bin/sh
+
+[ "$DEVICE" == "lo" ] && exit 0
+
+. /lib/functions.sh
+
+local isboot=$(uci_get_state system.core.booted)
+[ "$isboot" != "1" ] && exit 0
+
+case "$INTERFACE" in vlan*) exit 0 ;; gre*) exit 0 ;; esac
+
+#grep -Eq "option '?dns_type'? '?isp'?" /tmp/etc/config/dhcp || exit 0
+
+case "$ACTION" in
+	ifup|ifupdate|ifdown)
+		/etc/init.d/dnsmasq reload &
+	;;
+esac

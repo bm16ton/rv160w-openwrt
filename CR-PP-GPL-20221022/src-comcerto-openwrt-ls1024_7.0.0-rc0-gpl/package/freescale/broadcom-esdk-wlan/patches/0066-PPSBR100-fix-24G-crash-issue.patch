@@ -1,0 +1,121 @@
+From f7370aa3f29302696956e05900403b6774c4d531 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Tue, 25 Apr 2017 13:48:04 +0800
+Subject: [PATCH] PPSBR-100 fix  2.4G crash issue
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/shared/hnd_pktq.c |   38 +++++++++++++++++++++++++++++++++++---
+ 1 file changed, 35 insertions(+), 3 deletions(-)
+ mode change 100644 => 100755 main/src/shared/hnd_pktq.c
+
+diff --git a/main/src/shared/hnd_pktq.c b/main/src/shared/hnd_pktq.c
+old mode 100644
+new mode 100755
+index de834b6..86bbcdf
+--- a/main/src/shared/hnd_pktq.c
++++ b/main/src/shared/hnd_pktq.c
+@@ -55,7 +55,10 @@ pktq_penq(struct pktq *pq, int prec, void *p)
+ 
+ 	ASSERT(!pktq_full(pq));
+ 	ASSERT(!pktq_pfull(pq, prec));
+-
++	if(NULL != PKTLINK(p))
++	{
++		PKTSETLINK(p, NULL);
++	}
+ 	q = &pq->q[prec];
+ 
+ 	if (q->head)
+@@ -92,7 +95,11 @@ pktq_penq_head(struct pktq *pq, int prec, void *p)
+ 
+ 	ASSERT(!pktq_full(pq));
+ 	ASSERT(!pktq_pfull(pq, prec));
+-
++	if(NULL != PKTLINK(p))
++	{
++		PKTSETLINK(p, NULL);
++	}
++	
+ 	q = &pq->q[prec];
+ 
+ 	if (q->head == NULL)
+@@ -223,7 +230,7 @@ void * BCMFASTPATH BCMSPEEDOPT
+ pktq_pdeq(struct pktq *pq, int prec)
+ {
+ 	struct pktq_prec *q;
+-	void *p;
++	void *p = NULL;
+ 
+ 	/* protect shared resource */
+ 	if (HND_PKTQ_MUTEX_ACQUIRE(&pq->mutex, OSL_EXT_TIME_FOREVER) != OSL_EXT_SUCCESS)
+@@ -233,6 +240,9 @@ pktq_pdeq(struct pktq *pq, int prec)
+ 
+ 	q = &pq->q[prec];
+ 
++	if(0 == q->len)
++		goto done;
++
+ 	if ((p = q->head) == NULL)
+ 		goto done;
+ 
+@@ -267,6 +277,9 @@ pktq_pdeq_prev(struct pktq *pq, int prec, void *prev_p)
+ 
+ 	q = &pq->q[prec];
+ 
++	if(0 == q->len)
++		goto done;
++
+ 	if (prev_p == NULL)
+ 		goto done;
+ 
+@@ -301,6 +314,11 @@ pktq_pdeq_with_fn(struct pktq *pq, int prec, ifpkt_cb_t fn, int arg)
+ 	ASSERT(prec >= 0 && prec < pq->num_prec);
+ 
+ 	q = &pq->q[prec];
++	if(0 == q->len)
++	{
++		p = NULL;	
++		goto done;	
++	}
+ 	p = q->head;
+ 
+ 	while (p) {
+@@ -353,6 +371,11 @@ pktq_pdeq_tail(struct pktq *pq, int prec)
+ 
+ 	q = &pq->q[prec];
+ 
++	if(0 == q->len)
++	{
++		p = NULL;
++		goto done;
++	}
+ 	if ((p = q->head) == NULL)
+ 		goto done;
+ 
+@@ -1042,6 +1065,10 @@ pktq_swenq(struct swpktq *pq, int prec, void *p)
+ 
+ 	ASSERT(!pktq_sw_full(pq));
+ 	ASSERT(!pktq_swfull(pq, prec));
++	if(NULL != PKTLINK(p))
++	{
++		PKTSETLINK(p, NULL);
++	}
+ 
+ 	q = &pq->q[prec];
+ 
+@@ -1079,6 +1106,11 @@ pktq_swenq_head(struct swpktq *pq, int prec, void *p)
+ 
+ 	ASSERT(!pktq_sw_full(pq));
+ 	ASSERT(!pktq_swfull(pq, prec));
++	if(NULL != PKTLINK(p))
++	{
++		PKTSETLINK(p, NULL);
++	}
++
+ 
+ 	q = &pq->q[prec];
+ 
+-- 
+1.7.10
+

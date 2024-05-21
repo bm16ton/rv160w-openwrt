@@ -1,0 +1,2 @@
+#!/bin/sh
+kill -9 `ps -w | grep startpoeled | grep -v grep | awk '{ print $1 }'`

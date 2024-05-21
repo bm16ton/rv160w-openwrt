@@ -1,0 +1,33 @@
+From e1e4d092ecf08a58778368571ca0e6720e5b9975 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:23:00 +0800
+Subject: [PATCH 24/63] wpa2-pktcloss-fix
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc.c |    9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/main/src/wl/sys/wlc.c b/main/src/wl/sys/wlc.c
+index bd5797b..a41edae 100755
+--- a/main/src/wl/sys/wlc.c
++++ b/main/src/wl/sys/wlc.c
+@@ -32742,6 +32742,15 @@ wlc_sendup_chain(wlc_info_t *wlc, void *head)
+ 		ASSERT(!SCB_A4_DATA(scb));
+ 		bsscfg = SCB_BSSCFG(scb);
+ 
++#if defined(NCNB_CSKB) && defined(CPKTC)
++		if(h->fc & htol16(FC_WEP)) {
++			PKTMSPDOFSTREF(p) += 4 ;
++			if (bsscfg->WPA_auth) {
++				PKTMSPDOFSTREF(p) += 4 ;
++			}
++		}
++#endif
++
+ 		/* update per-scb stat counters */
+ 		WLCNTSCBINCR(scb->scb_stats.rx_ucast_pkts);
+ 		WLCNTSCBADD(scb->scb_stats.rx_ucast_bytes, pkt_len);
+-- 
+1.7.10
+

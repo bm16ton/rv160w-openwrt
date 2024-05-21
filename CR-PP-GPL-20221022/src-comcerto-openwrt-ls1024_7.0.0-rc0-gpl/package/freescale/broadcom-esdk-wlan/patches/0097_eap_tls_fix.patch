@@ -1,0 +1,13 @@
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index 0315169..34a7ce3 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -5092,7 +5092,7 @@ wl_sendup(wl_info_t *wl, wl_if_t *wlif, void *p, int numpkt)
+ 
+ #ifdef PPFE_FASTPATH 
+     /* If packet could be fast forwarded, then offload the packet to ethernet vwd driver */
+-    if (likely(!comcerto_wifi_rx_fastpath(skb))) {
++    if (!brcm_specialpkt && likely(!comcerto_wifi_rx_fastpath(skb))) {
+         return;
+     }	
+ #endif

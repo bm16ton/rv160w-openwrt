@@ -1,0 +1,53 @@
+From c678ced91c585ef08ab70cf54ff8a8c3e0e45fc4 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:34:42 +0800
+Subject: [PATCH 58/63] fix-crashed-with-DEVICEREMOVED-detected
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_bmac.c |    5 +++++
+ main/src/wl/sys/wlc_intr.c |    3 ++-
+ 2 files changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/main/src/wl/sys/wlc_bmac.c b/main/src/wl/sys/wlc_bmac.c
+index 81f7a41..53c91c3 100755
+--- a/main/src/wl/sys/wlc_bmac.c
++++ b/main/src/wl/sys/wlc_bmac.c
+@@ -16776,8 +16776,11 @@ wlc_bmac_iovar_dispatch(wlc_hw_info_t *wlc_hw, uint32 actionid,
+ 	}
+ 
+ 	case IOV_GVAL(IOV_BMAC_CIS_SOURCE): {
++		uint32 macintmask;
++		macintmask = wl_intrsoff(wlc_hw->wlc->wl);
+ 		if ((*ret_int_ptr = wlc_bmac_cissource(wlc_hw)) == BCME_ERROR)
+ 			err = BCME_ERROR;
++		wl_intrsrestore(wlc_hw->wlc->wl, macintmask);
+ 		break;
+ 	}
+ 
+@@ -17405,6 +17408,8 @@ wlc_bmac_cissource(wlc_hw_info_t *wlc_hw)
+ {
+ 	int ret = 0;
+ 
++	WL_TRACE(("Enter %s\n.", __func__));
++
+ 	switch (si_cis_source(wlc_hw->sih)) {
+ 	case CIS_OTP:
+ 		ret = WLC_CIS_OTP;
+diff --git a/main/src/wl/sys/wlc_intr.c b/main/src/wl/sys/wlc_intr.c
+index 21eb880..8529816 100755
+--- a/main/src/wl/sys/wlc_intr.c
++++ b/main/src/wl/sys/wlc_intr.c
+@@ -927,7 +927,8 @@ wlc_isr(wlc_info_t *wlc, bool *wantdpc)
+             }
+         } 
+ #endif
+-		WL_ERROR(("wl%d: DOWN detected in %s.\n", wlc_hw->unit, __func__));
++		WL_ERROR(("wl%d: DOWN detected (up = %d, macintmask = %d) in %s.\n",
++			wlc_hw->unit, wlc_hw->up, wlc_hw->macintmask, __func__));
+         return (FALSE);
+     }
+ 	/* read and clear macintstatus and intstatus registers */
+-- 
+1.7.10
+

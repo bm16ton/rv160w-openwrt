@@ -1,0 +1,15 @@
+diff -ruaN a/src/soc/robo/gex/sec.c b/src/soc/robo/gex/sec.c
+--- a/src/soc/robo/gex/sec.c	2017-07-18 14:51:10.926197182 +0530
++++ b/src/soc/robo/gex/sec.c	2017-07-18 14:52:41.038197171 +0530
+@@ -524,7 +524,10 @@
+                        */
+             temp = BCM_GEX_EAP_PORT_BLOCK_INGRESS;
+         } else {
+-            temp = BCM_GEX_EAP_PORT_BLOCK_INGRESS_EGRESS;
++	    // As per BCM comment changed BCM_GEX_EAP_PORT_BLOCK_INGRESS_EGRESS to BCM_GEX_EAP_PORT_BLOCK_NONE
++            //temp = BCM_GEX_EAP_PORT_BLOCK_INGRESS_EGRESS;
++              temp = BCM_GEX_EAP_PORT_BLOCK_NONE;
++
+         }
+ 
+         SOC_IF_ERROR_RETURN(soc_PORT_EAP_CONr_field_set

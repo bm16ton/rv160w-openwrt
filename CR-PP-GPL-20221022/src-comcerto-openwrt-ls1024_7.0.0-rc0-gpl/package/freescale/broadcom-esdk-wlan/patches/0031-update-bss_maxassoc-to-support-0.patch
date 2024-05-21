@@ -1,0 +1,27 @@
+From a977afb6d16c2087e6b187f7e108b0099f8e86f1 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:09:34 +0800
+Subject: [PATCH 31/63] update-bss_maxassoc-to-support-0
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_ap.c |    3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/main/src/wl/sys/wlc_ap.c b/main/src/wl/sys/wlc_ap.c
+index 8239732..fc98973 100755
+--- a/main/src/wl/sys/wlc_ap.c
++++ b/main/src/wl/sys/wlc_ap.c
+@@ -393,7 +393,8 @@ static const bcm_iovar_t wlc_ap_iovars[] = {
+ 	(IOVF_WHL|IOVF_RSDB_SET), IOVT_UINT32, 0
+ 	},
+ 	{"bss_maxassoc", IOV_BSS_MAXASSOC,
+-	(IOVF_NTRL), IOVT_UINT32, 0
++//	(IOVF_NTRL), IOVT_UINT32, 0
++	(0), IOVT_UINT32, 0
+ 	},
+ 	{"bss", IOV_BSS,
+ 	(0), IOVT_INT32, 0
+-- 
+1.7.10
+

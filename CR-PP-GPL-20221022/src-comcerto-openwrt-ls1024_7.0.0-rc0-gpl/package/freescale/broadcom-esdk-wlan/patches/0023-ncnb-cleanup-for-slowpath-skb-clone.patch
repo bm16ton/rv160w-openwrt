@@ -1,0 +1,26 @@
+From 2a7481b42e77c9dacb3516ae373dfdc6c14b9cb2 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:21:48 +0800
+Subject: [PATCH 23/63] ncnb-cleanup-for-slowpath-skb-clone
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wl_linux.c |    2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index 70a472f..59d7cab 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -5104,6 +5104,8 @@ sendup_next:
+                int datalen = PKTLEN(wl->osh,skb) - (ETHER_HDR_LEN - ETHER_TYPE_LEN);
+                memcpy(PKTDATA(wl->osh,skb) + (ETHER_HDR_LEN - ETHER_TYPE_LEN), PKTMSPDDATA(wl->osh,skb) + PKTMSPDOFST((wl->osh),skb) , datalen);
+                PKTMSPDLENREF(skb) = 0;
++	       kfree(skb->mspd_data);
++	       skb->mspd_data=NULL;
+        }
+ #endif
+ 
+-- 
+1.7.10
+

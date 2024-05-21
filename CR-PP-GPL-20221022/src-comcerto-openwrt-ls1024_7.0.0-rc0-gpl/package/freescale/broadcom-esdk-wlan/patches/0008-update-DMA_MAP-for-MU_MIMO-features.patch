@@ -1,0 +1,64 @@
+From 54d6d7205c91ddf82e570cc983e97696ba772eed Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 17:45:36 +0800
+Subject: [PATCH 08/63] update-DMA_MAP-for-MU_MIMO-features
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/shared/hnddma.c   |    8 ++++++--
+ main/src/wl/sys/wlc_bmac.c |    2 ++
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/main/src/shared/hnddma.c b/main/src/shared/hnddma.c
+index d8dcb32..b99b2ee 100644
+--- a/main/src/shared/hnddma.c
++++ b/main/src/shared/hnddma.c
+@@ -1274,9 +1274,9 @@ dma64_dd_upd(dma_info_t *di, dma64dd_t *ddring, dmaaddr_t pa, uint outidx, uint3
+     if (!arch_is_coherent()) 
+ #endif
+     {
+-#if defined(BCM47XX_CA9) && !defined(__NetBSD__) && !defined(BULK_DESCR_FLUSH)
++//#if defined(BCM47XX_CA9) && !defined(__NetBSD__) && !defined(BULK_DESCR_FLUSH)
+ 	    DMA_MAP(di->osh, (void *)(((uint)(&ddring[outidx])) & ~0x1f), 32, DMA_TX, NULL, NULL);
+-#endif /* BCM47XX_CA9 && !__NetBSD__ && !BULK_DESCR_FLUSH */
++//#endif /* BCM47XX_CA9 && !__NetBSD__ && !BULK_DESCR_FLUSH */
+ 
+ #if defined(CONFIG_BCM94908) /*WLENT*/
+ /* Write back / flush the DMA desriptor from CPU cache to main memory
+@@ -5279,6 +5279,8 @@ dma64_dd_upd_64_from_params(dma_info_t *di, dma64dd_t *ddring, dma64addr_t pa, u
+ 	    DMA_MAP(di->osh, (void *)(((uint64)(&ddring[outidx])) & ~0x1f), 32, DMA_TX, NULL, NULL);
+ #endif /* CONFIG_BCM94908 */
+ 
++	DMA_MAP(di->osh, (void *)(((uint)(&ddring[outidx])) & ~0x1f), 32, DMA_TX, NULL, NULL);
++
+ #if defined(__ARM_ARCH_7A__) && defined(CA7)
+ 	/* memory barrier before posting the descriptor */
+ 	DMB();
+@@ -5304,6 +5306,8 @@ dma64_dd_upd_64_from_struct(dma_info_t *di, dma64dd_t *ddring, dma64dd_t *dd, ui
+     DMA_MAP(di->osh, (void *)(((uint64)(&ddring[outidx])) & ~0x1f), 32, DMA_TX, NULL, NULL);
+ #endif /* CONFIG_BCM49408 */
+ 
++	DMA_MAP(di->osh, (void *)(((uint)(&ddring[outidx])) & ~0x1f), 32, DMA_TX, NULL, NULL);
++
+ #if defined(__ARM_ARCH_7A__) && defined(CA7)
+ 	/* memory barrier before posting the descriptor */
+ 	DMB();
+diff --git a/main/src/wl/sys/wlc_bmac.c b/main/src/wl/sys/wlc_bmac.c
+index 13e205e..5ba42f9 100644
+--- a/main/src/wl/sys/wlc_bmac.c
++++ b/main/src/wl/sys/wlc_bmac.c
+@@ -3873,9 +3873,11 @@ BCMINITFN(wlc_bmac_dma_param_set)(wlc_hw_info_t *wlc_hw, uint bustype, hnddma_t
+ 				dma_mr = wlc_bmac_dma_max_outstread(wlc_hw);
+ #endif
+ 				dma_param_set(di, HNDDMA_PID_TX_MULTI_OUTSTD_RD, dma_mr);
++				dma_param_set(di, HNDDMA_PID_TX_MULTI_OUTSTD_RD, 2 /*dma_mr*/);
+ 				dma_param_set(di, HNDDMA_PID_TX_PREFETCH_CTL, dmactl->txpfc);
+ 				dma_param_set(di, HNDDMA_PID_TX_PREFETCH_THRESH, dmactl->txpft);
+ 				dma_param_set(di, HNDDMA_PID_TX_BURSTLEN, dmactl->txblen);
++				dma_param_set(di, HNDDMA_PID_TX_BURSTLEN, 4 /*dmactl->txblen*/);
+ 				dma_param_set(di, HNDDMA_PID_RX_PREFETCH_CTL, dmactl->rxpfc);
+ 				dma_param_set(di, HNDDMA_PID_RX_PREFETCH_THRESH, dmactl->rxpft);
+ 				dma_param_set(di, HNDDMA_PID_RX_BURSTLEN, dmactl->rxblen);
+-- 
+1.7.10
+

@@ -1,0 +1,61 @@
+From 3c9bf6a680071a6400db3a3ab9f5b839eea3dcae Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 20:00:31 +0800
+Subject: [PATCH 45/63] fix-special-characters-for-passphrase
+Content-Type: text/plain; charset="utf-8"
+
+---
+ .../apps/wps/brcm_apps/linux/wps_linux_main.c      |   20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index fc6cc67..2d0f7a1 100755
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -545,11 +545,14 @@ set_wsec(char *ifname, void *credential, int mode)
+ 
+ 	char cur_ssid_fixed[DOT11_MAX_SSID_LEN * 4 + 1] = {0};
+ 	char new_ssid_fixed[DOT11_MAX_SSID_LEN * 4 + 1] = {0};
++	char temp_key_fixed[65 * 4 + 1] = {0};
+ 	char *p_cur_ssid = cur_ssid_fixed;
+ 	char *p_new_ssid = new_ssid_fixed;
++	char *p_temp_key = temp_key_fixed;
+ 	int ssid_len_idx = 0;
+ 	int cur_ssid_len = strlen(cur_ssid.SSID);
+ 	int new_ssid_len = strlen(cred->ssid);
++	int temp_key_len = strlen(temp_key);
+ 
+ 	for (ssid_len_idx = 0; ssid_len_idx < cur_ssid_len; ssid_len_idx++) {
+ 		if ((cur_ssid.SSID[ssid_len_idx] == '\\') ||
+@@ -577,13 +580,26 @@ set_wsec(char *ifname, void *credential, int mode)
+ 		p_new_ssid++;
+ 	}
+ 	
++	for (ssid_len_idx = 0; ssid_len_idx < temp_key_len; ssid_len_idx++) {
++		if ((temp_key[ssid_len_idx] == '\\') ||
++		   	(temp_key[ssid_len_idx] == '"')) {
++			if (temp_key[ssid_len_idx] == '\\') {
++				*p_temp_key++ = '\\';
++				*p_temp_key++ = '\\';
++			}
++			*p_temp_key++ = '\\';
++		}
++		*p_temp_key = temp_key[ssid_len_idx];
++		p_temp_key++;
++	}
++	
+ 	/* save the changes to CDB */
+ 	if (both_mark)
+ 		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 1 \"%s\" \"%s\" %d \"%s\" &",
+-				ifname, cur_ssid_fixed, new_ssid_fixed, psk_mode, temp_key);
++				ifname, cur_ssid_fixed, new_ssid_fixed, psk_mode, temp_key_fixed);
+ 	else
+ 		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 0 \"%s\" \"%s\" %d \"%s\" &",
+-				ifname, cur_ssid_fixed, new_ssid_fixed, psk_mode, temp_key);
++				ifname, cur_ssid_fixed, new_ssid_fixed, psk_mode, temp_key_fixed);
+ 
+ 	system(update_ssid_profile);
+ 
+-- 
+1.7.10
+

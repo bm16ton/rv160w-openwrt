@@ -1,0 +1,409 @@
+From 8b2afed7367c4adf2ea186269a51e3d99826ac28 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 17:43:32 +0800
+Subject: [PATCH 05/63] update-nvram-with-uci
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/router/nvram/Makefile      |    2 +-
+ main/components/router/nvram/nvram_linux.c |  297 +++++++++++++++++++++++++++-
+ 2 files changed, 297 insertions(+), 2 deletions(-)
+
+diff --git a/main/components/router/nvram/Makefile b/main/components/router/nvram/Makefile
+index 46be037..d23b368 100644
+--- a/main/components/router/nvram/Makefile
++++ b/main/components/router/nvram/Makefile
+@@ -28,7 +28,7 @@ CFLAGS  += -Os
+ else
+ CFLAGS  += -O2
+ endif
+-LDFLAGS += -L.
++LDFLAGS += -L. -luci
+ 
+ vpath %.c $(SRCBASE)/shared/nvram
+ 
+diff --git a/main/components/router/nvram/nvram_linux.c b/main/components/router/nvram/nvram_linux.c
+index 8167987..3e5cda4 100644
+--- a/main/components/router/nvram/nvram_linux.c
++++ b/main/components/router/nvram/nvram_linux.c
+@@ -33,7 +33,15 @@
+ #include <typedefs.h>
+ #include <bcmnvram.h>
+ 
++#ifndef FREESCALE_ARCH
+ #define PATH_DEV_NVRAM "/dev/nvram"
++#else
++#include <uci.h>
++struct uci_context *uci_ctx = NULL;
++char *name_fixed = NULL;
++int name_fixed_len = 0;
++int name_need_len = 0;
++#endif
+ #define CODE_BUFF	16
+ #define HEX_BASE	16
+ 
+@@ -46,10 +54,10 @@ static char *nvram_buf = NULL;
+ int
+ nvram_init(void *unused)
+ {
+-
+ 	if (nvram_fd >= 0)
+ 		return 0;
+ 
++#ifndef FREESCALE_ARCH
+ 	if ((nvram_fd = open(PATH_DEV_NVRAM, O_RDWR)) < 0)
+ 		goto err;
+ 
+@@ -68,11 +76,23 @@ nvram_init(void *unused)
+ err:
+ 	perror(PATH_DEV_NVRAM);
+ 	return errno;
++#else
++	if (!uci_ctx) {
++		uci_ctx = uci_alloc_context();
++		if (!uci_ctx)
++			return -1;
++	}
++
++	nvram_fd = 1;
++
++	return 0;
++#endif
+ }
+ 
+ char *
+ nvram_get(const char *name)
+ {
++#ifndef FREESCALE_ARCH
+ 	ssize_t count = strlen(name) + 1;
+ 	char tmp[100], *value;
+ 	unsigned long *off = (unsigned long *) tmp;
+@@ -100,6 +120,62 @@ nvram_get(const char *name)
+ 
+ 	if (off != (unsigned long *) tmp)
+ 		free(off);
++#else
++	char *value;
++	const char *opt;
++
++	if (nvram_init(NULL))
++		return NULL;
++
++	char *dot = strchr(name, '.');
++	int tmp_len = 0;
++	if (NULL == dot) {
++		name_need_len = strlen(name);
++	} else {
++		name_need_len = strlen(name) + 2;
++	}
++	if (name_need_len > name_fixed_len) {
++		name_fixed = (char *)realloc(name_fixed, name_need_len+1);
++		if (NULL == name_fixed)
++			return NULL;
++
++	} else {
++		if (NULL == name_fixed) {
++			name_fixed = (char *)malloc(name_need_len+1);
++
++			if (NULL == name_fixed)
++				return NULL;
++		}
++	}
++		
++	memset(name_fixed, 0, name_need_len+1);
++	if (NULL == dot) {
++		memcpy(name_fixed, name, name_need_len);
++	} else {
++		tmp_len = strlen(name) - strlen(dot);
++		memcpy(name_fixed, name, tmp_len);
++		memcpy(name_fixed+tmp_len, "___", 3);
++		memcpy(name_fixed+tmp_len+3, dot+1, strlen(dot)-1);
++	}
++
++	struct uci_ptr ptr = {
++		.package = "wificonfig",
++		.section = "nvram",
++	};
++
++	if (uci_lookup_ptr(uci_ctx, &ptr, NULL, true))
++		return NULL;
++
++	if (!ptr.s || strcmp(ptr.s->type, "nvram") != 0)
++		return NULL;
++
++	opt = uci_lookup_option_string(uci_ctx, ptr.s, name_fixed);
++	if (!opt)
++		return NULL;
++
++	value = opt;
++
++#endif
+ 
+ 	return value;
+ }
+@@ -147,6 +223,135 @@ nvram_set_bitflag(const char *name, const int bit, const int value)
+ 	return nvram_set(name, nvram_val);
+ }
+ 
++#ifdef FREESCALE_ARCH
++static enum {
++	CLI_FLAG_MERGE =    (1 << 0),
++	CLI_FLAG_QUIET =    (1 << 1),
++	CLI_FLAG_NOCOMMIT = (1 << 2),
++	CLI_FLAG_BATCH =    (1 << 3),
++	CLI_FLAG_SHOW_EXT = (1 << 4),
++} flags;
++
++struct uci_type_list {
++	unsigned int idx;
++	const char *name;
++	struct uci_type_list *next;
++};
++
++static struct uci_type_list *type_list = NULL;
++static char *typestr = NULL;
++static const char *cur_section_ref = NULL;
++
++static void
++uci_reset_typelist(void)
++{
++	struct uci_type_list *type;
++	while (type_list != NULL) {
++		type = type_list;
++		type_list = type_list->next;
++		free(type);
++	}
++	if (typestr) {
++		free(typestr);
++		typestr = NULL;
++	}
++	cur_section_ref = NULL;
++}
++
++static char *
++uci_lookup_section_ref(struct uci_section *s)
++{
++	struct uci_type_list *ti = type_list;
++	int maxlen;
++
++	if (!s->anonymous || !(flags & CLI_FLAG_SHOW_EXT))
++		return s->e.name;
++
++	/* look up in section type list */
++	while (ti) {
++		if (strcmp(ti->name, s->type) == 0)
++			break;
++		ti = ti->next;
++	}
++	if (!ti) {
++		ti = malloc(sizeof(struct uci_type_list));
++		if (!ti)
++			return NULL;
++		memset(ti, 0, sizeof(struct uci_type_list));
++		ti->next = type_list;
++		type_list = ti;
++		ti->name = s->type;
++	}
++
++	maxlen = strlen(s->type) + 1 + 2 + 10;
++	if (!typestr) {
++		typestr = malloc(maxlen);
++	} else {
++		typestr = realloc(typestr, maxlen);
++	}
++
++	if (typestr)
++		sprintf(typestr, "@%s[%d]", ti->name, ti->idx);
++
++	ti->idx++;
++
++	return typestr;
++}
++
++static void uci_get_option(char *buf, int *count, struct uci_option *o)
++{
++	int ret = 0;
++	char *t = NULL;
++	const char *sname;
++	char *sname_fixed = NULL;
++
++	sname = o->e.name;
++
++	t = strstr(sname, "___");
++	if (NULL != t) {
++		sname_fixed = (char *)malloc(strlen(sname));
++		if (NULL == sname_fixed)
++			return;
++
++		memset(sname_fixed, 0, strlen(sname));
++		memcpy(sname_fixed, sname, strlen(sname)-strlen(t));
++		memcpy(sname_fixed+strlen(sname)-strlen(t), ".", 1);
++		memcpy(sname_fixed+strlen(sname)-strlen(t)+1, t+3, strlen(t)-3);
++		ret = snprintf(buf, *count-2, "%s=%s", sname_fixed, o->v.string);
++	} else {
++		ret = snprintf(buf, *count, "%s=%s", sname, o->v.string);
++	}
++	*count -= (ret+1);
++}
++
++static void uci_get_section(char *buf, int *count, struct uci_section *s)
++{
++
++	struct uci_element *e;
++	int left_count = *count;
++
++	uci_foreach_element(&s->options, e) {
++		uci_get_option(buf+*count-left_count, &left_count, uci_to_option(e));
++	}
++}
++
++static int uci_get_package(char *buf, int count, struct uci_package *p)
++{
++	struct uci_element *e;
++	int left_count = count;
++
++	uci_reset_typelist();
++	uci_foreach_element( &p->sections, e) {
++		struct uci_section *s = uci_to_section(e);
++		cur_section_ref = uci_lookup_section_ref(s);
++		uci_get_section(buf+count - left_count, &left_count, s);
++	}
++	uci_reset_typelist();
++
++	return count - left_count;
++}
++#endif
++
+ int
+ nvram_getall(char *buf, int count)
+ {
+@@ -159,6 +364,7 @@ nvram_getall(char *buf, int count)
+ 	if (count == 0)
+ 		return 0;
+ 
++#ifndef FREESCALE_ARCH
+ 	/* Get all variables */
+ 	*buf = '\0';
+ 
+@@ -168,11 +374,23 @@ nvram_getall(char *buf, int count)
+ 		perror(PATH_DEV_NVRAM);
+ 
+ 	return (ret == count) ? 0 : ret;
++#else
++	memset(buf, 0, count);
++	struct uci_ptr ptr;
++	if (uci_lookup_ptr(uci_ctx, &ptr, "wificonfig", true) != UCI_OK) {
++		return -1;
++	}
++
++	ret = uci_get_package(buf, count, ptr.p);
++
++	return (ret == count) ? 0 : ret;
++#endif
+ }
+ 
+ static int
+ _nvram_set(const char *name, const char *value)
+ {
++#ifndef FREESCALE_ARCH
+ 	size_t count = strlen(name) + 1;
+ 	char tmp[100], *buf = tmp;
+ 	int ret;
+@@ -203,6 +421,63 @@ _nvram_set(const char *name, const char *value)
+ 		free(buf);
+ 
+ 	return (ret == count) ? 0 : ret;
++#else
++	if (nvram_init(NULL))
++		return -1;
++
++	char *dot = strchr(name, '.');
++	int tmp_len = 0;
++	if (NULL == dot) {
++		name_need_len = strlen(name);
++	} else {
++		name_need_len = strlen(name) + 2;
++	}
++	if (name_need_len > name_fixed_len) {
++		name_fixed = (char *)realloc(name_fixed, name_need_len+1);
++		if (NULL == name_fixed)
++			return -1;
++	} else {
++		if (NULL == name_fixed) {
++			name_fixed = (char *)malloc(name_need_len+1);
++
++			if (NULL == name_fixed)
++				return -1;
++		}
++	}
++	
++	memset(name_fixed, 0, name_need_len+1);
++	if (NULL == dot) {
++		memcpy(name_fixed, name, name_need_len);
++	} else {
++		tmp_len = strlen(name) - strlen(dot);
++		memcpy(name_fixed, name, tmp_len);
++		memcpy(name_fixed+tmp_len, "___", 3);
++		memcpy(name_fixed+tmp_len+3, dot+1, strlen(dot)-1);
++	}
++
++	char *value_fixed = value;
++	if (NULL == value)
++		value_fixed = "";
++
++	struct uci_ptr ptr = {
++		.package = "wificonfig",
++		.section = "nvram",
++		.option = name_fixed,
++		.value = value_fixed,
++	};
++
++	if (uci_lookup_ptr(uci_ctx, &ptr, NULL, true))
++		return -1;
++	
++	if (!ptr.s || strcmp(ptr.s->type, "nvram") != 0)
++		return -1;
++
++	uci_set(uci_ctx, &ptr);
++
++	uci_save(uci_ctx, ptr.p);
++
++	return 0;
++#endif
+ }
+ 
+ int
+@@ -225,10 +500,30 @@ nvram_commit(void)
+ 	if ((ret = nvram_init(NULL)))
+ 		return ret;
+ 
++#ifndef FREESCALE_ARCH
+ 	ret = ioctl(nvram_fd, NVRAM_MAGIC, NULL);
+ 
+ 	if (ret < 0)
+ 		perror(PATH_DEV_NVRAM);
+ 
+ 	return ret;
++#else
++	nvram_fd = -1;
++
++    if (!uci_ctx)
++	        return 0;
++	struct uci_ptr ptr;
++
++	if (uci_lookup_ptr(uci_ctx, &ptr, "wificonfig", true) != UCI_OK) {
++		return -1;
++	}
++
++
++	uci_commit(uci_ctx, &ptr.p, false);
++
++	uci_free_context(uci_ctx);
++	uci_ctx = NULL;
++#endif
++
++	return 0;
+ }
+-- 
+1.7.10
+

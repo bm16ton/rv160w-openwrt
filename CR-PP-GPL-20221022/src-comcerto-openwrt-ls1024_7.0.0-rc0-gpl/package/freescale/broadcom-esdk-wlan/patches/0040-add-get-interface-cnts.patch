@@ -1,0 +1,258 @@
+From 8d285639ddea67a114e850d6b31ccf15a4ff8f43 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:34:09 +0800
+Subject: [PATCH 40/63] add-get-interface-cnts
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/include/wlioctl.h     |   30 ++++++++++++++++++++++++++++++
+ main/src/wl/sys/wlc.c          |   28 ++++++++++++++++++++++++++++
+ sys/src/include/wlioctl.h      |   30 ++++++++++++++++++++++++++++++
+ sys/src/supp/include/wlioctl.h |   30 ++++++++++++++++++++++++++++++
+ sys/src/wl/exe/GNUmakefile     |    3 +++
+ sys/src/wl/exe/wlu.c           |   39 +++++++++++++++++++++++++++++++++++++++
+ 6 files changed, 160 insertions(+)
+
+diff --git a/main/src/include/wlioctl.h b/main/src/include/wlioctl.h
+index a511ebf..a6929ec 100755
+--- a/main/src/include/wlioctl.h
++++ b/main/src/include/wlioctl.h
+@@ -1351,6 +1351,36 @@ typedef struct get_pktcnt {
+ 	uint rx_ocast_good_pkt; /* unicast packets destined for others */
+ } get_pktcnt_t;
+ 
++#if (THIRD_PARTY_ARCH == 1)
++typedef struct get_if_cnt {
++	uint16	version;		/* version of the structure */
++	uint16	length;			/* length of the entire structure */
++	uint32	PAD;			/* padding */
++
++	/* transmit stat counters */
++	uint64	txframe;		/* tx data frames */
++	uint64	txbyte;			/* tx data bytes */
++	uint64	txerror;		/* tx data errors (derived: sum of others) */
++	uint64  txnobuf;		/* tx out of buffer errors */
++	uint64  txrunt;			/* tx runt frames */
++	uint64  txfail;			/* tx failed frames */
++	uint64	txretry;		/* tx retry frames */
++	uint64	txretrie;		/* tx multiple retry frames */
++	uint64	txfrmsnt;		/* tx sent frames */
++	uint64	txmulti;		/* tx mulitcast sent frames */
++	uint64	txfrag;			/* tx fragments sent */
++
++	/* receive stat counters */
++	uint64	rxframe;		/* rx data frames */
++	uint64	rxbyte;			/* rx data bytes */
++	uint64	rxerror;		/* rx data errors (derived: sum of others) */
++	uint64	rxnobuf;		/* rx out of buffer errors */
++	uint64  rxrunt;			/* rx runt frames */
++	uint64  rxfragerr;		/* rx fragment errors */
++	uint64	rxmulti;		/* rx multicast frames */
++} get_if_cnt_t;
++#endif
++
+ /* NINTENDO2 */
+ #define LQ_IDX_MIN              0
+ #define LQ_IDX_MAX              1
+diff --git a/main/src/wl/sys/wlc.c b/main/src/wl/sys/wlc.c
+index 3347eee..2c7e27a 100755
+--- a/main/src/wl/sys/wlc.c
++++ b/main/src/wl/sys/wlc.c
+@@ -16074,6 +16074,7 @@ _wlc_ioctl(void *ctx, int cmd, void *arg, int len, struct wlc_if *wlcif)
+   }
+ #endif /* WLENT_SNR */
+ 
++#if (THIRD_PARTY_ARCH == 0)
+ 	case WLC_GET_PKTCNTS: {
+ 		get_pktcnt_t *pktcnt = (get_pktcnt_t*)pval;
+ 		if (WLC_UPDATE_STATS(wlc))
+@@ -16090,6 +16091,33 @@ _wlc_ioctl(void *ctx, int cmd, void *arg, int len, struct wlc_if *wlcif)
+ 		}
+ 		break;
+ 	}
++#else
++	case WLC_GET_PKTCNTS: {
++		get_if_cnt_t *if_cnt = (get_if_cnt_t *)pval;
++		if (WLC_UPDATE_STATS(wlc))
++			wlc_statsupd(wlc);
++
++		if_cnt->txframe = WLCNTVAL(wlcif->_cnt.txframe);
++		if_cnt->txbyte = WLCNTVAL(wlcif->_cnt.txbyte);
++		if_cnt->txerror = WLCNTVAL(wlcif->_cnt.txerror);
++		if_cnt->txnobuf = WLCNTVAL(wlcif->_cnt.txnobuf);
++		if_cnt->txrunt = WLCNTVAL(wlcif->_cnt.txrunt);
++		if_cnt->txfail = WLCNTVAL(wlcif->_cnt.txfail);
++		if_cnt->txretry = WLCNTVAL(wlcif->_cnt.txretry);
++		if_cnt->txretrie = WLCNTVAL(wlcif->_cnt.txretrie);
++		if_cnt->txfrmsnt = WLCNTVAL(wlcif->_cnt.txfrmsnt);
++		if_cnt->txmulti = WLCNTVAL(wlcif->_cnt.txmulti);
++		if_cnt->txfrag = WLCNTVAL(wlcif->_cnt.txfrag);
++		if_cnt->rxframe = WLCNTVAL(wlcif->_cnt.rxframe);
++		if_cnt->rxbyte = WLCNTVAL(wlcif->_cnt.rxbyte);
++		if_cnt->rxerror = WLCNTVAL(wlcif->_cnt.rxerror);
++		if_cnt->rxnobuf = WLCNTVAL(wlcif->_cnt.rxnobuf);
++		if_cnt->rxrunt = WLCNTVAL(wlcif->_cnt.rxrunt);
++		if_cnt->rxfragerr = WLCNTVAL(wlcif->_cnt.rxfragerr);
++		if_cnt->rxmulti = WLCNTVAL(wlcif->_cnt.rxmulti);
++		break;
++	}
++#endif
+ 
+ 	case WLC_GET_WSEC:
+ 		bcmerror = wlc_iovar_op(wlc, "wsec", NULL, 0, arg, len, IOV_GET, wlcif);
+diff --git a/sys/src/include/wlioctl.h b/sys/src/include/wlioctl.h
+index 2b87299..34b3bf0 100755
+--- a/sys/src/include/wlioctl.h
++++ b/sys/src/include/wlioctl.h
+@@ -1414,6 +1414,36 @@ typedef struct get_pktcnt {
+ 	uint rx_ocast_good_pkt; /**< unicast packets destined for others */
+ } get_pktcnt_t;
+ 
++#if (THIRD_PARTY_ARCH == 1)
++typedef struct get_if_cnt {
++	uint16  version;        /* version of the structure */
++	uint16  length;         /* length of the entire structure */
++	uint32  PAD;            /* padding */
++
++	/* transmit stat counters */
++	uint64  txframe;        /* tx data frames */
++	uint64  txbyte;         /* tx data bytes */
++	uint64  txerror;        /* tx data errors (derived: sum of others) */
++	uint64  txnobuf;        /* tx out of buffer errors */
++	uint64  txrunt;         /* tx runt frames */
++	uint64  txfail;         /* tx failed frames */
++	uint64  txretry;        /* tx retry frames */
++	uint64  txretrie;       /* tx multiple retry frames */
++	uint64  txfrmsnt;       /* tx sent frames */
++	uint64  txmulti;        /* tx mulitcast sent frames */
++	uint64  txfrag;         /* tx fragments sent */
++
++	/* receive stat counters */
++	uint64  rxframe;        /* rx data frames */
++	uint64  rxbyte;         /* rx data bytes */
++	uint64  rxerror;        /* rx data errors (derived: sum of others) */
++	uint64  rxnobuf;        /* rx out of buffer errors */
++	uint64  rxrunt;         /* rx runt frames */
++	uint64  rxfragerr;      /* rx fragment errors */
++	uint64  rxmulti;        /* rx multicast frames */
++} get_if_cnt_t;
++#endif
++
+ /* NINTENDO2 */
+ #define LQ_IDX_MIN              0
+ #define LQ_IDX_MAX              1
+diff --git a/sys/src/supp/include/wlioctl.h b/sys/src/supp/include/wlioctl.h
+index 3781558..0df0e72 100644
+--- a/sys/src/supp/include/wlioctl.h
++++ b/sys/src/supp/include/wlioctl.h
+@@ -864,6 +864,36 @@ typedef struct get_pktcnt {
+ 	uint rx_ocast_good_pkt; /* unicast packets destined for others */
+ } get_pktcnt_t;
+ 
++#if (THIRD_PARTY_ARCH == 1)
++typedef struct get_if_cnt {
++	uint16  version;        /* version of the structure */
++	uint16  length;         /* length of the entire structure */
++	uint32  PAD;            /* padding */
++
++	/* transmit stat counters */
++	uint64  txframe;        /* tx data frames */
++	uint64  txbyte;         /* tx data bytes */
++	uint64  txerror;        /* tx data errors (derived: sum of others) */
++	uint64  txnobuf;        /* tx out of buffer errors */
++	uint64  txrunt;         /* tx runt frames */
++	uint64  txfail;         /* tx failed frames */
++	uint64  txretry;        /* tx retry frames */
++	uint64  txretrie;       /* tx multiple retry frames */
++	uint64  txfrmsnt;       /* tx sent frames */
++	uint64  txmulti;        /* tx mulitcast sent frames */
++	uint64  txfrag;         /* tx fragments sent */
++
++	/* receive stat counters */
++	uint64  rxframe;        /* rx data frames */
++	uint64  rxbyte;         /* rx data bytes */
++	uint64  rxerror;        /* rx data errors (derived: sum of others) */
++	uint64  rxnobuf;        /* rx out of buffer errors */
++	uint64  rxrunt;         /* rx runt frames */
++	uint64  rxfragerr;      /* rx fragment errors */
++	uint64  rxmulti;        /* rx multicast frames */
++} get_if_cnt_t;
++#endif
++
+ /* Linux network driver ioctl encoding */
+ typedef struct wl_ioctl {
+ 	uint cmd;	/* common ioctl definition */
+diff --git a/sys/src/wl/exe/GNUmakefile b/sys/src/wl/exe/GNUmakefile
+index d08153a..60c8d6f 100644
+--- a/sys/src/wl/exe/GNUmakefile
++++ b/sys/src/wl/exe/GNUmakefile
+@@ -100,6 +100,9 @@ ifeq ($(OLYMPIC_RWL),1)
+     CFLAGS += -DOLYMPIC_RWL
+ endif
+ 
++ifeq ($(THIRD_PARTY_ARCH),1)
++    CFLAGS += -DTHIRD_PARTY_ARCH=1
++endif
+ 
+ ifneq ($(findstring $(TARGETENV), "linux linuxmips linuxmips_be linuxarm linuxarm_le android android_ndk_r6b freebsd freebsd_be"),)
+ 
+diff --git a/sys/src/wl/exe/wlu.c b/sys/src/wl/exe/wlu.c
+index ebfa038..1dfbcd2 100644
+--- a/sys/src/wl/exe/wlu.c
++++ b/sys/src/wl/exe/wlu.c
+@@ -17739,6 +17739,7 @@ retry:
+ #endif   /* BWL_FILESYSTEM_SUPPORT */
+ }
+ 
++#if (THIRD_PARTY_ARCH == 0)
+ static int
+ wl_get_pktcnt(void *wl, cmd_t *cmd, char **argv)
+ {
+@@ -17759,6 +17760,44 @@ wl_get_pktcnt(void *wl, cmd_t *cmd, char **argv)
+ 
+ 	return ret;
+ }
++#else
++static int
++wl_get_pktcnt(void *wl, cmd_t *cmd, char **argv)
++{
++	int ret;
++	get_if_cnt_t if_cnt;
++
++	//UNUSED_PARAMETER(argv);
++	// skip the command name
++	argv++;
++
++	memset(&if_cnt, 0, sizeof(if_cnt));
++	if ((ret = wlu_get(wl, cmd->get, &if_cnt, sizeof(if_cnt))) < 0)
++		return ret;
++
++	if (!*argv || (strcmp(argv[0], "0") == 0)) {
++		printf("txframe %d txbyte %d txerror %d txnobuf %d txrunt %d txfail %d txretry %d txretrie %d txfrmsnt %d txmulti %d txfrag %d\n",
++			   dtoh32(if_cnt.txframe), dtoh32(if_cnt.txbyte), dtoh32(if_cnt.txerror),
++			   dtoh32(if_cnt.txnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.txfail),
++			   dtoh32(if_cnt.txretry), dtoh32(if_cnt.txretrie), dtoh32(if_cnt.txfrmsnt),
++			   dtoh32(if_cnt.txmulti), dtoh32(if_cnt.txfrag));
++		printf("rxframe %d rxbyte %d rxerror %d rxnobuf %d rxrunt %d rxfragerr %d rxmulti %d\n",
++			   dtoh32(if_cnt.rxframe), dtoh32(if_cnt.rxbyte), dtoh32(if_cnt.rxerror),
++			   dtoh32(if_cnt.rxnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.rxfragerr),
++			   dtoh32(if_cnt.rxmulti));
++	} else {
++		printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
++			   dtoh32(if_cnt.txframe), dtoh32(if_cnt.txbyte), dtoh32(if_cnt.txerror),
++			   dtoh32(if_cnt.txnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.txfail),
++			   dtoh32(if_cnt.txretry), dtoh32(if_cnt.txretrie), dtoh32(if_cnt.txfrmsnt),
++			   dtoh32(if_cnt.txmulti), dtoh32(if_cnt.txfrag),
++			   dtoh32(if_cnt.rxframe), dtoh32(if_cnt.rxbyte), dtoh32(if_cnt.rxerror),
++			   dtoh32(if_cnt.rxnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.rxfragerr),
++			   dtoh32(if_cnt.rxmulti));
++	}
++	return ret;
++}
++#endif
+ 
+ static cntry_name_t *
+ wlc_cntry_name_to_country(char *long_name)
+-- 
+1.7.10
+

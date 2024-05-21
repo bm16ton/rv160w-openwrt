@@ -1,0 +1,17 @@
+#!/bin/sh
+
+lease_file="/tmp/udhcpc.log"
+touch "${lease_file}"
+if [ "X$(cat "${lease_file}")" = "X" ]; then
+   echo "" >> "${lease_file}"
+fi
+
+if [ ! -z ${vendor_encap} ]; then
+   sed -i "1ioption vendor-encapsulated-options \"${vendor_encap}\";" ${lease_file}
+fi
+if [ ! -z ${domain} ]; then
+   sed -i "1ioption domain-name \"${domain}\";" ${lease_file}
+fi
+if [ ! -z ${dns} ]; then
+   sed -i "1ioption domain-name-servers \"${dns}\";" ${lease_file}
+fi

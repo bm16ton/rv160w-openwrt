@@ -1,0 +1,40 @@
+config wifi-device wl0
+    option type     broadcom
+    option channel  auto
+    option hwmode   'b g n'
+	option htmode	40
+	option disabled 1
+	option txpower '25'
+
+config wifi-iface
+    option device   wl0
+    option network  lan
+    option mode     ap
+    option ssid     CiscoSB-Setup
+    option isolate 1
+    option wps      1
+	option encryption 'psk2'
+	option key 'cisco123'
+	option vlanid	1
+	option disabled	0
+
+config wifi-device wl1
+    option type     broadcom
+    option channel  auto
+    option htmode   80
+    option hwmode   'a n ac'
+	option mu_mimo	0
+	option disabled 1
+	option txpower '25'
+
+config wifi-iface
+    option device   wl1
+    option network  lan
+    option mode     ap
+    option ssid     CiscoSB-Setup
+    option isolate 1
+    option wps      1
+	option encryption 'psk2'
+	option key 'cisco123'
+	option vlanid	1
+	option disabled	0

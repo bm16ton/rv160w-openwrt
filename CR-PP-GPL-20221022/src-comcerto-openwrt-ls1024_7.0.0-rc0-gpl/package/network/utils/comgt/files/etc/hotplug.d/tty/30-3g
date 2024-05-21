@@ -1,0 +1,152 @@
+#!/bin/sh
+# 2017-08-22: li.zhang <li.zhang@deltaww.com>
+# Porting the E3276
+# 2017-04-13: li.zhang <li.zhang@deltaww.com>
+# Add the special dongle dealwith
+# 2017-04-13: li.zhang <li.zhang@deltaww.com>
+# modify the ps command
+# 2017-03-13: li.zhang <li.zhang@deltaww.com>
+# the initial 3g hotplug file
+. /lib/functions.sh
+. /lib/netifd/netifd-proto.sh
+
+# USB_STATUS in "USBx:dev_device:mount_point:type:status" format
+USB_CONN_STATUS=/var/USBCONNSTATUS
+USB_NUM=
+DEVMODEM=/dev/modem
+
+USB1COMPORT="/tmp/TTY_USB1"
+USB2COMPORT="/tmp/TTY_USB2"
+
+USBPORT1="usb3"
+USBPORT2="usb1"
+
+find_3g_iface() {
+	local cfg="$1"
+	local tty="$2"
+	local usb_num="$3"
+	local devicename="$4"
+	local reload="$5"
+	local proto
+	config_get proto "$cfg" proto
+	[ "$proto" = 3g ] || [ "$proto" = mobile ] || return 0
+
+	if [ "$ACTION" = add ]; then
+		exist=`ps -w | grep connect_detect | grep -v grep |wc -l`
+
+		if [ "$exist" = "0" ];then
+			/usr/bin/connect_detect.sh &
+		fi
+
+		if [ "$reload" = 1 ];then
+			enable=`uci get network.$cfg.enable` >/dev/null 2>&1
+			if [ "$enable" = 0 ];then
+				uci set network.$cfg.enable=1
+				cp /tmp/.uci/network /tmp/networkconfig
+				uci commit network
+				#/etc/init.d/network reload
+				ubus call network reload
+                                /sbin/mtu-mac-enable reload
+			fi
+			driver=$(readlink /sys/class/tty/$devicename/device/driver/module)
+			if [ $driver ]; then
+				driver=$(basename $driver)
+				if [ "$driver" = "option" ]; then
+					if [ "$cfg" = "usb1" ] && [ "$usb_num" = 1 ];then
+						proto_set_available "$cfg" "1"
+					fi
+					if [ "$cfg" = "usb2" ] && [ "$usb_num" = 2 ];then
+						proto_set_available "$cfg" "1"
+					fi
+				fi
+			fi
+		fi
+	fi
+	
+	if [ "$ACTION" = remove ]; then
+		killall -9 connect_detect.sh
+		if [ "$cfg" = "usb1" ] && [ "$usb_num" = 1 ];then
+			proto_set_available "$cfg" "0"
+		fi
+		if [ "$cfg" = "usb2" ] && [ "$usb_num" = 2 ];then
+			proto_set_available "$cfg" "0"
+		fi
+	fi
+}
+
+case "$DEVICENAME" in
+	ttyUSB*)
+		USB_NUM=
+		Reload_network=0		
+		tmp=`echo $DEVPATH | grep $USBPORT1`
+		# Check which port the com port is connected.
+		if [ -n "$tmp" ];then
+			USB_NUM=1
+		else
+			USB_NUM=2
+		fi
+
+		if [ "$ACTION" = add ]; then
+			if [ "$USB_NUM" = 1 ];then
+				echo $DEVICENAME >> $USB1COMPORT
+			else
+				echo $DEVICENAME >> $USB2COMPORT
+			fi
+
+			# The U620L exit
+			local proto
+			proto=`uci get networki.usb1.proto`
+			temp=`ls /sys/class/usbmisc/cdc-wdm0/device/net`
+			[ "$temp" = "wwan0" ] && [ "$proto" != "3g" ] && return 0
+
+			driver=$(readlink /sys/class/tty/$DEVNAME/device/driver/module)
+			if [ $driver ]; then
+				driver=$(basename $driver)
+				if [ "$driver" = "option" ]; then
+					# Update the USB Status
+					usbconnstatus=`cat $USB_CONN_STATUS | grep "^USB${USB_NUM}"`
+					if [ -n "$usbconnstatus" ];then
+						# We need to log this info that to only 1 time.
+						already_detected=`cat $USB_CONN_STATUS | grep "^USB${USB_NUM}" | cut -d : -f 5`
+						[ "$already_detected" = 0 ] && {
+							logger -t mobile -p local0.info "usb${USB_NUM}: Detected 3G device"
+							Reload_network=1
+						}
+                                        	`sed -i "/^USB${USB_NUM}:/c\USB${USB_NUM}:$DEVICENAME::3G:1" $USB_CONN_STATUS`
+                                	else
+                                		logger -t mobile -p local0.info "usb${USB_NUM}: Detected 3G device"
+                                        	echo "USB${USB_NUM}:$DEVICENAME::3G:1" >> $USB_CONN_STATUS
+                                        	Reload_network=1
+                                	fi
+				fi
+			fi
+		fi
+		
+		if [ "$ACTION" = remove ]; then
+			if [ "$USB_NUM" = 1 ];then
+				sed -i "/$DEVICENAME/d" $USB1COMPORT >/dev/null 2>&1
+			else
+				sed -i "/$DEVICENAME/d" $USB2COMPORT >/dev/null 2>&1
+			fi
+
+			detect=$(cat /var/USBCONNSTATUS | awk -F: '{printf $4}')
+			[ "$detect" = "3G" ] || return 0
+
+			# Update the 3G connection status
+			usbport=`cat $USB_CONN_STATUS | grep $DEVICENAME | cut -d : -f 1`
+        	        if [ -n "$usbport" ];then
+				logger -t mobile -p local0.info "usb${USB_NUM}: 3G device removed"
+        	                rm -rf $DEVMODEM$USB_NUM
+        	                `sed -i "/^USB$USB_NUM:/c\USB$USB_NUM::::0" $USB_CONN_STATUS`
+
+				# Delete the dongle statistics
+				`sh /usr/bin/update_mobile.sh "del" "$DEVMODEM$USB_NUM"`	
+        	        fi
+		fi
+		
+		[ -e "/dev/$DEVICENAME" ] || [ "$ACTION" = remove ] || exit 0
+		config_load network
+		config_foreach find_3g_iface interface "/dev/$DEVICENAME" "$USB_NUM" "$DEVNAME" "$Reload_network"
+	;;
+esac
+

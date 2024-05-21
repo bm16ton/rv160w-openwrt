@@ -1,0 +1,351 @@
+From 159a1ba67ccee9fa275de76041882aa313956cd1 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 17 May 2017 13:24:48 +0800
+Subject: [PATCH] Torrey_Pines_CE_patch
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/phy/wlc_phy_ac.c  |   54 +++++++++++++++++++++++++++++++++++++-
+ main/src/wl/phy/wlc_phy_cmn.c |   12 +++++++--
+ main/src/wl/phy/wlc_phy_int.h |    3 +++
+ main/src/wl/phy/wlc_phy_n.c   |   58 ++++++++++++++++++++++++++++++++++++++++-
+ main/src/wl/sys/wlc_ap.c      |   23 +++++++++++-----
+ 5 files changed, 140 insertions(+), 10 deletions(-)
+
+diff --git a/main/src/wl/phy/wlc_phy_ac.c b/main/src/wl/phy/wlc_phy_ac.c
+index 0234eba..5015d7d 100644
+--- a/main/src/wl/phy/wlc_phy_ac.c
++++ b/main/src/wl/phy/wlc_phy_ac.c
+@@ -56,6 +56,7 @@
+ 
+ #include <phy_ac.h>
+ #include <phy_ac_info.h>
++#include <phy_rxgcrs_api.h>
+ 
+ #ifndef ACPHY_PAPD_EPS_TBL_SIZE
+ #define ACPHY_PAPD_EPS_TBL_SIZE 64
+@@ -4373,6 +4374,55 @@ wlc_phy_cals_mac_susp_en_other_cr(phy_info_t *pi, bool suspend)
+ 		}
+ 	}
+ }
++
++
++/* Return status of edcrs */
++bool
++wlc_phy_eu_edcrs_status_acphy(phy_info_t *pi)
++{
++	bool edcrs = FALSE, suspend;
++	uint loop_count = 50, percentage = 75, edcrs_high_count = 0;
++	uint16 reg_val;
++	uint8 i = 0;
++	uint8 region_group = wlc_phy_get_locale(pi->rxgcrsi);
++
++
++	/* No need to do anything if region is NOT EU */
++	if (region_group != REGION_EU)
++		return edcrs;
++
++	if (!pi->sh->up)
++		return edcrs;
++
++	/* suspend mac if haven't done so */
++	suspend = !(R_REG(pi->sh->osh, &pi->regs->maccontrol) & MCTL_EN_MAC);
++	if (!suspend)
++		wlapi_suspend_mac_and_wait(pi->sh->physhim);
++
++	phy_utils_phyreg_enter(pi);
++
++	/* Check EDCRS a few times to decide if the medium is busy.
++	   If medium is busy, skip PAPD this time around.
++	*/
++	for (i = 0; i < loop_count; i++) {
++		reg_val = READ_PHYREG(pi, ed_crs);
++		if ((reg_val & 0xee) > 0) {
++			edcrs_high_count++;
++		}
++	}
++
++	if (edcrs_high_count > (loop_count * percentage / 100))
++		edcrs = TRUE;
++
++	phy_utils_phyreg_exit(pi);
++	if (!suspend)
++		wlapi_enable_mac(pi->sh->physhim);
++
++	return edcrs;
++}
++
++
++
+ void
+ wlc_phy_cals_acphy(phy_info_t *pi, uint8 searchmode)
+ {
+@@ -4605,6 +4655,9 @@ wlc_phy_cals_acphy(phy_info_t *pi, uint8 searchmode)
+ 		}
+ #endif /* WLENT_BCM43570 */
+ 
++        	if (wlc_phy_eu_edcrs_status_acphy(pi))
++			return;
++
+ 		/* carry out all phases "en bloc", for comments see the various phases below */
+ 		pi->cal_info->last_cal_time     = pi->sh->now;
+ 		accal->chanspec = pi->radio_chanspec;
+diff --git a/main/src/wl/phy/wlc_phy_cmn.c b/main/src/wl/phy/wlc_phy_cmn.c
+index d7ef8f1..f71a4c1 100755
+--- a/main/src/wl/phy/wlc_phy_cmn.c
++++ b/main/src/wl/phy/wlc_phy_cmn.c
+@@ -390,6 +390,7 @@ wlc_phy_timercb_phycal(phy_info_t *pi)
+ {
+ 	phy_info_nphy_t *pi_nphy = pi->u.pi_nphy;
+ 	uint delay_val = pi->phy_cal_delay;
++	bool edcrs = FALSE;
+ #if defined(PHYCAL_CACHING)
+ 	ch_calcache_t *ctx = NULL;
+ 	ctx = wlc_phy_get_chanctx(pi, pi->radio_chanspec);
+@@ -410,6 +411,11 @@ wlc_phy_timercb_phycal(phy_info_t *pi)
+ 			return;
+ 		}
+ 
++                if (ISNPHY(pi))
++                        edcrs = wlc_phy_eu_edcrs_status_nphy(pi);
++		else if (ISACPHY(pi))
++		        edcrs = wlc_phy_eu_edcrs_status_acphy(pi);
++ 
+ 		if (SCAN_RM_IN_PROGRESS(pi) || PLT_INPROG_PHY(pi) || PHY_MUTED(pi)) {
+ 			/* delay percal until scan completed */
+ 			PHY_CAL(("wlc_phy_timercb_phycal: scan in progress, delay 1 sec\n"));
+@@ -419,6 +425,9 @@ wlc_phy_timercb_phycal(phy_info_t *pi)
+ 			if (!ctx)
+ #endif
+ 				wlc_phy_cal_perical_mphase_restart(pi);
++		} else if (edcrs) {
++		        PHY_CAL(("wlc_phy_timercb_phycal: ed high, delay 1 sec\n"));
++			delay_val = 1000;       /* delay 1 sec */
+ 		} else {
+ 			if (ISNPHY(pi)) {
+ 				wlc_phy_cal_perical_nphy_run(pi, PHY_PERICAL_AUTO);
+@@ -3452,7 +3461,6 @@ wlc_phy_test_evm(phy_info_t *pi, int channel, uint rate, int txpwr)
+ 	/* stop any test in progress */
+ 	wlc_phy_test_stop(pi);
+ 
+-
+ 	/* channel 0 means restore original contents and end the test */
+ 	if (channel == 0) {
+ 		if (ISNPHY(pi)) {
+@@ -15442,7 +15450,7 @@ bool
+ wlc_phy_acimode_noisemode_reset_allowed(wlc_phy_t *ppi, uint16 home_channel)
+ {
+ 	bool allow = FALSE;
+-#if !defined(WLC_DISABLE_ACI) && defined(WLSRVSDB)
++#if (!defined(WLC_DISABLE_ACI)) && defined(WLSRVSDB)
+ 	phy_info_t *pi = (phy_info_t *)ppi;
+ 
+ 	int i = 0;
+diff --git a/main/src/wl/phy/wlc_phy_int.h b/main/src/wl/phy/wlc_phy_int.h
+index 201662d..5beab3b 100644
+--- a/main/src/wl/phy/wlc_phy_int.h
++++ b/main/src/wl/phy/wlc_phy_int.h
+@@ -4540,6 +4540,9 @@ uint8 wlc_phy_get_tbl_id_gainctrlbbmultluts(phy_info_t *pi, uint8 core);
+ uint8 wlc_phy_get_tbl_id_iqlocal(phy_info_t *pi, uint16 core);
+ uint8 wlc_phy_get_tbl_id_estpwrshftluts(phy_info_t *pi, uint8 core);
+ 
++extern bool wlc_phy_eu_edcrs_status_nphy(phy_info_t *pi);
++extern bool wlc_phy_eu_edcrs_status_acphy(phy_info_t *pi);
++ 
+ extern void wlc_acphy_save_sparereg_tbl_access_war_4349B0(phy_info_t *pi);
+ extern void wlc_acphy_restore_sparereg_tbl_access_war_4349B0(phy_info_t *pi);
+ 
+diff --git a/main/src/wl/phy/wlc_phy_n.c b/main/src/wl/phy/wlc_phy_n.c
+index 1373c44..7865789 100644
+--- a/main/src/wl/phy/wlc_phy_n.c
++++ b/main/src/wl/phy/wlc_phy_n.c
+@@ -25151,6 +25151,10 @@ wlc_phy_cal_perical_nphy_run(phy_info_t *pi, uint8 caltype)
+ 
+ 	ASSERT(pi->phy_cal_mode != PHY_PERICAL_DISABLE);
+ 
++	/* Don't do cal if edcrs is high */
++	if (wlc_phy_eu_edcrs_status_nphy(pi))
++	        return;
++
+ 	/*
+ 	 * AUTO mode: If the last calibration was on the current channel, do a partial
+ 	 * calibration, otherwise do a FULL calibration
+@@ -32480,6 +32484,50 @@ wlc_phy_papd_cal_gctrl_nphy(phy_info_t *pi, uint8 start_gain, uint8 core,
+ 
+ }
+ 
++/* Return status of edcrs */
++bool
++wlc_phy_eu_edcrs_status_nphy(phy_info_t *pi)
++{
++        bool edcrs = FALSE, suspend;
++        uint loop_count = 50, percentage = 75, edcrs_high_count = 0;
++        uint16 reg_val;
++        uint8 i = 0;
++        uint8 region_group = wlc_phy_get_locale(pi->rxgcrsi);
++
++        /* No need to do anything if region is NOT EU */
++        if (region_group != REGION_EU)
++                return edcrs;
++
++        if (!pi->sh->up)
++                return edcrs;
++
++        /* suspend mac if haven't done so */
++        suspend = !(R_REG(pi->sh->osh, &pi->regs->maccontrol) & MCTL_EN_MAC);
++        if (!suspend)
++                wlapi_suspend_mac_and_wait(pi->sh->physhim);
++
++        phy_utils_phyreg_enter(pi);
++
++        /* Check EDCRS a few times to decide if the medium is busy.
++                If medium is busy, skip PAPD this time around.
++        */
++        for (i = 0; i < loop_count; i++) {
++                reg_val = phy_utils_read_phyreg(pi, NPHY_ed_crs);
++                if ((reg_val & 0xee) > 0) {
++                        edcrs_high_count++;
++                }
++        }
++
++        if (edcrs_high_count > (loop_count * percentage / 100))
++                edcrs = TRUE;
++
++        phy_utils_phyreg_exit(pi);
++        if (!suspend)
++                wlapi_enable_mac(pi->sh->physhim);
++
++        return edcrs;
++}
++
+ /** Run PAPD calibration for NPHY */
+ static void
+ wlc_phy_txpwr_papd_cal_run(phy_info_t *pi, bool full_cal, uint8 core_from, uint8 core_to)
+@@ -34757,14 +34805,18 @@ wlc_phy_txpwr_papd_cal_nphy(phy_info_t *pi)
+ 		if (PHY_IPA(pi) && (pi_nphy->nphy_force_papd_cal || (wlc_phy_txpwr_ison_nphy(pi) &&
+ 			((uint32)ABS(txpwr_idx_cur[0] -
+ 			pi_nphy->nphy_papd_tx_gain_at_last_cal[0]) >= delta_idx)))) {
++                        if (!wlc_phy_eu_edcrs_status_nphy(pi)) {
+ 			wlapi_bmac_write_shm(pi->sh->physhim, M_CTS_DURATION, 5000);
+ 			wlc_phy_txpwr_papd_cal_run(pi, TRUE, PHY_CORE_0, PHY_CORE_0);
++                        }
+ 		} else if (PHY_IPA(pi) && (pi_nphy->nphy_force_papd_cal ||
+ 			(wlc_phy_txpwr_ison_nphy(pi) &&
+ 			((uint32)ABS(txpwr_idx_cur[1] -
+ 			pi_nphy->nphy_papd_tx_gain_at_last_cal[1]) >= delta_idx)))) {
++                        if (!wlc_phy_eu_edcrs_status_nphy(pi)) {
+ 			wlapi_bmac_write_shm(pi->sh->physhim, M_CTS_DURATION, 5000);
+ 			wlc_phy_txpwr_papd_cal_run(pi, TRUE, PHY_CORE_1, PHY_CORE_1);
++                        }
+ 		}
+ #ifdef PHYCAL_SPLIT_4324x
+ 	} else if (NREV_GE(pi->pubpi->phy_rev, LCNXN_BASEREV + 3)) {
+@@ -34778,8 +34830,10 @@ wlc_phy_txpwr_papd_cal_nphy(phy_info_t *pi)
+ 				/* Cal on a single core. Cal on other core will be done on the next
+ 				 * watchdog timeout, 1 second later
+ 				 */
+-				wlc_phy_papd_cal_watchdog_nphy_setup_rev19(pi, core, core);
++                                if (!wlc_phy_eu_edcrs_status_nphy(pi)) {
++				        wlc_phy_papd_cal_watchdog_nphy_setup_rev19(pi, core, core);
+ 				break;
++                                }
+ 			}
+ 		}
+ #endif /* PHYCAL_SPLIT_4324x */
+@@ -34793,6 +34847,7 @@ wlc_phy_txpwr_papd_cal_nphy(phy_info_t *pi)
+ 			((PHYCORENUM(pi->pubpi->phy_corenum) > 1) ?
+ 			((uint32)ABS(txpwr_idx_cur[1] -
+ 			pi_nphy->nphy_papd_tx_gain_at_last_cal[1]) >= delta_idx) : 0))))) {
++                        if (!wlc_phy_eu_edcrs_status_nphy(pi)) {
+ #ifndef PHYCAL_SPLIT_4324x
+ 			if (NREV_GE(pi->pubpi->phy_rev, LCNXN_BASEREV + 3))
+ 				wlc_phy_papd_cal_watchdog_nphy_setup_rev19(pi,
+@@ -34801,6 +34856,7 @@ wlc_phy_txpwr_papd_cal_nphy(phy_info_t *pi)
+ #endif /* PHYCAL_SPLIT_4324x */
+ 				wlc_phy_txpwr_papd_cal_run(pi, TRUE,
+ 				                 PHY_CORE_0, pi->pubpi->phy_corenum - 1);
++			}
+ 		}
+ 	}
+ }
+diff --git a/main/src/wl/sys/wlc_ap.c b/main/src/wl/sys/wlc_ap.c
+index 7e041a4..af209a7 100755
+--- a/main/src/wl/sys/wlc_ap.c
++++ b/main/src/wl/sys/wlc_ap.c
+@@ -142,6 +142,7 @@
+ #ifdef WLAUTHRESP_MAC_FILTER
+ #include <wlc_macfltr.h>
+ #endif /* WLAUTHRESP_MAC_FILTER */
++#include <wlc_phy_int.h>
+ #include <wlc_ulb.h>
+ 
+ /* Default pre tbtt time for non mbss case */
+@@ -1171,6 +1172,7 @@ wlc_ap_stas_timeout(wlc_ap_info_t *ap)
+ 	struct scb *scb;
+ 	struct scb_iter scbiter;
+ 
++	uint16 scb_activity_time;
+ 
+ 	WL_INFORM(("%s: run at time = %d\n", __FUNCTION__, wlc->pub->now));
+ 	FOREACHSCB(wlc->scbstate, &scbiter, scb) {
+@@ -1197,6 +1199,7 @@ wlc_ap_stas_timeout(wlc_ap_info_t *ap)
+ 			continue;
+ 		}
+ 
++		scb_activity_time = wlc->ap->scb_activity_time;
+ #ifdef WLENT_STA_SCB_TIMEOUT
+ 		/*
+ 		Actively free any SCBs whose used timer is beyond the scb_long_timeout 
+@@ -1256,11 +1259,11 @@ wlc_ap_stas_timeout(wlc_ap_info_t *ap)
+ 		/* probe associated stas if idle for scb_activity_time or reprobe them */
+ 		if (SCB_ASSOCIATED(scb) &&
+ #ifndef WLENT_STA_SCB_TIMEOUT
+-		    ((ap->scb_activity_time && ((wlc->pub->now - scb->used) >=
+-		      ap->scb_activity_time)) ||
++                   ((scb_activity_time && ((wlc->pub->now - scb->used) >=
++		    scb_activity_time)) ||
+ #else
+-			 (((ap->scb_activity_time && ((wlc->pub->now - scb->used) >=
+-			   ap->scb_activity_time)) &&
++                   (((scb_activity_time && ((wlc->pub->now - scb->used) >=
++		                                scb_activity_time)) &&
+ 			  ((wlc->pub->now - scb->used) >= ap->scb_timeout)) ||
+ #endif /* WLENT_STA_SCB_TIMEOUT*/
+ 		     (ap->reprobe_scb && scb->grace_attempts))) {
+@@ -3661,6 +3664,7 @@ static void
+ wlc_ap_sta_probe_complete(wlc_info_t *wlc, uint txstatus, struct scb *scb, void *pkt)
+ {
+ 	bool infifoflush = FALSE;
++	uint16 scb_activity_time;
+ 	ASSERT(scb != NULL);
+ 
+ 	scb->flags &= ~SCB_PENDING_PROBE;
+@@ -3718,9 +3722,10 @@ wlc_ap_sta_probe_complete(wlc_info_t *wlc, uint txstatus, struct scb *scb, void
+ 	 * was some activity after sending the probe then it indicates there is life out there in
+ 	 * scb.
+ 	 */
++	scb_activity_time = wlc->ap->scb_activity_time;
+ 	if (((txstatus & TX_STATUS_MASK) != TX_STATUS_NO_ACK) ||
+-	    (wlc->pub->now - scb->used < wlc->ap->scb_activity_time) ||
+-	    wlc->ap->scb_activity_time == 0) {
++	    (wlc->pub->now - scb->used < scb_activity_time) ||
++	    scb_activity_time == 0) {
+ 		scb->grace_attempts = 0;
+ 		/* update the primary PSTA also */
+ 		if (scb->psta_prim)
+@@ -3871,6 +3876,12 @@ wlc_ap_watchdog(void *arg)
+ 			 * then some thing has gone bad, do the big-hammer.
+ 			 */
+ 			if (txbcn_snapshot == appvt->txbcn_snapshot) {
++				if (WLCISACPHY(wlc->band)) {
++					if (wlc_phy_eu_edcrs_status_acphy((phy_info_t *)WLC_PI(wlc))) {
++						appvt->txbcn_inactivity = 0;
++					}
++				}
++
+ 				if (++appvt->txbcn_inactivity >= ap->txbcn_timeout) {
+ #ifdef WLENT_EVENTS
+           wlc_event_t *e = wlc_event_alloc(wlc->eventq, WLC_E_BCN_STUCK);
+-- 
+1.7.10
+

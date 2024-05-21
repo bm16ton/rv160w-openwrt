@@ -1,0 +1,37 @@
+From fe7907776ba273579f706ea1f8e4587cd480b3b0 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:13:02 +0800
+Subject: [PATCH 12/63] AMSDU-UL-fix-for-packet-chaining
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_amsdu.c |    6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+index 1ade7b1..8e7feed 100755
+--- a/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -3184,7 +3184,7 @@ wlc_recvamsdu(amsdu_info_t *ami, wlc_d11rxhdr_t *wrxh, void *p, uint16 *padp, bo
+ 		}
+ 
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+-		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) + pad + ETHER_HDR_LEN;
++		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) + *padp + ETHER_HDR_LEN;
+ #endif
+ 
+ 		WL_AMSDU(("wlc_recvamsdu: first A-MSDU buffer\n"));
+@@ -3285,6 +3285,10 @@ wlc_recvamsdu(amsdu_info_t *ami, wlc_d11rxhdr_t *wrxh, void *p, uint16 *padp, bo
+ 		/* Store the frontpad value of this single subframe */
+ 		deagg->first_pad = *padp;
+ 
++#if defined(NCNB_CSKB) && defined(CPKTC)
++		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) + *padp + ETHER_HDR_LEN;
++#endif
++
+ 		if (!wlc_amsdu_deagg_open(ami, fifo, p, h, pktlen_w_plcp)) {
+ 			goto abort;
+ 		}
+-- 
+1.7.10
+

@@ -1,0 +1,150 @@
+From af6419df912aeeb2e1545881b6c246b132effcb9 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:17:13 +0800
+Subject: [PATCH 17/63] update-for-wps-ap-pin-timeout
+Content-Type: text/plain; charset="utf-8"
+
+---
+ .../apps/wps/brcm_apps/apps/wps_monitor.c          |    5 ++
+ main/components/apps/wps/brcm_apps/apps/wps_ui.c   |   58 ++++++++++++++++++++
+ .../components/apps/wps/brcm_apps/include/wps_ui.h |    4 ++
+ 3 files changed, 67 insertions(+)
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_monitor.c b/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
+index c89f852..0298f1f 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
+@@ -489,6 +489,8 @@ wps_timeout()
+ 	}
+ #endif /* WPS_UPNP_DEVICE */
+ 
++	wps_ui_dev_pin_timeout();
++
+ 	/* do led status update */
+ 	wps_pb_timeout((int)wps_app->wksp);
+ 
+@@ -745,6 +747,8 @@ wps_mainloop(int num, char **list)
+ 		TUTRACE((TUTRACE_ERR, "WPSM work space initial failed.\n"));
+ 		return 0;
+ 	}
++	
++	wps_ui_set_dev_pin_start_time();
+ 
+ 	/* main loop to dispatch message */
+ 	while (1) {
+@@ -754,6 +758,7 @@ wps_mainloop(int num, char **list)
+ 		/* check flag for shutdown */
+ 		if (wps_flags & WPSM_WKSP_FLAG_SHUTDOWN) {
+ 			wps_close();
++			wps_ui_update_dev_pin_timeout();
+ 			break;
+ 		}
+ 
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ui.c b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+index 2a0ea7b..5da132e 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ui.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+@@ -34,6 +34,8 @@
+ #include <wps_nfc.h>
+ #endif
+ 
++#include <bcmnvram.h>
++
+ extern void wps_setProcessStates(int state);
+ 
+ typedef struct {
+@@ -128,6 +130,8 @@ static wps_hndl_t ui_hndl;
+ static int pending_flag = 0;
+ static unsigned long pending_time = 0;
+ 
++static unsigned long wps_device_pin_start_time = 0;
++
+ #ifdef WPS_ADDCLIENT_WWTP
+ /* WSC 2.0,
+  * One way to define the use of a particular PIN is that it should be valid for the whole
+@@ -528,6 +532,59 @@ wps_ui_clear_pending()
+ 	pending_time = 0;
+ }
+ 
++void wps_ui_set_dev_pin_start_time()
++{
++	(void) time((time_t*)&wps_device_pin_start_time);
++}
++
++void wps_ui_update_dev_pin_timeout()
++{
++	int ap_timeout = 0;
++	char *value = NULL;
++	unsigned long now;
++	unsigned long rest;
++	char prest[32] = {0};
++
++	if ((nvram_get("wps_device_pin_g") != NULL) &&
++		(strcmp(nvram_safe_get("wps_ap_pin_to"), "1") != 0)) {
++		(void) time((time_t*)&now);
++
++		value = nvram_safe_get("wps_ap_pin_cnt");
++		ap_timeout = atoi(value);
++		ap_timeout = (ap_timeout > 0 ? ap_timeout : WPS_OVERALL_TIMEOUT);
++		
++		if ((now < wps_device_pin_start_time) ||
++			((now - wps_device_pin_start_time) >= ap_timeout)) {
++			wps_set_conf("wps_ap_pin_to", "1");
++		} else {
++			rest = ap_timeout - (now - wps_device_pin_start_time);
++			sprintf(prest, "%d", rest);
++			wps_set_conf("wps_ap_pin_cnt", prest);
++		}
++	}
++}
++
++void wps_ui_dev_pin_timeout()
++{
++	int ap_timeout = 0;
++	char *value = NULL;
++	unsigned long now;
++
++	if ((nvram_get("wps_device_pin_g") != NULL) &&
++		(strcmp(nvram_safe_get("wps_ap_pin_to"), "1") != 0)) {
++		(void) time((time_t*)&now);
++
++		value = nvram_safe_get("wps_ap_pin_cnt");
++		ap_timeout = atoi(value);
++		ap_timeout = (ap_timeout > 0 ? ap_timeout : WPS_OVERALL_TIMEOUT);
++
++		if ((now < wps_device_pin_start_time) ||
++			((now - wps_device_pin_start_time) > ap_timeout)) {
++			wps_set_conf("wps_ap_pin_to", "1");
++		}
++	}
++}
++
+ int
+ wps_ui_pending_expire()
+ {
+@@ -1377,6 +1434,7 @@ wps_ui_do_set(char *buf)
+ 						}
+ #endif
+ 						wps_set_conf("wps_ap_pin_to", "0");
++						wps_ui_set_dev_pin_start_time();
+ 						/* WSC 2.0, Request to Enroll TRUE */
+ 						ret = wpsap_open_session(wps_app,
+ 							SCMODE_AP_ENROLLEE, ifmac, NULL,
+diff --git a/main/components/apps/wps/brcm_apps/include/wps_ui.h b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+index f402ae2..dfaf5bf 100644
+--- a/main/components/apps/wps/brcm_apps/include/wps_ui.h
++++ b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+@@ -115,6 +115,10 @@ typedef enum {
+ int wps_ui_is_pending();
+ void wps_ui_clear_pending();
+ int wps_ui_pending_expire();
++void wps_ui_set_dev_pin_start_time();
++void wps_ui_update_dev_pin_timeout();
++void wps_ui_dev_pin_timeout();
++void wps_ui_dev_pin_clear_timeout();
+ int wps_ui_init();
+ void wps_ui_deinit();
+ char *wps_ui_get_env(char *name);
+-- 
+1.7.10
+

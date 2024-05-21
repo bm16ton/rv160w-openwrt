@@ -1,0 +1,106 @@
+From 3e20729d4c20d5995dd4ab4dcff65b0dda975b62 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:30:39 +0800
+Subject: [PATCH 36/63] fix-low-throughput
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/keymgmt/src/km_key.c      |    2 +-
+ main/src/wl/keymgmt/src/km_key_tkip.c |   20 ++++++++++++++++----
+ main/src/wl/sys/wlc_amsdu.c           |    6 ++++--
+ 3 files changed, 21 insertions(+), 7 deletions(-)
+
+diff --git a/main/src/wl/keymgmt/src/km_key.c b/main/src/wl/keymgmt/src/km_key.c
+index 1529df3..b55440f 100644
+--- a/main/src/wl/keymgmt/src/km_key.c
++++ b/main/src/wl/keymgmt/src/km_key.c
+@@ -450,7 +450,7 @@ wlc_key_prep_tx_msdu(wlc_key_t *key, void *pkt, size_t frag_length, uint8 prio)
+ 		hdr = KEY_MSDU_HDR(key, pkt);
+ /* need to test and comfirm , it is changed*/
+ #ifdef NCNB_CSKB
+-	if (PKTMSPDDATA(KEY_OSH(key), pkt)) {
++	if (key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), pkt)) {
+ 		body = ((uint8 *)hdr) + NCNB_MSDU_HDR_LEN;
+ 		body_len = KEY_PKT_LEN(key, pkt) - ETHER_HDR_LEN;
+ 	} else {
+diff --git a/main/src/wl/keymgmt/src/km_key_tkip.c b/main/src/wl/keymgmt/src/km_key_tkip.c
+index 362a80a..c538f64 100644
+--- a/main/src/wl/keymgmt/src/km_key_tkip.c
++++ b/main/src/wl/keymgmt/src/km_key_tkip.c
+@@ -742,12 +742,12 @@ tkip_tx_mpdu(wlc_key_t *key, void *pkt, struct dot11_header *hdr,
+ 			KM_ASSERT(PKTTAILROOM(KEY_OSH(key), mic_pkt) >= mic_len);
+ #ifdef NCNB_CSKB
+ 			if (mic_pkt == pkt) {
+-				if (PKTMSPDDATA(KEY_OSH(key), pkt)) {
++				if (key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), pkt)) {
+ 					tx_micp = (uint8 *) PKTMSPDDATA(KEY_OSH(key), pkt) + PKTMSPDOFST(KEY_OSH(key), pkt) + PKTMSPDLEN(KEY_OSH(key), pkt);
+ 				} else {
+ 					tx_micp = body + body_len;
+ 				}	
+-			} else if (PKTMSPDDATA(KEY_OSH(key), mic_pkt)) {
++			} else if (key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), mic_pkt)) {
+ 				tx_micp = (uint8 *) PKTMSPDDATA(KEY_OSH(key), mic_pkt) + PKTMSPDOFST(KEY_OSH(key), mic_pkt) + PKTMSPDLEN(KEY_OSH(key), mic_pkt);
+ 			} else {
+ 				tx_micp = (uint8 *) PKTDATA(KEY_OSH(key), mic_pkt) + PKTLEN(KEY_OSH(key), mic_pkt);
+@@ -761,7 +761,7 @@ tkip_tx_mpdu(wlc_key_t *key, void *pkt, struct dot11_header *hdr,
+ 			tkip_key->tx_state.mic_off += (uint8)mic_len;
+ #ifdef NCNB_CSKB
+ 			PKTSETLEN(KEY_OSH(key), mic_pkt, PKTLEN(KEY_OSH(key), mic_pkt) + mic_len);
+-			if (PKTMSPDDATA(KEY_OSH(key), mic_pkt)) {
++			if (key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), mic_pkt)) {
+ 				PKTMSPDLENREF(mic_pkt) += mic_len;
+ 			}
+ 			
+@@ -1005,12 +1005,24 @@ tkip_tx_msdu(wlc_key_t *key, void *pkt, struct ether_header *hdr,
+ 	/* update the sdu mic for the body; it may span multiple pkts */
+ 	tkip_mic_update(&mic_ctx, body, body_len);
+ 	while ((pkt = PKTNEXT(KEY_OSH(key), pkt)) != NULL) {
++#ifdef NCNB_CSKB
++		uint8 *data = NULL;
++		int data_len = 0;
++		if(key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), pkt)) {
++			data = PKTMSPDDATA(KEY_OSH(key), pkt) + PKTMSPDOFST(KEY_OSH(key), pkt) - NCNB_MSDU_OFST;
++			data_len = PKTMSPDLEN(KEY_OSH(key), pkt) + NCNB_MSDU_OFST;
++		} else {
++			data = PKTDATA(KEY_OSH(key), pkt);
++			data_len = PKTLEN(KEY_OSH(key), pkt);
++		}
++#else
+ 		uint8 *data = PKTDATA(KEY_OSH(key), pkt);
+ 		int data_len = PKTLEN(KEY_OSH(key), pkt);
++#endif
+ 		tkip_mic_update(&mic_ctx, data, data_len);
+        	}
+ #ifdef NCNB_CSKB
+-	if (PKTMSPDDATA(KEY_OSH(key), head)) {
++	if ((PKTNEXT(KEY_OSH(key), head) == NULL) && key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), head)) {
+ 		uint8 *data = NULL;
+ 		int data_len = 0;
+ 		data = PKTMSPDDATA(KEY_OSH(key), head) + PKTMSPDOFST(KEY_OSH(key), head) - NCNB_MSDU_OFST;
+diff --git a/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+index 43ed118..8f70dd1 100755
+--- a/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -3698,7 +3698,8 @@ wlc_amsdu_deagg_hw(amsdu_info_t *ami, struct scb *scb, struct wlc_frminfo *f)
+ 		} else {
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+ 			if(likely(PKTMSPDDATA(osh,newpkt))) {
+-				PKTMSPDLENREF(newpkt) -= (PKTLEN(osh,newpkt) - sflen);
++				int roundoff_diff = PKTLEN(osh,newpkt) - sflen;
++				PKTMSPDLENREF(newpkt) -= roundoff_diff ? (ROUNDUP(roundoff_diff,4)-roundoff_diff) : 0;
+ 				if(scb && WSEC_ENABLED(scb->bsscfg->wsec)) {
+ 					if(PKTNEXT(osh, newpkt) != NULL) {
+ 						PKTMSPDLENREF(newpkt) += 8;
+@@ -3958,7 +3959,8 @@ wlc_amsdu_pktc_deagg_hw(amsdu_info_t *ami, void **pp, wlc_rfc_t *rfc, uint16 *in
+ 		} else {
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+ 			if(likely(PKTMSPDDATA(osh,newpkt))) {
+-				PKTMSPDLENREF(newpkt) += (PKTLEN(osh,newpkt) - sflen);
++				int roundoff_diff = PKTLEN(osh,newpkt) - sflen;
++				PKTMSPDLENREF(newpkt) += roundoff_diff ? (ROUNDUP(roundoff_diff,4)-roundoff_diff) : 0;
+ 				if(scb && WSEC_ENABLED(scb->bsscfg->wsec)) {
+ 					if(PKTNEXT(osh, newpkt) != NULL) {
+ 						PKTMSPDLENREF(newpkt) += 8;
+-- 
+1.7.10
+

@@ -1,0 +1,844 @@
+# 2017-02-06: harry.lin <harry.lin@deltaww.com>
+# BRCM ROBO SDK patch for RV16X/RV26X.
+diff -Nur sdk-xgs-robo-6.5.4-old/build.sh sdk-xgs-robo-6.5.4/build.sh
+--- sdk-xgs-robo-6.5.4-old/build.sh	1970-01-01 07:00:00.000000000 +0700
++++ sdk-xgs-robo-6.5.4/build.sh	2017-01-22 21:46:59.238378371 +0800
+@@ -0,0 +1,12 @@
++#!/bin/sh
++PROJECT_TOP_DIR=/home3/harry.lin/PP-3
++export TOOLCHAIN_BASE_DIR=$PROJECT_TOP_DIR/staging_dir/toolchain-arm_cortex-a9_gcc-4.8-linaro_glibc-2.19_eabi
++export KERNDIR=$PROJECT_TOP_DIR/build_dir/target-arm_cortex-a9_glibc-2.19_eabi/linux-comcerto2000_hgw/linux-4.1.8
++
++export KERNBLDDIR=$PROJECT_TOP_DIR/build_dir/target-arm_cortex-a9_glibc-2.19_eabi/linux-comcerto2000_hgw/linux-4.1.8/
++export STAGING_DIR=$PROJECT_TOP_DIR/staging_dir/
++
++#Build By Using User Mode
++cd ./systems/linux/user/dni-4_1_8/;make
++#Build By Using Kernel Mode
++#cd ./systems/linux/kernel/dni-4_1_8/;make
+diff -Nur sdk-xgs-robo-6.5.4-old/make/Makefile.linux-dni-4_1_8 sdk-xgs-robo-6.5.4/make/Makefile.linux-dni-4_1_8
+--- sdk-xgs-robo-6.5.4-old/make/Makefile.linux-dni-4_1_8	1970-01-01 07:00:00.000000000 +0700
++++ sdk-xgs-robo-6.5.4/make/Makefile.linux-dni-4_1_8	2017-01-22 22:02:09.468378242 +0800
+@@ -0,0 +1,139 @@
++# $Id: Makefile.linux-dni-4_1_8,v 1.42 Broadcom SDK $
++# $Copyright: Copyright 2016 Broadcom Corporation.
++# This program is the proprietary software of Broadcom Corporation
++# and/or its licensors, and may only be used, duplicated, modified
++# or distributed pursuant to the terms and conditions of a separate,
++# written license agreement executed between you and Broadcom
++# (an "Authorized License").  Except as set forth in an Authorized
++# License, Broadcom grants no license (express or implied), right
++# to use, or waiver of any kind with respect to the Software, and
++# Broadcom expressly reserves all rights in and to the Software
++# and all intellectual property rights therein.  IF YOU HAVE
++# NO AUTHORIZED LICENSE, THEN YOU HAVE NO RIGHT TO USE THIS SOFTWARE
++# IN ANY WAY, AND SHOULD IMMEDIATELY NOTIFY BROADCOM AND DISCONTINUE
++# ALL USE OF THE SOFTWARE.  
++#  
++# Except as expressly set forth in the Authorized License,
++#  
++# 1.     This program, including its structure, sequence and organization,
++# constitutes the valuable trade secrets of Broadcom, and you shall use
++# all reasonable efforts to protect the confidentiality thereof,
++# and to use this information only in connection with your use of
++# Broadcom integrated circuit products.
++#  
++# 2.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS
++# PROVIDED "AS IS" AND WITH ALL FAULTS AND BROADCOM MAKES NO PROMISES,
++# REPRESENTATIONS OR WARRANTIES, EITHER EXPRESS, IMPLIED, STATUTORY,
++# OR OTHERWISE, WITH RESPECT TO THE SOFTWARE.  BROADCOM SPECIFICALLY
++# DISCLAIMS ANY AND ALL IMPLIED WARRANTIES OF TITLE, MERCHANTABILITY,
++# NONINFRINGEMENT, FITNESS FOR A PARTICULAR PURPOSE, LACK OF VIRUSES,
++# ACCURACY OR COMPLETENESS, QUIET ENJOYMENT, QUIET POSSESSION OR
++# CORRESPONDENCE TO DESCRIPTION. YOU ASSUME THE ENTIRE RISK ARISING
++# OUT OF USE OR PERFORMANCE OF THE SOFTWARE.
++# 
++# 3.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL
++# BROADCOM OR ITS LICENSORS BE LIABLE FOR (i) CONSEQUENTIAL,
++# INCIDENTAL, SPECIAL, INDIRECT, OR EXEMPLARY DAMAGES WHATSOEVER
++# ARISING OUT OF OR IN ANY WAY RELATING TO YOUR USE OF OR INABILITY
++# TO USE THE SOFTWARE EVEN IF BROADCOM HAS BEEN ADVISED OF THE
++# POSSIBILITY OF SUCH DAMAGES; OR (ii) ANY AMOUNT IN EXCESS OF
++# THE AMOUNT ACTUALLY PAID FOR THE SOFTWARE ITSELF OR USD 1.00,
++# WHICHEVER IS GREATER. THESE LIMITATIONS SHALL APPLY NOTWITHSTANDING
++# ANY FAILURE OF ESSENTIAL PURPOSE OF ANY LIMITED REMEDY.$
++
++# User must select one platform from below.
++ifeq (,$(BUILD_PLATFORM))
++BUILD_PLATFORM=ARM_LINUX
++endif
++
++# TOOLCHAIN_BASE_DIR    Toolchain base directory
++# TARGET_ARCHITECTURE   Compiler for target architecture
++# KERNDIR               Kernel directory
++TOOLCHAIN_BASE_DIR ?= $(TOPDIR)/staging_dir/toolchain-arm_cortex-a9_gcc-4.8-linaro_glibc-2.19_eabi
++TARGET_ARCHITECTURE := arm-openwrt-linux-gnueabi
++KERNDIR ?= $(TOPDIR)/build_dir/target-arm_cortex-a9_glibc-2.19_eabi/linux-comcerto2000_hgw/linux-4.1.8
++KERNBLDDIR ?= $(TOPDIR)/build_dir/target-arm_cortex-a9_glibc-2.19_eabi/linux-comcerto2000_hgw/linux-4.1.8
++
++
++ifeq (,$(CROSS_COMPILE))
++CROSS_COMPILE := $(TARGET_ARCHITECTURE)-
++endif
++
++
++# DNI toolchain
++TOOLCHAIN_BIN_DIR := $(TOOLCHAIN_BASE_DIR)/bin
++override PATH := $(TOOLCHAIN_BIN_DIR)/../$(TARGET_ARCHITECTURE)/bin:$(TOOLCHAIN_BIN_DIR):$(PATH)
++LD_LIBRARY_PATH := $(TOOLCHAIN_BASE_DIR)/lib
++export TOOLCHAIN_BIN_DIR LD_LIBRARY_PATH
++
++
++# Default Linux include directory
++ifeq (,$(LINUX_INCLUDE))
++LINUX_INCLUDE := $(KERNDIR)/include
++endif
++
++CFGFLAGS += -DSYS_BE_PIO=0 -DSYS_BE_PACKET=0 -DSYS_BE_OTHER=0
++ENDIAN = LE_HOST=1
++CFGFLAGS += -D$(ENDIAN) -DBCM_ROBO_SUPPORT -DALTA_ROBO_SPI
++CFGFLAGS += -DBCM_PLATFORM_STRING=\"DNI_LS1024A\"
++
++# Extra variables.
++EXTRA_CFLAGS = -D"KBUILD_STR(s)=\#s" $(basename_flags) $(modname_flags)
++
++ARCH = arm
++KBUILD_VERBOSE = 1
++
++export ARCH KBUILD_VERBOSE 
++
++
++# From linux/arch/ppc/Makefile
++comma = ,
++basetarget = $(basename $(notdir $@))
++modname = $(basetarget)
++
++name-fix = $(subst $(comma),_,$(subst -,_,$1))
++basename_flags = -D"KBUILD_BASENAME=KBUILD_STR($(call name-fix,$(basetarget)))"
++modname_flags  = $(if $(filter 1,$(words $(modname))),\
++                 -D"KBUILD_MODNAME=KBUILD_STR($(call name-fix,$(modname)))")
++
++KFLAG_INCLD = $(TOOLCHAIN_BIN_DIR)/../lib/gcc/$(TARGET_ARCHITECTURE)/4.8.3/include
++
++ifdef BROADCOM_SVK
++ifdef BCM_BME3200_B0
++PLX_PCI2LBUS=1
++endif
++ifdef BCM_BM9600_B0
++PLX_PCI2LBUS=1
++endif
++ifeq ($PLX_PCI2LBUS, 1)
++CFLAGS += -DBCM_PLX9656_LOCAL_BUS -DBDE_LINUX_NON_INTERRUPTIBLE 
++endif
++endif
++
++ifdef DPP_CHIPS
++CFLAGS += -DDUNE_BCM -D__DUNE_GTO_BCM_CPU__ -D__DUNE_LINUX_BCM_CPU_PCIE__ -D__DUNE_LINUX_BCM_CPU_PCP_DMA__
++CFGFLAGS += -DSOC_CM_FUNCTION
++endif
++
++ifdef DFE_CHIPS
++CFLAGS += -DDUNE_BCM -D__DUNE_GTO_BCM_CPU__ -D__DUNE_LINUX_BCM_CPU_PCIE__
++CFGFLAGS += -DSOC_CM_FUNCTION
++endif
++
++ifdef SHADOW_PLX
++CFLAGS += -DBCM_PLX9656_LOCAL_BUS -DBDE_LINUX_NON_INTERRUPTIBLE -DSHADOW_SVK
++endif
++
++ifeq (,$(KFLAGS))
++KFLAGS += -D__LINUX_ARM_ARCH__=7 -D__KERNEL__ -nostdinc  -isystem $(KFLAG_INCLD) -I$(LINUX_INCLUDE) -I$(KERNBLDDIR)/include -I$(KERNBLDDIR)/include/uapi -I$(KERNBLDDIR)/include/generated/uapi -include $(KERNBLDDIR)/include/generated/uapi/linux/version.h -include $(KERNBLDDIR)/include/generated/autoconf.h -I$(KERNDIR)/arch/arm/include  -I$(KERNDIR)/arch/arm/include/uapi -I$(KERNBLDDIR)/arch/arm/include/generated -I$(KERNDIR)/arch/arm/mach-comcerto/include -Wall -Wstrict-prototypes -Wno-trigraphs -Os -fno-strict-aliasing -fno-common -marm -mabi=aapcs-linux -fno-pic -pipe -msoft-float -ffreestanding -march=armv7-a -mfpu=vfp -mfloat-abi=softfp -fomit-frame-pointer -g -fno-stack-protector -Wdeclaration-after-statement -Wno-pointer-sign -Wno-unused-but-set-variable -mlong-calls
++endif
++
++ifneq (,$(findstring TCL,$(FEATURE_LIST)))
++#LINK_STATIC = 0
++#export LINK_STATIC
++endif
++
++ifneq ($(targetplat),user)
++include ${SDK}/make/Makefile.linux-kernel-4_1_8
++endif
++
+diff -Nur sdk-xgs-robo-6.5.4-old/make/Makefile.linux-kernel-4_1_8 sdk-xgs-robo-6.5.4/make/Makefile.linux-kernel-4_1_8
+--- sdk-xgs-robo-6.5.4-old/make/Makefile.linux-kernel-4_1_8	1970-01-01 07:00:00.000000000 +0700
++++ sdk-xgs-robo-6.5.4/make/Makefile.linux-kernel-4_1_8	2017-01-22 21:55:44.128377772 +0800
+@@ -0,0 +1,173 @@
++# $Id: Makefile.linux-kernel-4_1_8,v 1.2 Broadcom SDK $
++# $Copyright: Copyright 2016 Broadcom Corporation.
++# This program is the proprietary software of Broadcom Corporation
++# and/or its licensors, and may only be used, duplicated, modified
++# or distributed pursuant to the terms and conditions of a separate,
++# written license agreement executed between you and Broadcom
++# (an "Authorized License").  Except as set forth in an Authorized
++# License, Broadcom grants no license (express or implied), right
++# to use, or waiver of any kind with respect to the Software, and
++# Broadcom expressly reserves all rights in and to the Software
++# and all intellectual property rights therein.  IF YOU HAVE
++# NO AUTHORIZED LICENSE, THEN YOU HAVE NO RIGHT TO USE THIS SOFTWARE
++# IN ANY WAY, AND SHOULD IMMEDIATELY NOTIFY BROADCOM AND DISCONTINUE
++# ALL USE OF THE SOFTWARE.  
++#  
++# Except as expressly set forth in the Authorized License,
++#  
++# 1.     This program, including its structure, sequence and organization,
++# constitutes the valuable trade secrets of Broadcom, and you shall use
++# all reasonable efforts to protect the confidentiality thereof,
++# and to use this information only in connection with your use of
++# Broadcom integrated circuit products.
++#  
++# 2.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS
++# PROVIDED "AS IS" AND WITH ALL FAULTS AND BROADCOM MAKES NO PROMISES,
++# REPRESENTATIONS OR WARRANTIES, EITHER EXPRESS, IMPLIED, STATUTORY,
++# OR OTHERWISE, WITH RESPECT TO THE SOFTWARE.  BROADCOM SPECIFICALLY
++# DISCLAIMS ANY AND ALL IMPLIED WARRANTIES OF TITLE, MERCHANTABILITY,
++# NONINFRINGEMENT, FITNESS FOR A PARTICULAR PURPOSE, LACK OF VIRUSES,
++# ACCURACY OR COMPLETENESS, QUIET ENJOYMENT, QUIET POSSESSION OR
++# CORRESPONDENCE TO DESCRIPTION. YOU ASSUME THE ENTIRE RISK ARISING
++# OUT OF USE OR PERFORMANCE OF THE SOFTWARE.
++# 
++# 3.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL
++# BROADCOM OR ITS LICENSORS BE LIABLE FOR (i) CONSEQUENTIAL,
++# INCIDENTAL, SPECIAL, INDIRECT, OR EXEMPLARY DAMAGES WHATSOEVER
++# ARISING OUT OF OR IN ANY WAY RELATING TO YOUR USE OF OR INABILITY
++# TO USE THE SOFTWARE EVEN IF BROADCOM HAS BEEN ADVISED OF THE
++# POSSIBILITY OF SUCH DAMAGES; OR (ii) ANY AMOUNT IN EXCESS OF
++# THE AMOUNT ACTUALLY PAID FOR THE SOFTWARE ITSELF OR USD 1.00,
++# WHICHEVER IS GREATER. THESE LIMITATIONS SHALL APPLY NOTWITHSTANDING
++# ANY FAILURE OF ESSENTIAL PURPOSE OF ANY LIMITED REMEDY.$
++
++# Configuration Flags
++
++# Filter out features that cannot or should not be supported in kernel mode
++
++_FEATURE_EXCLUDE_LIST += EDITLINE TCL OOB_RCPU CINT APIMODE DUNE_UI
++FEATURE_EXCLUDE_LIST = $(sort $(_FEATURE_EXCLUDE_LIST))
++
++# Tools
++
++# Conditionally Replaces DEFAULT var
++ifeq ($(origin CC),default)
++CC	= $(LSRUN) $(CROSS_COMPILE)gcc
++endif
++
++ifeq ($(origin CXX),default)
++CXX	= $(CROSS_COMPILE)g++
++endif
++
++ifeq ($(origin LD),default)
++LD	= $(CROSS_COMPILE)ld
++endif
++
++ifeq ($(origin AR),default)
++AR	= $(CROSS_COMPILE)ar
++endif
++
++ifeq ($(origin AS),default)
++AS	= $(CROSS_COMPILE)as
++endif
++
++ifeq ($(origin ARFLAGS),default)
++	ARFLAGS	= -rc
++endif
++
++STRIP	= $(CROSS_COMPILE)strip
++RANLIB  = $(CROSS_COMPILE)ranlib
++OBJCOPY = $(CROSS_COMPILE)objcopy
++NM      = $(CROSS_COMPILE)nm
++
++# Handle differences between gcc 2.x and gcc 3.x
++gcc-tune-flag = $(shell if ${CC} -dumpspecs | grep mcpu >/dev/null; then echo cpu; else echo tune; fi)
++
++# Configuration Variables
++
++# OSType Defines: This defines the type of RTOS or microkernel which you
++# are compiling the SAL (and its associated driver) for. New platforms
++# can be created by porting the routines (system.c) to your platform and
++# adding the define in this Makefile.
++
++OSTYPE = LINUX
++
++#
++# ORIGIN is used to Optionally select different CFLAGS. It is used to import
++# source from other vendors. If SOURCE=Broadcom, then the BCM_ flags are added
++# to those passed to the compiler. If SOURCE != Broadcom, BCM_ flags are NOT
++# added.
++#
++# Default specifies Broadcom
++#
++ifndef ORIGIN
++	ORIGIN = Broadcom
++endif
++
++#
++# STD_{C|CPP|CXX}FLAGS - Standard flags used by ALL compilations
++# BCM_{C|CPP|CXX}FLAGS - Flags used for Broadcom source files
++# OPT_{C|CPP|CXX}FLAGS - Defined in local make files BEFORE inclusion of 
++#			 this Makefile, to define local "Extra" flags.
++#
++
++ifdef IPROC_BUILD
++CFGFLAGS += -I$(SDK)/systems/linux/kernel/modules/include \
++	    -I$(SDK)/systems/bde/linux/include \
++	    -I$(LINUX_INCLUDE) \
++            -I$(KERNDIR)/arch/$(ARCH)
++else
++CFGFLAGS += -I$(SDK)/systems/linux/kernel/modules/include \
++	    -I$(SDK)/systems/bde/linux/include \
++		-I$(SDK)/systems/drv/et/ \
++	    -I$(LINUX_INCLUDE) \
++	    -I$(LINUX_INCLUDE)/asm/gcc \
++	    -I$(LINUX_INCLUDE)/asm/mach-generic \
++            -I$(KERNDIR)/arch/$(ARCH)
++endif
++
++CFGFLAGS += -DNO_FILEIO -DNO_CTRL_C -DNO_MEMTUNE
++
++CFGFLAGS += -D$(OSTYPE)
++
++# No user sal for the linux kernel
++# NO_SAL_APPL=1
++
++STD_CFLAGS = $(KFLAGS) $(CFGFLAGS)
++
++
++STD_CPPFLAGS = ${STD_CFLAGS}
++STD_CXXFLAGS = ${STD_CFLAGS}
++
++ifndef BCM_CFLAGS
++BCM_CFLAGS   = -Wall
++endif
++
++BCM_CPPFLAGS = ${BCM_CFLAGS}
++BCM_CXXFLAGS = ${BCM_CFLAGS}
++
++ifeq (${ORIGIN}, Broadcom)
++	CFLAGS   += ${STD_CFLAGS}   ${BCM_CFLAGS}   ${OPT_CFLAGS}
++	CPPFLAGS += ${STD_CPPFLAGS} ${BCM_CPPFLAGS} ${OPT_CPPFLAGS}
++	CXXFLAGS += ${STD_CXXFLAGS} ${BCM_CXXFLAGS} ${OPT_CXXFLAGS}
++else
++	CFLAGS   += ${STD_CFLAGS}   ${OPT_CFLAGS}
++	CPPFLAGS += ${STD_CPPFLAGS} ${OPT_CPPFLAGS}
++	CXXFLAGS += ${STD_CXXFLAGS} ${OPT_CXXFLAGS}
++endif
++
++#
++# Ignore pedantic flag for kernel modules
++#
++ifdef DEBUG_PEDANTIC
++DEBUG_PEDANTIC = FALSE
++endif
++
++#
++# DEPEND is used as a command to generate the list of dependencies.
++# The format of the output must be 
++#	"file.o : file.c a/b/c.h d/e/f.h ...", 
++# if it is on multiple lines, each line must end in a backslash. 
++# The output MUST be on standard out.
++#
++DEPEND = ${CC} -M $(CFLAGS) $< 
+diff -Nur sdk-xgs-robo-6.5.4-old/make/Makefile.unix-user sdk-xgs-robo-6.5.4/make/Makefile.unix-user
+--- sdk-xgs-robo-6.5.4-old/make/Makefile.unix-user	2016-05-27 07:55:50.000000000 +0800
++++ sdk-xgs-robo-6.5.4/make/Makefile.unix-user	2017-01-22 21:42:04.738377750 +0800
+@@ -81,7 +81,7 @@
+ OSTYPE = LINUX
+ 
+ # Linux
+-LIBS= -lnsl -lpthread -lm -lrt
++LIBS= -Wl,-Bdynamic -lpthread -lm -lrt -lc -lgcc_s
+ 
+ #
+ # ORIGIN is used to Optionally select different CFLAGS. It is used to import
+@@ -110,7 +110,7 @@
+ STD_CPPFLAGS = ${STD_CFLAGS}
+ STD_CXXFLAGS = ${STD_CFLAGS}
+ 
+-BCM_CFLAGS   = -Wall -Werror -fno-strict-aliasing
++BCM_CFLAGS   = -Wall -Werror -Wno-unused-variable -Wno-uninitialized -fno-strict-aliasing
+ ifeq ($(platform), iproc-3_6)
+ ifeq (BE,$(ENDIAN_MODE))
+ BCM_CFLAGS   += -Werror=format-security
+diff -Nur sdk-xgs-robo-6.5.4-old/src/appl/diag/shell.c sdk-xgs-robo-6.5.4/src/appl/diag/shell.c
+--- sdk-xgs-robo-6.5.4-old/src/appl/diag/shell.c	2016-05-27 07:55:54.000000000 +0800
++++ sdk-xgs-robo-6.5.4/src/appl/diag/shell.c	2017-01-22 21:42:04.738377750 +0800
+@@ -967,10 +967,12 @@
+     sh_pop_ctrl_c();
+ #endif
+ 
++#if 0
+     if (rv == CMD_EXIT) {
+         /* An 'exit' command in script is normal completion of script. */
+         rv = CMD_OK;
+     }
++#endif
+ 
+     return(rv);
+ #endif /* NO_FILEIO */
+diff -Nur sdk-xgs-robo-6.5.4-old/src/appl/diag/system.c sdk-xgs-robo-6.5.4/src/appl/diag/system.c
+--- sdk-xgs-robo-6.5.4-old/src/appl/diag/system.c	2016-05-27 07:55:54.000000000 +0800
++++ sdk-xgs-robo-6.5.4/src/appl/diag/system.c	2017-01-22 21:42:04.745254349 +0800
+@@ -2306,6 +2306,7 @@
+      */
+ 
+     if (!(flags & BOOT_F_NO_RC)) {
++        int rv;
+         for (i = 0; i < soc_ndev; i++) {
+             if (soc_attached(SOC_NDEV_IDX2DEV(i))) {
+                 sh_swap_unit_vars(SOC_NDEV_IDX2DEV(i));
+@@ -2313,7 +2314,12 @@
+                     /* Wait for master unit to establish link */
+                     sal_sleep(3);
+                 }
+-                if (diag_rc_load(SOC_NDEV_IDX2DEV(i)) != CMD_OK) {
++                rv = diag_rc_load(SOC_NDEV_IDX2DEV(i));
++                if (rv != CMD_OK) {
++                    if (rv == CMD_EXIT) {
++                        cli_out("Exit.\n");
++                        return;
++                    }
+                     cli_out("ERROR loading rc script on unit %d\n", SOC_NDEV_IDX2DEV(i));
+                 }
+             }
+diff -Nur sdk-xgs-robo-6.5.4-old/src/soc/common/phyctrl.c sdk-xgs-robo-6.5.4/src/soc/common/phyctrl.c
+--- sdk-xgs-robo-6.5.4-old/src/soc/common/phyctrl.c	2016-05-27 07:56:04.000000000 +0800
++++ sdk-xgs-robo-6.5.4/src/soc/common/phyctrl.c	2017-01-22 21:42:04.745254349 +0800
+@@ -1591,7 +1591,7 @@
+ 
+     INT_MCU_LOCK(unit);
+     if (SOC_SUCCESS(rv)) {
+-        rv = (PHY_SPEED_GET(pd, unit, port, speed));
++        //rv = (PHY_SPEED_GET(pd, unit, port, speed));
+     }
+     INT_MCU_UNLOCK(unit);
+     
+diff -Nur sdk-xgs-robo-6.5.4-old/src/soc/robo/drv.c sdk-xgs-robo-6.5.4/src/soc/robo/drv.c
+--- sdk-xgs-robo-6.5.4-old/src/soc/robo/drv.c	2016-05-27 07:56:22.000000000 +0800
++++ sdk-xgs-robo-6.5.4/src/soc/robo/drv.c	2017-01-22 21:42:04.745254349 +0800
+@@ -2110,7 +2110,7 @@
+                 } else 
+ #endif /* BCM_POLAR_SUPPORT */
+                 {
+-                    temp = 1;
++                    temp = 0;
+                 }
+ 
+                 soc_BRCM_HDR_CTRLr_field_set(unit, &reg_value, 
+@@ -2325,6 +2325,7 @@
+                 if ((reg_value & BCM53134_STRAP_PIN_IMP_MODE_MASK) 
+                                   == BCM53134_STRAP_PIN_IMP_MODE_RGMII) {
+                     rgmii = 1;
++                    imp1_rgmii = 1;
+                     if (SOC_PBMP_MEMBER(PBMP_GE_ALL(unit), 5)) {
+                         if (soc_property_port_get(unit, 5,
+                             spn_PHY_SYS_INTERFACE, 0) == SOC_PORT_IF_SGMII) {
+@@ -2437,7 +2438,7 @@
+                     REG_WRITE_STS_OVERRIDE_P5r(unit, &reg_value);
+ #endif
+                 }
+-#if defined(KEYSTONE)
++//#if defined(KEYSTONE)
+                 if (rgmii) {
+                     /* Enable RGMII tx/rx clock delay mode */
+                     REG_READ_IMP_RGMII_CTL_GPr(unit, 
+@@ -2450,7 +2451,19 @@
+                     REG_WRITE_IMP_RGMII_CTL_GPr(unit, 
+                         CMIC_PORT(unit), &reg_value);
+                 }
+-#endif
++                if (imp1_rgmii) {
++                    /* Enable RGMII tx/rx clock delay mode */
++                    REG_READ_PORT5_RGMII_CTL_GPr(unit,
++                        CMIC_PORT(unit), &reg_value);
++                    temp = 1;
++                    soc_PORT5_RGMII_CTL_GPr_field_set(unit,
++                        &reg_value, EN_RGMII_DLL_RXCf, &temp);
++                    soc_PORT5_RGMII_CTL_GPr_field_set(unit,
++                        &reg_value, EN_RGMII_DLL_TXCf, &temp);
++                    REG_WRITE_PORT5_RGMII_CTL_GPr(unit,
++                        CMIC_PORT(unit), &reg_value);
++                }
++//#endif
+ #endif /* BCM_STARFIGHTER3_SUPPORT */
+             }
+ 
+diff -Nur sdk-xgs-robo-6.5.4-old/systems/bde/linux/kernel/linux-kernel-bde.c sdk-xgs-robo-6.5.4/systems/bde/linux/kernel/linux-kernel-bde.c
+--- sdk-xgs-robo-6.5.4-old/systems/bde/linux/kernel/linux-kernel-bde.c	2016-05-27 07:56:25.000000000 +0800
++++ sdk-xgs-robo-6.5.4/systems/bde/linux/kernel/linux-kernel-bde.c	2017-01-22 22:14:06.078377898 +0800
+@@ -504,20 +504,17 @@
+ static void *sbh = NULL;
+ 
+ #ifdef ALTA_ROBO_SPI
+-
+-extern void *alta_eth_spi_ctrl;
+-
+ extern int
+-robo_spi_read(void *cookie, uint16_t reg, uint8_t *buf, int len);
++robo_spi_read(void *cookie, uint16_t reg, uint64_t *buf, int len);
+ 
+ extern int
+-robo_spi_write(void *cookie, uint16_t reg, uint8_t *buf, int len);
++robo_spi_write(void *cookie, uint16_t reg, uint64_t *buf, int len);
+ 
+ #define ROBO_RREG(_robo, _dev, _page, _reg, _buf, _len) \
+-        robo_spi_read(_dev ? NULL : alta_eth_spi_ctrl, \
++        robo_spi_read(NULL, \
+                       (_page << 8) | (_reg), _buf, _len)
+ #define ROBO_WREG(_robo, _dev, _page, _reg, _buf, _len) \
+-        robo_spi_write(_dev ? NULL : alta_eth_spi_ctrl, \
++        robo_spi_write(NULL, \
+                        (_page << 8) | (_reg), _buf, _len)
+ 
+ #else /* !ALTA_ROBO_SPI */
+@@ -3163,7 +3160,7 @@
+ 
+ #define SOC_ATTACH(_sc)        (NULL)
+ #define ROBO_ATTACH(_sih, _ss)    (NULL)
+-#define MAX_BUSTYPE        (0)
++#define MAX_BUSTYPE        (2)
+ #define ROBO_SWITCH_BUS(_robo, _bustype) 
+ #define ROBO_SELECT_DEVICE(_robo, _phyidh, _phyidl)
+ #endif
+@@ -3316,12 +3313,14 @@
+     }
+ 
+     /* Get Robo device handle */
++	/*
+     if (robo == NULL) {
+         sbh = (void *)SOC_ATTACH(NULL);
+         if (sbh == NULL) {
+             return -ENODEV;
+         }
+     }
++	*/
+ 
+ #if defined(IPROC_CMICD) && defined(BCM_STARFIGHTER3_SUPPORT)
+     robo_switch = probe_robo_switch_iproc_spi();
+@@ -3337,12 +3336,15 @@
+     }
+ #endif
+ 
++
++	/*
+     if (robo == NULL) {
+         robo = (void *)ROBO_ATTACH(sbh, 0);
+     }
+     if (robo == NULL) {
+         return -ENODEV;
+     }
++	*/
+ 
+     max_bustype = MAX_BUSTYPE + 1;
+ 
+@@ -3371,9 +3373,9 @@
+         unsigned short phyidl_nr; /* phyidl with revision stripped */        
+         uint16 model_id;
+         uint8 rev_id;
+-#if defined(KEYSTONE) || defined(IPROC_CMICD)
++//#if defined(KEYSTONE) || defined(IPROC_CMICD)
+         uint32 addr, len;
+-#endif
++//#endif
+         uint32 mlen, op;
+ 
+         if (_switch_ndevices >= LINUX_BDE_MAX_SWITCH_DEVICES) {
+@@ -3397,11 +3399,11 @@
+         }
+ 
+         if(_spi_id_table[match_idx].model_info){
+-#if defined(KEYSTONE) || defined(IPROC_CMICD)
++//#if defined(KEYSTONE) || defined(IPROC_CMICD)
+             addr = _spi_id_table[match_idx].model_info & 0xffff;
+             len = (_spi_id_table[match_idx].model_info >> 16) & 0xf;
+-#endif
+             ROBO_RREG(robo, dev, (addr >> 8), (addr & 0xff), buf, (uint)len);
++//#endif
+             mlen = (_spi_id_table[match_idx].model_info >> 20) & 0xf;
+             model_id = 0;
+             for (i = 0; i < mlen; i++)
+@@ -3447,11 +3449,11 @@
+             model_id = phyidl_nr;
+         }
+         if(_spi_id_table[match_idx].rev_info){
+-#if defined(KEYSTONE) || defined(IPROC_CMICD)
++//#if defined(KEYSTONE) || defined(IPROC_CMICD)
+             addr = _spi_id_table[match_idx].rev_info & 0xffff;
+             len = (_spi_id_table[match_idx].rev_info >> 16) & 0xf;
+-#endif
+             ROBO_RREG(robo, dev, (addr >> 8), (addr & 0xff), buf, (uint)len);
++//#endif
+             mlen = (_spi_id_table[match_idx].rev_info >> 20) & 0xf;
+             rev_id = 0;
+             for (i = 0; i < mlen; i++)
+@@ -4526,7 +4528,7 @@
+     
+     dma_sync_single_for_cpu(NULL, (unsigned long)ptr, length, DMA_BIDIRECTIONAL);
+ #else
+-    dma_cache_sync(NULL, ptr, length, DMA_BIDIRECTIONAL);
++    //dma_cache_sync(NULL, ptr, length, DMA_BIDIRECTIONAL);
+ #endif
+ #endif
+     return 0;
+@@ -4542,7 +4544,7 @@
+     
+     dma_sync_single_for_cpu(NULL, (unsigned long)ptr, length, DMA_BIDIRECTIONAL);
+ #else
+-    dma_cache_sync(NULL, ptr, length, DMA_BIDIRECTIONAL);
++    //dma_cache_sync(NULL, ptr, length, DMA_BIDIRECTIONAL);
+ #endif
+ #endif
+ 
+@@ -4820,10 +4822,10 @@
+ static int
+ _spi_read(int d, uint32 addr, uint8 *buf, int len)
+ {
+-#if defined(KEYSTONE) || defined(IPROC_CMICD)
++//#if defined(KEYSTONE) || defined(IPROC_CMICD)
+     bde_ctrl_t *ctrl;
+     uint8 page, offset;
+-#endif
++//#endif
+ #if defined(IPROC_CMICD)
+     int rv = 0;
+     uint16 value = 0;
+@@ -4839,9 +4841,9 @@
+         return -1;
+     }
+ 
+-#if defined(KEYSTONE) || defined(IPROC_CMICD)
++//#if defined(KEYSTONE) || defined(IPROC_CMICD)
+     ctrl = _devices + d;
+-#endif
++//#endif
+ 
+ #if defined(IPROC_CMICD)
+     if (addr & SOC_EXTERNAL_PHY_BUS_CPUMDIO) {
+@@ -4851,10 +4853,10 @@
+     }
+ #endif
+ 
+-#if defined(KEYSTONE) || defined(IPROC_CMICD)
++//#if defined(KEYSTONE) || defined(IPROC_CMICD)
+     page = (addr >> SOC_ROBO_PAGE_BP) & 0xFF;
+     offset = addr & 0xFF;
+-#endif
++//#endif
+ 
+ #if defined(IPROC_CMICD) && defined(BCM_STARFIGHTER3_SUPPORT)
+     if (spi_device_found) {
+@@ -4873,10 +4875,10 @@
+ static int
+ _spi_write(int d, uint32 addr, uint8 *buf, int len)
+ {
+-#if defined(KEYSTONE) || defined(IPROC_CMICD)
++//#if defined(KEYSTONE) || defined(IPROC_CMICD)
+     bde_ctrl_t *ctrl;
+     uint8 page, offset;
+-#endif
++//#endif
+ #if defined(IPROC_CMICD)
+     int rv = 0;
+     uint16 value = 0;
+@@ -4891,9 +4893,9 @@
+         return -1;
+     }
+ 
+-#if defined(KEYSTONE) || defined(IPROC_CMICD)
++//#if defined(KEYSTONE) || defined(IPROC_CMICD)
+     ctrl = _devices + d;
+-#endif
++//#endif
+ 
+ #if defined(IPROC_CMICD)
+     if (addr & SOC_EXTERNAL_PHY_BUS_CPUMDIO) {
+@@ -4903,10 +4905,10 @@
+     }
+ #endif
+ 
+-#if defined(KEYSTONE) || defined(IPROC_CMICD)
++//#if defined(KEYSTONE) || defined(IPROC_CMICD)
+     page = (addr >> SOC_ROBO_PAGE_BP) & 0xFF;
+     offset = addr & 0xFF;
+-#endif
++//#endif
+ 
+ #if defined(IPROC_CMICD) && defined(BCM_STARFIGHTER3_SUPPORT)
+     if (spi_device_found) {
+diff -Nur sdk-xgs-robo-6.5.4-old/systems/linux/kernel/dni-4_1_8/Makefile sdk-xgs-robo-6.5.4/systems/linux/kernel/dni-4_1_8/Makefile
+--- sdk-xgs-robo-6.5.4-old/systems/linux/kernel/dni-4_1_8/Makefile	1970-01-01 07:00:00.000000000 +0700
++++ sdk-xgs-robo-6.5.4/systems/linux/kernel/dni-4_1_8/Makefile	2017-01-22 22:17:22.388378080 +0800
+@@ -0,0 +1,86 @@
++# -*- Makefile -*-
++# $Id: Makefile,v 1.9 Broadcom SDK $
++# $Copyright: Copyright 2016 Broadcom Corporation.
++# This program is the proprietary software of Broadcom Corporation
++# and/or its licensors, and may only be used, duplicated, modified
++# or distributed pursuant to the terms and conditions of a separate,
++# written license agreement executed between you and Broadcom
++# (an "Authorized License").  Except as set forth in an Authorized
++# License, Broadcom grants no license (express or implied), right
++# to use, or waiver of any kind with respect to the Software, and
++# Broadcom expressly reserves all rights in and to the Software
++# and all intellectual property rights therein.  IF YOU HAVE
++# NO AUTHORIZED LICENSE, THEN YOU HAVE NO RIGHT TO USE THIS SOFTWARE
++# IN ANY WAY, AND SHOULD IMMEDIATELY NOTIFY BROADCOM AND DISCONTINUE
++# ALL USE OF THE SOFTWARE.  
++#  
++# Except as expressly set forth in the Authorized License,
++#  
++# 1.     This program, including its structure, sequence and organization,
++# constitutes the valuable trade secrets of Broadcom, and you shall use
++# all reasonable efforts to protect the confidentiality thereof,
++# and to use this information only in connection with your use of
++# Broadcom integrated circuit products.
++#  
++# 2.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS
++# PROVIDED "AS IS" AND WITH ALL FAULTS AND BROADCOM MAKES NO PROMISES,
++# REPRESENTATIONS OR WARRANTIES, EITHER EXPRESS, IMPLIED, STATUTORY,
++# OR OTHERWISE, WITH RESPECT TO THE SOFTWARE.  BROADCOM SPECIFICALLY
++# DISCLAIMS ANY AND ALL IMPLIED WARRANTIES OF TITLE, MERCHANTABILITY,
++# NONINFRINGEMENT, FITNESS FOR A PARTICULAR PURPOSE, LACK OF VIRUSES,
++# ACCURACY OR COMPLETENESS, QUIET ENJOYMENT, QUIET POSSESSION OR
++# CORRESPONDENCE TO DESCRIPTION. YOU ASSUME THE ENTIRE RISK ARISING
++# OUT OF USE OR PERFORMANCE OF THE SOFTWARE.
++# 
++# 3.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL
++# BROADCOM OR ITS LICENSORS BE LIABLE FOR (i) CONSEQUENTIAL,
++# INCIDENTAL, SPECIAL, INDIRECT, OR EXEMPLARY DAMAGES WHATSOEVER
++# ARISING OUT OF OR IN ANY WAY RELATING TO YOUR USE OF OR INABILITY
++# TO USE THE SOFTWARE EVEN IF BROADCOM HAS BEEN ADVISED OF THE
++# POSSIBILITY OF SUCH DAMAGES; OR (ii) ANY AMOUNT IN EXCESS OF
++# THE AMOUNT ACTUALLY PAID FOR THE SOFTWARE ITSELF OR USD 1.00,
++# WHICHEVER IS GREATER. THESE LIMITATIONS SHALL APPLY NOTWITHSTANDING
++# ANY FAILURE OF ESSENTIAL PURPOSE OF ANY LIMITED REMEDY.$
++
++#
++# This make job requires the following environment variables to be set:
++#
++# SDK                - path to StrataXGS SDK root directory
++#
++# Optionally the following environment variables can be set to
++# override the default build server configuration:
++#
++# PPC_TOOLS_DIR      - path to build tools (if not in PATH already)
++# PPC_CROSS_COMPILE  - cross compile tools prefix
++# LINUX_INCLUDE      - path to Linux kernel include directory
++#
++
++SDK :=$(shell if [ -n "$$SDK" ] ; then\
++	echo $$SDK;\
++	else\
++	cd $(dir $(lastword $(MAKEFILE_LIST))); while /usr/bin/test ! -e RELEASE ; do \
++	dir=`cd ../;pwd`;			\
++	if [ "$$dir" = "/" ] ; then		\
++	   echo Cannot find SDK in $(lastword $(MAKEFILE_LIST)) 1>&2;		\
++	   exit 1;				\
++	fi ;					\
++	cd $$dir;				\
++	done ;					\
++	pwd;					\
++	fi)
++
++ifeq ($(SDK),)					
++$(error Please run this in a tree)		
++endif 				
++
++export SDK
++
++override kernel_version=4_1_8
++platform=dni-$(kernel_version)
++#LINUX_MAKE_USER=1
++#export LINKER_RELAX=1
++export BCM_PTL_SPT=1
++export ALL_ROBO_CHIPS=1
++
++include ${SDK}/make/Make.linux
++
+diff -Nur sdk-xgs-robo-6.5.4-old/systems/linux/user/dni-4_1_8/Makefile sdk-xgs-robo-6.5.4/systems/linux/user/dni-4_1_8/Makefile
+--- sdk-xgs-robo-6.5.4-old/systems/linux/user/dni-4_1_8/Makefile	1970-01-01 07:00:00.000000000 +0700
++++ sdk-xgs-robo-6.5.4/systems/linux/user/dni-4_1_8/Makefile	2017-01-22 22:18:56.758378062 +0800
+@@ -0,0 +1,86 @@
++# -*- Makefile -*-
++# $Id: Makefile,v 1.9 Broadcom SDK $
++# $Copyright: Copyright 2016 Broadcom Corporation.
++# This program is the proprietary software of Broadcom Corporation
++# and/or its licensors, and may only be used, duplicated, modified
++# or distributed pursuant to the terms and conditions of a separate,
++# written license agreement executed between you and Broadcom
++# (an "Authorized License").  Except as set forth in an Authorized
++# License, Broadcom grants no license (express or implied), right
++# to use, or waiver of any kind with respect to the Software, and
++# Broadcom expressly reserves all rights in and to the Software
++# and all intellectual property rights therein.  IF YOU HAVE
++# NO AUTHORIZED LICENSE, THEN YOU HAVE NO RIGHT TO USE THIS SOFTWARE
++# IN ANY WAY, AND SHOULD IMMEDIATELY NOTIFY BROADCOM AND DISCONTINUE
++# ALL USE OF THE SOFTWARE.  
++#  
++# Except as expressly set forth in the Authorized License,
++#  
++# 1.     This program, including its structure, sequence and organization,
++# constitutes the valuable trade secrets of Broadcom, and you shall use
++# all reasonable efforts to protect the confidentiality thereof,
++# and to use this information only in connection with your use of
++# Broadcom integrated circuit products.
++#  
++# 2.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS
++# PROVIDED "AS IS" AND WITH ALL FAULTS AND BROADCOM MAKES NO PROMISES,
++# REPRESENTATIONS OR WARRANTIES, EITHER EXPRESS, IMPLIED, STATUTORY,
++# OR OTHERWISE, WITH RESPECT TO THE SOFTWARE.  BROADCOM SPECIFICALLY
++# DISCLAIMS ANY AND ALL IMPLIED WARRANTIES OF TITLE, MERCHANTABILITY,
++# NONINFRINGEMENT, FITNESS FOR A PARTICULAR PURPOSE, LACK OF VIRUSES,
++# ACCURACY OR COMPLETENESS, QUIET ENJOYMENT, QUIET POSSESSION OR
++# CORRESPONDENCE TO DESCRIPTION. YOU ASSUME THE ENTIRE RISK ARISING
++# OUT OF USE OR PERFORMANCE OF THE SOFTWARE.
++# 
++# 3.     TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL
++# BROADCOM OR ITS LICENSORS BE LIABLE FOR (i) CONSEQUENTIAL,
++# INCIDENTAL, SPECIAL, INDIRECT, OR EXEMPLARY DAMAGES WHATSOEVER
++# ARISING OUT OF OR IN ANY WAY RELATING TO YOUR USE OF OR INABILITY
++# TO USE THE SOFTWARE EVEN IF BROADCOM HAS BEEN ADVISED OF THE
++# POSSIBILITY OF SUCH DAMAGES; OR (ii) ANY AMOUNT IN EXCESS OF
++# THE AMOUNT ACTUALLY PAID FOR THE SOFTWARE ITSELF OR USD 1.00,
++# WHICHEVER IS GREATER. THESE LIMITATIONS SHALL APPLY NOTWITHSTANDING
++# ANY FAILURE OF ESSENTIAL PURPOSE OF ANY LIMITED REMEDY.$
++
++#
++# This make job requires the following environment variables to be set:
++#
++# SDK                - path to StrataXGS SDK root directory
++#
++# Optionally the following environment variables can be set to
++# override the default build server configuration:
++#
++# PPC_TOOLS_DIR      - path to build tools (if not in PATH already)
++# PPC_CROSS_COMPILE  - cross compile tools prefix
++# LINUX_INCLUDE      - path to Linux kernel include directory
++#
++
++SDK :=$(shell if [ -n "$$SDK" ] ; then\
++	echo $$SDK;\
++	else\
++	cd $(dir $(lastword $(MAKEFILE_LIST))); while /usr/bin/test ! -e RELEASE ; do \
++	dir=`cd ../;pwd`;			\
++	if [ "$$dir" = "/" ] ; then		\
++	   echo Cannot find SDK in $(lastword $(MAKEFILE_LIST)) 1>&2;		\
++	   exit 1;				\
++	fi ;					\
++	cd $$dir;				\
++	done ;					\
++	pwd;					\
++	fi)
++
++ifeq ($(SDK),)					
++$(error Please run this in a tree)		
++endif 				
++
++export SDK
++
++override kernel_version=4_1_8
++platform=dni-$(kernel_version)
++LINUX_MAKE_USER=1
++export LINKER_RELAX=1
++export BCM_PTL_SPT=1
++export ALL_ROBO_CHIPS=1
++
++include ${SDK}/make/Make.linux
++

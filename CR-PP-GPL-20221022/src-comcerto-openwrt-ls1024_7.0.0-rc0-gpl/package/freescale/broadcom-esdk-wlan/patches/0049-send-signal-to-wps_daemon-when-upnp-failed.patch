@@ -1,0 +1,25 @@
+From 3a46d8e9ab0918d911a2c0ee986077e92db17a84 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 20:03:08 +0800
+Subject: [PATCH 49/63] send-signal-to-wps_daemon-when-upnp-failed
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/apps/wps_libupnp.c |    1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_libupnp.c b/main/components/apps/wps/brcm_apps/apps/wps_libupnp.c
+index b6820ab..c157449 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_libupnp.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_libupnp.c
+@@ -1050,6 +1050,7 @@ wps_upnp_init()
+ 	context = upnp_init(wfa_port, wfa_adv_time, lan_ifnamelist, &WFADevice, randomstring);
+ 	if (context == NULL) {
+ 		TUTRACE((TUTRACE_ERR, "UPnP WFADevice initialization fail\n"));
++		eval("start-stop-daemon", "-K", "-q", "-s", "SIGUSR2", "-n", "wps_daemon");
+ 		goto err_exit;
+ 	}
+ 
+-- 
+1.7.10
+

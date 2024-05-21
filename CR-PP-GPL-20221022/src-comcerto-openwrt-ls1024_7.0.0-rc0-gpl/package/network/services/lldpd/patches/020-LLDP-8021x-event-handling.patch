@@ -1,0 +1,289 @@
+From deb50efc5d2dc0d148c0dd52e30b52afde236830 Mon Sep 17 00:00:00 2001
+From: Manish Tiwari <manish.tiwari@nxp.com>
+Date: Wed, 21 Mar 2018 17:13:19 +0530
+Subject: [PATCH] LLDP 8021x event handling Signed-off-by: Manish Tiwari
+ <manish.tiwari@nxp.com>
+
+---
+ src/event.c |  103 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++--
+ src/lldp.c  |   54 +++++++++++++++++++++++++++----
+ src/lldpd.c |   11 ++++---
+ 3 files changed, 154 insertions(+), 14 deletions(-)
+
+diff --git a/src/event.c b/src/event.c
+index 376b1e2..4007f68 100644
+--- a/src/event.c
++++ b/src/event.c
+@@ -20,6 +20,21 @@
+ #include <signal.h>
+ #include <event2/event.h>
+ 
++#include <sys/socket.h>
++#include <arpa/inet.h>
++#include <sys/socket.h>
++#include <netinet/in.h>
++#include <string.h>
++#include <stdlib.h>
++#include <pthread.h>
++#include <poll.h>
++
++/* changes for 8021x events */ 
++#define LLDP_DOT1X_PORT 27877
++extern uint8_t bitmap;
++pthread_t tid;
++pthread_mutex_t lock;
++
+ static void
+ levent_log_cb(int severity, const char *msg)
+ {
+@@ -263,6 +278,92 @@ levent_stop(evutil_socket_t fd, short what, void *arg)
+ 	event_base_loopbreak(base);
+ }
+ 
++
++/* This function will poll for 8021x events */
++void *dot1x_data_recv_thread(void *vargp)
++{
++	int server_sockfd, client_sockfd;
++	socklen_t addr_size;
++	struct sockaddr_storage serverStorage;
++	struct sockaddr_in serverAddr, clientAddr;
++  	int nBytes, ret;
++	uint8_t temp;
++	
++	/*Create UDP server socket*/
++  	server_sockfd = socket(PF_INET, SOCK_DGRAM, 0);
++	if (server_sockfd < 0)
++        {
++                perror("socket");
++                return -1;
++        }
++
++  	/*Configure settings in address struct*/
++  	serverAddr.sin_family = AF_INET;
++  	serverAddr.sin_port = htons(LLDP_DOT1X_PORT);
++  	serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
++  	memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);
++
++  	/*Bind socket with address struct*/
++  	if(bind(server_sockfd, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) < 0)
++	{
++                perror("bind");
++                return -1;
++	}
++  	
++	/*Initialize size variable to be used later on*/
++  	addr_size = sizeof serverStorage;
++
++	while(1)
++	{
++		nBytes = recvfrom(server_sockfd,&temp,sizeof(temp),0,(struct sockaddr *)&serverStorage, &addr_size);
++		if(nBytes < 0)
++		{
++			perror("recvfrom");
++
++		}
++		pthread_mutex_lock(&lock);
++  		//LLOG_INFO("LLDP data before event [ temp = %x, bitmap = %x ]",temp, bitmap);
++		bitmap=temp;
++  		//LLOG_INFO("LLDP date after event [ temp = %x, bitmap = %x ] ",temp, bitmap);
++		pthread_mutex_unlock(&lock);
++        }
++	pthread_mutex_destroy(&lock);
++	close(server_sockfd);
++}
++
++int lldp_8021x_init()
++{
++	
++        FILE *fp=NULL;
++	int temp;
++
++	/* Reading data from a file when LLDP start for a first time */
++	fp = fopen("/tmp/stats/Dot1xPortStatus","r");
++	if(fp != NULL)
++	{
++		fscanf(fp,"%x",&temp);
++		bitmap=temp;
++		LLOG_INFO("Initial Dot1xPortStatus bitmap = %x",  bitmap);
++		fclose(fp);  
++	}
++	else
++	{
++		bitmap=0xff;
++		LLOG_INFO("Could not open file /tmp/stats/Dot1xPortStatus, return %d, bitmap = %x", fp, bitmap);
++	}
++
++	if (pthread_mutex_init(&lock, NULL) != 0)
++    	{
++        	LLOG_INFO("Mutex init has failed");
++        	return -1;
++    	}
++	else
++		LLOG_INFO("Mutex initialized successfully");
++
++	pthread_create(&tid, NULL, dot1x_data_recv_thread, NULL);
++	return 0;
++}
++
+ static void
+ levent_update_and_send(evutil_socket_t fd, short what, void *arg)
+ {
+@@ -328,13 +429,11 @@ levent_init(struct lldpd *cfg)
+ 		levent_stop, cfg->g_base),
+ 	    NULL);
+ }
+-
+ /* Initialize libevent and start the event loop */
+ void
+ levent_loop(struct lldpd *cfg)
+ {
+ 	levent_init(cfg);
+-
+ 	/* libevent loop */
+ 	do {
+ 		if (event_base_got_break(cfg->g_base) ||
+diff --git a/src/lldp.c b/src/lldp.c
+index 45baa02..7367f23 100644
+--- a/src/lldp.c
++++ b/src/lldp.c
+@@ -45,6 +45,8 @@
+ #define NOTRECEIVED_LEN 12
+ 
+ extern char PID_RV34X[10];
++extern uint8_t bitmap;
++extern pthread_mutex_t lock;
+ 
+ inline static int
+ lldpd_af_to_lldp_proto(int af)
+@@ -214,7 +216,23 @@ lldp_send(struct lldpd *global,
+    if(strcmp(port->p_descr,LAN_INTERFACE)==0)
+    {
+ 	if ((strncmp(PID_RV34X,"RV260",5) == 0) || (strncmp(PID_RV34X,"RV160",5) == 0))
+-	{ 
++	{
++		if( access( "/tmp/stats/Dot1xPortStatus", F_OK ) != -1 ) 
++		{
++			/* 802.1x enable */
++			pthread_mutex_lock(&lock);
++			cputag[3] &= bitmap;
++			pthread_mutex_unlock(&lock);
++		} 
++		else 
++		{	
++			/* 802.1x disable */
++			pthread_mutex_lock(&lock);
++			bitmap = 0xff;
++			cputag[3] &= bitmap;
++			pthread_mutex_unlock(&lock);
++		}
++
+ 		if (!(
+ 		      /* LLDP multicast address */
+ 		      POKE_BYTES(mcastaddr, sizeof(mcastaddr)) &&
+@@ -641,11 +659,10 @@ lldp_decode(struct lldpd *cfg, char *frame, int s,
+ #endif
+ 	struct lldpd_mgmt *mgmt;
+ 	int af;
+-    int portno=0;
+-    char cmd[64]={'\0'};
+-    char var[2]={'\0'};
+-    FILE *fp=NULL;
+-    
++    	int portno=0;
++    	char cmd[64]={'\0'};
++    	char var[2]={'\0'};
++    	FILE *fp=NULL;
+ 
+ 	u_int8_t addr_str_length, addr_str_buffer[32];
+ 	u_int8_t addr_family, addr_length, *addr_ptr, iface_subtype;
+@@ -699,7 +716,30 @@ lldp_decode(struct lldpd *cfg, char *frame, int s,
+                   //LLOG_WARNX("LLDP disabled on port %d\n", (portno+1));
+ 		  goto malformed;
+         	}
+-	
++		else
++		{
++
++			if( access( "/tmp/stats/Dot1xPortStatus", F_OK ) != -1 ) 
++			{
++				/* If 8021x enable so proceed as per global bitmap value */
++			} 
++			else 
++			{
++				/* When 8021x disabled */
++				pthread_mutex_lock(&lock);
++				bitmap = 0xff;
++				pthread_mutex_unlock(&lock);
++			}
++			if((1 << portno) & bitmap)
++			{
++				//LLOG_INFO("LAN%d, Allowed by 802.1x Bitmap = %x",(portno+1),bitmap);
++			}
++			else
++			{
++				//LLOG_INFO("LAN%d, Disabled by by 802.1x Bitmap = %x",(portno+1),bitmap);
++				goto malformed;
++			}
++		}
+ 	}
+ 	if(strcmp(hardware->h_ifname, "eth0")==0)
+ 	{
+diff --git a/src/lldpd.c b/src/lldpd.c
+index 44463bd..f1e7815 100644
+--- a/src/lldpd.c
++++ b/src/lldpd.c
+@@ -36,6 +36,7 @@
+ #include <net/if_arp.h>
+ 
+ char PID_RV34X[10] = {0};
++uint8_t bitmap;
+ 
+ static void		 usage(void);
+ 
+@@ -150,14 +151,14 @@ int get_Chassis_id(const char *ifname)
+ int get_PID_RV34X(char* PID)
+ {
+   FILE *fp=NULL;
+-  char cmd[256];
++  char cmd[64];
+ 
+   sprintf(cmd,"uci get systeminfo.sysinfo.pid | awk -F'-' '{print $1}'");
+ 
+   if((fp = popen(cmd,"r"))!=NULL)
+   {
+-        memset(cmd,0,256);
+-        fgets(cmd,256,fp);
++        memset(cmd,0,64);
++        fgets(cmd,64,fp);
+   }
+   pclose(fp);
+ 
+@@ -196,7 +197,6 @@ int get_PID_RV34X(char* PID)
+         strcpy(PID,"RV260");
+         return 0;
+   }
+-
+   return -1;
+ }
+ 
+@@ -1140,7 +1140,7 @@ lldpd_main(int argc, char *argv[])
+ 	/** Fetch the Product ID **/
+         get_PID_RV34X(PID_RV34X);
+         LLOG_INFO("PID of board is %s \n",PID_RV34X);
+-	
++		
+ 	get_Chassis_id("eth2");
+ 	saved_argv = argv;
+ 
+@@ -1350,6 +1350,7 @@ lldpd_main(int argc, char *argv[])
+ 		fatalx("unable to create control socket " LLDPD_CTL_SOCKET);
+ 
+ 	/* Main loop */
++	lldp_8021x_init();
+ 	levent_loop(cfg);
+ 	lldpd_exit(cfg);
+ 
+-- 
+1.7.9.5
+

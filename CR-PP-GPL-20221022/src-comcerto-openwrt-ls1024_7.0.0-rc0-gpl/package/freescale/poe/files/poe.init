@@ -1,0 +1,110 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=1
+
+. /lib/config/uci.sh
+. /lib/functions.sh
+
+config_load poeconf
+
+start()
+{
+  board=`uci get systeminfo.sysinfo.pid | cut -d'-' -f1`
+  if [ "$board" != "RV260P" ]; then
+      return 0;
+  fi
+  # affine the I2C to core 1, to resolve the Sw Qos  performance drop issue.
+  echo 2 > /proc/irq/62/smp_affinity
+  insmod /lib/modules/4.1.8/poedrv.ko
+  set_poe_conf
+  onpoll
+  logger -t PoE "PoE Application started .."
+}
+
+stop(){
+
+  board=`uci get systeminfo.sysinfo.pid | cut -d'-' -f1`
+  if [ "$board" != "RV260P" ]; then
+      return 0;
+  fi
+  offpoll
+  disable_all_poe_led
+  rmmod poedrv
+  logger -t PoE "PoE Application stopped .."
+  return 0;
+}
+
+
+reload(){
+  board=`uci get systeminfo.sysinfo.pid | cut -d'-' -f1`
+  if [ "$board" != "RV260P" ]; then
+      return 0;
+  fi
+  offpoll
+  uci commit poeconf
+  set_poe_conf
+  sleep 1
+  onpoll
+}
+
+restart(){
+  reload
+}
+
+
+set_port_config()
+{
+  local padmin allport port
+
+  for port in 0 1 2 3
+  do
+   config_get padmin poesettings_$port poe_admin_status
+   allport=$allport$padmin
+  done
+  echo $allport > /proc/poe/portpower
+}
+
+onpoll()
+{
+  /bin/sh /etc/startpoeled & >/dev/null 2>&1
+  taskset -p 2 `ps -w | grep startpoeled | grep -v grep | awk '{ print $1 }'` >/dev/null 2>&1
+}
+
+offpoll()
+{
+  /bin/sh /etc/stoppoeled & >/dev/null 2>&1
+}
+
+disable_all_poe_led()
+{
+ echo "0000" > /proc/poe/portpower
+ echo 0 > /sys/devices/platform/leds-gpio/leds/rv160w\:\:pse_led4/brightness
+ echo 0 > /sys/devices/platform/leds-gpio/leds/rv160w\:\:pse_led3/brightness
+ echo 0 > /sys/devices/platform/leds-gpio/leds/rv160w\:\:pse_led2/brightness
+ echo 0 > /sys/devices/platform/leds-gpio/leds/rv160w\:\:pse_led1/brightness
+}
+
+set_poe_conf() {
+    local padmin allport port poeglobal
+    local interface_port poe_admin_status power_priority admin_power_alloc
+    local poe_mode legacy trap trap_threshold
+
+    config_get poe_mode poeglobal poe_mode
+    config_get legacy poeglobal legacy
+    config_get trap poeglobal trap
+    config_get trap_threshold poeglobal trap_threshold
+    poeglobal="$poe_mode:$legacy:$trap:$trap_threshold" 
+
+    for port in 0 1 2 3
+    do
+        #config_get interface_port poesettings_$port  interface_port
+        config_get poe_admin_status poesettings_$port poe_admin_status
+        config_get power_priority poesettings_$port power_priority
+        config_get admin_power_alloc poesettings_$port admin_power_alloc
+        allport="$allport:$poe_admin_status:$power_priority:$admin_power_alloc"
+    done
+    #echo "$poeglobal$allport" > /tmp/.poe.log
+    echo "$poeglobal$allport" > /proc/poe/setconf
+}
+

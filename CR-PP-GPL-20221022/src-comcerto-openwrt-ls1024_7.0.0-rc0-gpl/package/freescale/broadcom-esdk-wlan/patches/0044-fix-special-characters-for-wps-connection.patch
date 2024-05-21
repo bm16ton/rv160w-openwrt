@@ -1,0 +1,84 @@
+From 56f8cd64e71478a434380036abf9303dd1d6cde6 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:59:58 +0800
+Subject: [PATCH 44/63] fix-special-characters-for-wps-connection
+Content-Type: text/plain; charset="utf-8"
+
+---
+ .../apps/wps/brcm_apps/linux/wps_linux_main.c      |   42 ++++++++++++++++++--
+ main/components/apps/wps/common/include/tutrace.h  |    3 --
+ 2 files changed, 38 insertions(+), 7 deletions(-)
+
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index 5a0d6a2..fc6cc67 100755
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -543,13 +543,47 @@ set_wsec(char *ifname, void *credential, int mode)
+ 		wl_ioctl(both_ifname, WLC_UP, NULL, 0);
+ 	}
+ 
++	char cur_ssid_fixed[DOT11_MAX_SSID_LEN * 4 + 1] = {0};
++	char new_ssid_fixed[DOT11_MAX_SSID_LEN * 4 + 1] = {0};
++	char *p_cur_ssid = cur_ssid_fixed;
++	char *p_new_ssid = new_ssid_fixed;
++	int ssid_len_idx = 0;
++	int cur_ssid_len = strlen(cur_ssid.SSID);
++	int new_ssid_len = strlen(cred->ssid);
++
++	for (ssid_len_idx = 0; ssid_len_idx < cur_ssid_len; ssid_len_idx++) {
++		if ((cur_ssid.SSID[ssid_len_idx] == '\\') ||
++		   	(cur_ssid.SSID[ssid_len_idx] == '"')) {
++			if (cur_ssid.SSID[ssid_len_idx] == '\\') {
++				*p_cur_ssid++ = '\\';
++				*p_cur_ssid++ = '\\';
++			}
++			*p_cur_ssid++ = '\\';
++		}
++		*p_cur_ssid = cur_ssid.SSID[ssid_len_idx];
++		p_cur_ssid++;
++	}
++	
++	for (ssid_len_idx = 0; ssid_len_idx < new_ssid_len; ssid_len_idx++) {
++		if ((cred->ssid[ssid_len_idx] == '\\') ||
++		   	(cred->ssid[ssid_len_idx] == '"')) {
++			if (cred->ssid[ssid_len_idx] == '\\') {
++				*p_new_ssid++ = '\\';
++				*p_new_ssid++ = '\\';
++			}
++			*p_new_ssid++ = '\\';
++		}
++		*p_new_ssid = cred->ssid[ssid_len_idx];
++		p_new_ssid++;
++	}
++	
+ 	/* save the changes to CDB */
+ 	if (both_mark)
+-		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 1 %s %s %d %s &",
+-				ifname, cur_ssid.SSID, cred->ssid, psk_mode, temp_key);
++		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 1 \"%s\" \"%s\" %d \"%s\" &",
++				ifname, cur_ssid_fixed, new_ssid_fixed, psk_mode, temp_key);
+ 	else
+-		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 0 %s %s %d %s &",
+-				ifname, cur_ssid.SSID, cred->ssid, psk_mode, temp_key);
++		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 0 \"%s\" \"%s\" %d \"%s\" &",
++				ifname, cur_ssid_fixed, new_ssid_fixed, psk_mode, temp_key);
+ 
+ 	system(update_ssid_profile);
+ 
+diff --git a/main/components/apps/wps/common/include/tutrace.h b/main/components/apps/wps/common/include/tutrace.h
+index ee358cc..2d5e6e4 100644
+--- a/main/components/apps/wps/common/include/tutrace.h
++++ b/main/components/apps/wps/common/include/tutrace.h
+@@ -47,9 +47,6 @@ int WPS_HexDumpAscii(unsigned int level, char *title, unsigned char *buf, unsign
+ #define TUTRACE_INFO       TUINFO, __FUNCTION__, __LINE__
+ #define TUTRACE_NFC        TUNFC, __FUNCTION__, __LINE__
+ 
+-
+-#define _TUDEBUGTRACE
+-
+ #ifdef _TUDEBUGTRACE
+ 
+ #define TUTRACE(VARGLST)   print_traceMsg VARGLST
+-- 
+1.7.10
+

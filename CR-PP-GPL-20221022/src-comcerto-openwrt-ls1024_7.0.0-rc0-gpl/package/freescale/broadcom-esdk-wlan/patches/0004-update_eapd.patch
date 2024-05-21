@@ -1,0 +1,80 @@
+From 1846874cfd7b810b0500560f0b0146ee98568957 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 17:42:55 +0800
+Subject: [PATCH 04/63] update_eapd
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/router/eapd/eapd.c |   12 ++++++------
+ main/components/router/eapd/eapd.h |    4 ++--
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/main/components/router/eapd/eapd.c b/main/components/router/eapd/eapd.c
+index d659195..ae703ae 100644
+--- a/main/components/router/eapd/eapd.c
++++ b/main/components/router/eapd/eapd.c
+@@ -2484,7 +2484,7 @@ sta_remove(eapd_wksp_t *nwksp, eapd_sta_t *sta)
+ 	eapd_sta_t *sta_list;
+ 	uint hash;
+ 
+-	EAPD_INFO("sta %s remove\n", ether_etoa((uchar *)&sta->ea, eabuf));
++	//EAPD_INFO("sta %s remove\n", ether_etoa((uchar *)&sta->ea, eabuf));
+ 
+ 	if (sta == NULL) {
+ 		EAPD_ERROR("called with NULL STA ponter\n");
+@@ -2505,8 +2505,8 @@ sta_remove(eapd_wksp_t *nwksp, eapd_sta_t *sta)
+ 		while ((sta_list != NULL) && (sta_list->next != sta))
+ 			sta_list = sta_list->next;
+ 		if (sta_list == NULL) {
+-			EAPD_INFO("sta %s not in hash list\n",
+-				ether_etoa((uchar *)&sta->ea, eabuf));
++			//EAPD_INFO("sta %s not in hash list\n",
++			//	ether_etoa((uchar *)&sta->ea, eabuf));
+ 		}
+ 		else {
+ 			sta_list->next = sta->next;
+@@ -2529,7 +2529,7 @@ sta_lookup(eapd_wksp_t *nwksp, struct ether_addr *sta_ea, struct ether_addr *bss
+ 	eapd_sta_t *sta;
+ 	time_t now, oldest;
+ 
+-	EAPD_INFO("lookup for sta %s\n", ether_etoa((uchar *)sta_ea, eabuf));
++	//EAPD_INFO("lookup for sta %s\n", ether_etoa((uchar *)sta_ea, eabuf));
+ 
+ 	hash = EAPD_PAE_HASH(sta_ea);
+ 
+@@ -2587,7 +2587,7 @@ sta_lookup(eapd_wksp_t *nwksp, struct ether_addr *sta_ea, struct ether_addr *bss
+ 
+ 		/* initial mode */
+ 		sta->mode = EAPD_STA_MODE_UNKNOW;
+-		EAPD_INFO("Create eapd sta %s\n", ether_etoa((uchar *)&sta->ea, eabuf));
++		//EAPD_INFO("Create eapd sta %s\n", ether_etoa((uchar *)&sta->ea, eabuf));
+ 
+ 		/* Add entry to the cache */
+ 		sta->next = nwksp->sta_hashed[hash];
+@@ -2604,7 +2604,7 @@ sta_lookup(eapd_wksp_t *nwksp, struct ether_addr *sta_ea, struct ether_addr *bss
+ 
+ 		/* initial mode */
+ 		sta->mode = EAPD_STA_MODE_UNKNOW;
+-		EAPD_INFO("sta %s come from changed.\n", ether_etoa((uchar *)&sta->ea, eabuf));
++		//EAPD_INFO("sta %s come from changed.\n", ether_etoa((uchar *)&sta->ea, eabuf));
+ 	}
+ 
+ 	sta->last_use = now;
+diff --git a/main/components/router/eapd/eapd.h b/main/components/router/eapd/eapd.h
+index 40b9a3c..11af223 100644
+--- a/main/components/router/eapd/eapd.h
++++ b/main/components/router/eapd/eapd.h
+@@ -32,8 +32,8 @@ extern uint eapd_msg_level;
+ #define EAPDBANNER(fmt, arg...)	do { \
+ 		printf(" EAPD>> %s(%d): "fmt, __FUNCTION__, __LINE__ , ##arg);} while (0)
+ 
+-#define EAPD_ERROR(fmt, arg...)
+-#define EAPD_INFO(fmt, arg...)
++#define EAPD_ERROR(fmt, arg...) printf(fmt , ##arg)
++#define EAPD_INFO(fmt, arg...) printf(fmt , ##arg)
+ #define EAPD_PRINT(fmt, arg...)	printf(fmt , ##arg)
+ 
+ #define EAPD_WKSP_FLAG_SHUTDOWN			0x1
+-- 
+1.7.10
+

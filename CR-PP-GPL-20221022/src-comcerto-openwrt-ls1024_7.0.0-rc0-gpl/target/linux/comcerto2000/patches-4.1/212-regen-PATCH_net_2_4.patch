@@ -1,0 +1,61 @@
+From 4867b3f80b6d9cb8e0bc1ba7ee2c62dc2fa6c095 Mon Sep 17 00:00:00 2001
+From: Ganesh Reddy <ganesh.reddy@nxp.com>
+Date: Thu, 4 Jul 2019 16:50:04 +0530
+Subject: [PATCH] Regenerated patch from the original PATCH_net_2_4.patch part
+ of CVE-2019-11478
+
+This patch is appliying as per CVE-2019-11478 (https://github.com/Netflix/security-bulletins/blob/master/advisories/third-party/2019-001.md)
+Original patch reference is:
+  https://github.com/Netflix/security-bulletins/blob/master/advisories/third-party/2019-001/PATCH_net_2_4.patch
+It is tuned as per current Linux kernel in our ASK-7.1.1.
+
+Signed-off-by: Ganesh Reddy <ganesh.reddy@nxp.com>
+---
+ include/uapi/linux/snmp.h | 1 +
+ net/ipv4/proc.c           | 1 +
+ net/ipv4/tcp_output.c     | 5 +++++
+ 3 files changed, 7 insertions(+)
+
+diff --git a/include/uapi/linux/snmp.h b/include/uapi/linux/snmp.h
+index 6a6fb74..9b943b7 100644
+--- a/include/uapi/linux/snmp.h
++++ b/include/uapi/linux/snmp.h
+@@ -276,6 +276,7 @@ enum
+ 	LINUX_MIB_TCPACKSKIPPEDFINWAIT2,	/* TCPACKSkippedFinWait2 */
+ 	LINUX_MIB_TCPACKSKIPPEDTIMEWAIT,	/* TCPACKSkippedTimeWait */
+ 	LINUX_MIB_TCPACKSKIPPEDCHALLENGE,	/* TCPACKSkippedChallenge */
++	LINUX_MIB_TCPWQUEUETOOBIG,              /* TCPWqueueTooBig */
+ 	__LINUX_MIB_MAX
+ };
+ 
+diff --git a/net/ipv4/proc.c b/net/ipv4/proc.c
+index e1f3b91..53b4a53 100644
+--- a/net/ipv4/proc.c
++++ b/net/ipv4/proc.c
+@@ -298,6 +298,7 @@ static const struct snmp_mib snmp4_net_list[] = {
+ 	SNMP_MIB_ITEM("TCPACKSkippedFinWait2", LINUX_MIB_TCPACKSKIPPEDFINWAIT2),
+ 	SNMP_MIB_ITEM("TCPACKSkippedTimeWait", LINUX_MIB_TCPACKSKIPPEDTIMEWAIT),
+ 	SNMP_MIB_ITEM("TCPACKSkippedChallenge", LINUX_MIB_TCPACKSKIPPEDCHALLENGE),
++	SNMP_MIB_ITEM("TCPWqueueTooBig", LINUX_MIB_TCPWQUEUETOOBIG),
+ 	SNMP_MIB_SENTINEL
+ };
+ 
+diff --git a/net/ipv4/tcp_output.c b/net/ipv4/tcp_output.c
+index 62693b0..2066c33 100644
+--- a/net/ipv4/tcp_output.c
++++ b/net/ipv4/tcp_output.c
+@@ -1162,6 +1162,11 @@ int tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
+ 	if (nsize < 0)
+ 		nsize = 0;
+ 
++	if (unlikely((sk->sk_wmem_queued >> 1) > sk->sk_sndbuf)) {
++		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPWQUEUETOOBIG);
++		return -ENOMEM;
++	}
++
+ 	if (skb_unclone(skb, gfp))
+ 		return -ENOMEM;
+ 
+-- 
+1.9.1
+

@@ -1,0 +1,16 @@
+# 2017-03-20: Manish Tiwari <mansh.tiwari@nxp.com>
+# NXP application support for switch (BCM53134M and BCM53128M).
+diff -aurN a/make/Make.linux b/make/Make.linux
+--- a/make/Make.linux	2016-12-19 19:28:41.206795659 +0530
++++ b/make/Make.linux	2016-12-19 19:32:13.554799645 +0530
+@@ -91,6 +91,10 @@
+         platform=$(platform) kernel_version=$(kernel_version)
+ endif
+ 
++  CMD += $(LINUX_MAKE_FLAGS) -C $(SDK)/systems/linux/user/switch \
++	platform=$(platform) bldroot_suffix=/$(platform) kernel_version=$(kernel_version) \
++	LINUX_MAKE_SHARED_LIB=$(LINUX_MAKE_SHARED_LIB) SHAREDLIBVER=$(SHAREDLIBVER)
++
+ ifneq (,$(MIPS_TOOLS_DIR))
+   CMD += MIPS_TOOLS_DIR=$(MIPS_TOOLS_DIR)
+ endif

@@ -1,0 +1,13 @@
+diff --git a/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+index ca27a26..d82e39d 100755
+--- a/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -3711,7 +3711,7 @@ wlc_amsdu_deagg_hw(amsdu_info_t *ami, struct scb *scb, struct wlc_frminfo *f)
+ 				int roundoff_diff = PKTLEN(osh,newpkt) - sflen;
+ 				PKTMSPDLENREF(newpkt) -= roundoff_diff ? (ROUNDUP(roundoff_diff,4)-roundoff_diff) : 0;
+ 				if(scb && WSEC_ENABLED(scb->bsscfg->wsec)) {
+-					if(PKTNEXT(osh, newpkt) != NULL) {
++					if((num_sf == 0) && PKTNEXT(osh, newpkt) != NULL) {  /* Adjusting mspd_len for first and last frame */
+ 						PKTMSPDLENREF(newpkt) += 8;
+ 					} else if(num_sf !=0 && PKTNEXT(osh, newpkt) == NULL) {
+ 						PKTMSPDLENREF(newpkt) -= 8;

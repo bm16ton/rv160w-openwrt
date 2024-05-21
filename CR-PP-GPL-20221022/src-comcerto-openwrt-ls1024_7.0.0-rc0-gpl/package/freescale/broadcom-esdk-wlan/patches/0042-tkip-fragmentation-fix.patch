@@ -1,0 +1,65 @@
+From 4e4b28ca92ebb215e61d3faed555b96ae0ae2928 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:57:21 +0800
+Subject: [PATCH 42/63] tkip-fragmentation-fix
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/shared/linux_osl.c |    6 +++---
+ main/src/wl/sys/wlc_rx.c    |    2 +-
+ main/src/wl/sys/wlc_tx.c    |    2 +-
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/main/src/shared/linux_osl.c b/main/src/shared/linux_osl.c
+index dc5b61b..58008e3 100644
+--- a/main/src/shared/linux_osl.c
++++ b/main/src/shared/linux_osl.c
+@@ -640,6 +640,9 @@ static struct sk_buff *osl_alloc_skb(osl_t *osh, unsigned int len)
+ 		skb->mspd_data = NULL;
+ 		skb->mspd_len = 0;
+ 		skb->mspd_ofst = 0;
++#ifdef PKTC
++		memset(skb->pktc_cb, 0, sizeof(skb->pktc_cb));
++#endif
+ 	}
+ #endif
+ #ifdef CTFMAP
+@@ -647,9 +650,6 @@ static struct sk_buff *osl_alloc_skb(osl_t *osh, unsigned int len)
+ 		_DMA_MAP(osh, PKTDATA(osh, skb), len, DMA_RX, NULL, NULL);
+ 	}
+ #endif /* CTFMAP */
+-#ifdef PKTC
+-       memset(skb->pktc_cb, 0, sizeof(skb->pktc_cb));
+-#endif
+ 	return skb;
+ }
+ 
+diff --git a/main/src/wl/sys/wlc_rx.c b/main/src/wl/sys/wlc_rx.c
+index f42ff28..c21af04 100644
+--- a/main/src/wl/sys/wlc_rx.c
++++ b/main/src/wl/sys/wlc_rx.c
+@@ -977,7 +977,7 @@ wlc_recv(wlc_info_t *wlc, void *p)
+ #ifdef NCNB_CSKB
+ 		if(likely(PKTMSPDDATA(osh,p))) {
+ 			uint16 ether_type = ntoh16(*((uint16 *)(PKTDATA(osh,p) + (ETHER_TYPE_OFST + ((fc & FC_WEP) ? (bsscfg && bsscfg->WPA_auth ? 8 : 4) : 0 )))));
+-			if(((fc & FC_WEP) && !(wlc->ucode_extended_caps & (1 << C_UCODE_FEAT_DESC_KEY)) && (TKIP_BODY_WEP_SEED_OKAY(PKTDATA(osh,p)+TKIP_BODY_OFST))) ||	!(((FC_SUBTYPE(fc) == FC_SUBTYPE_DATA) || (FC_SUBTYPE(fc) == FC_SUBTYPE_QOS_DATA)) && 						(ether_type == ETHER_TYPE_IP || ether_type == ETHER_TYPE_IPV6) )) {
++			if(((fc & FC_WEP) && (TKIP_BODY_WEP_SEED_OKAY(PKTDATA(osh,p)+TKIP_BODY_OFST))) ||	!(((FC_SUBTYPE(fc) == FC_SUBTYPE_DATA) || (FC_SUBTYPE(fc) == FC_SUBTYPE_QOS_DATA)) && 						(ether_type == ETHER_TYPE_IP || ether_type == ETHER_TYPE_IPV6) )) {
+ 				memcpy(PKTDATA(osh,p) + MIN_OFST - (pad_present ? 2 : 0) , PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p),PKTMSPDLEN(osh,p));
+ 				kfree(PKTMSPDDATA(osh,p));
+ 				PKTMSPDDATAREF(p) = NULL;
+diff --git a/main/src/wl/sys/wlc_tx.c b/main/src/wl/sys/wlc_tx.c
+index 7503ea1..be04ca3 100644
+--- a/main/src/wl/sys/wlc_tx.c
++++ b/main/src/wl/sys/wlc_tx.c
+@@ -4232,7 +4232,7 @@ wlc_prep_sdu(wlc_info_t *wlc, struct scb *scb, void **pkts, int *npkts, uint *fi
+ 	}
+ 
+ #ifdef NCNB_CSKB
+-	if(PKTMSPDDATA(osh, sdu) && is_tkip && !(wlc->ucode_extended_caps & (1 << C_UCODE_FEAT_DESC_KEY)) ) {
++	if(PKTMSPDDATA(osh, sdu) && is_tkip ) {
+ 		memcpy(PKTDATA(osh, sdu) + (PKTLEN(osh,sdu) - PKTMSPDLEN(osh, sdu)),PKTMSPDDATA(osh, sdu) +  PKTMSPDOFST(osh, sdu),PKTMSPDLEN(osh, sdu));
+ 		kfree(PKTMSPDDATA(osh, sdu));
+ 		PKTMSPDDATAREF(sdu) = NULL;
+-- 
+1.7.10
+

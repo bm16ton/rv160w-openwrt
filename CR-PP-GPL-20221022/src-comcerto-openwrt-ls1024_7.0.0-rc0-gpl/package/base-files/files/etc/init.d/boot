@@ -1,0 +1,306 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2006-2011 OpenWrt.org
+# 03-13-2017: li.zhang <li.zhang@deltaww.com>
+# Add the hotplug booting
+# 09-30-2017: li.zhang <li.zhang@deltaww.com>
+# Add copy the /etc/mobile(mobile related files and driver backup) to /mnt/packages
+# 05-03-2018: yangyang.xu <yangyang.xu@deltaww.com>
+# After PP reboot, the "Default" certificate "used by" displays an error.
+. /etc/boardInfo
+
+START=10
+STOP=98
+
+uci_apply_defaults() {
+	. /lib/functions/system.sh
+
+	cd /etc/uci-defaults || return 0
+	files="$(ls)"
+	[ -z "$files" ] && return 0
+	mkdir -p /tmp/.uci
+	for file in $files; do
+		( . "./$(basename $file)" ) && rm -f "$file"
+	done
+	uci commit
+}
+
+checkTime() {
+	local count
+	count=0
+	if [ $# -eq 1 ]; then
+		for var in $(echo ${1} | sed -e "s/[:.-]/ /g")
+		do
+			var=$(echo "$var" | sed -e "s/^0*//g")
+			[ -z "$var" ] && var=0
+			count=$(((${count} << 8) + ${var}))
+		done
+	fi
+	echo ${count};
+}
+
+is_newer_time () {
+	flashTime="$1"
+	clockTime=`date "+%Y.%m.%d-%H:%M:%S"`
+	if [ $(checkTime "$flashTime") -gt $(checkTime "$clockTime") ];then
+		return 0
+	fi
+	return 1
+}
+
+system_config() {
+	local cfg="$1"
+
+	local hostname timezone
+
+	#config_get hostname "$cfg" hostname 'OpenWrt'
+	hostname=`uci get systemconfig.system.hostname`
+	echo "$hostname" > /proc/sys/kernel/hostname
+
+	#config_get timezone "$cfg" timezone 'UTC'
+	[ ! -e /mnt/configcert/config/TZ ] && echo "GMT" > /mnt/configcert/config/TZ
+	rm -rf /etc/TZ
+	ln -sn /mnt/configcert/config/TZ /etc/TZ
+
+	# Read time from hardware clock
+	hwclock -s
+
+	flashTime=`cat $TimeFile`>/dev/null 2>&1
+	[ -n "$flashTime" ] && {
+		if is_newer_time "$flashTime";then
+			date -s "$flashTime"
+		fi
+	}
+
+	# apply timezone to kernel
+	date -k
+}
+
+openssldir_symbolic_link_test() {
+
+	CERTS_DIR=/etc/ssl/certs
+	KEYS_DIR=/etc/ssl/private
+	TEMP_CERTS_DIR=/tmp/.CERTS_DIR_TMP
+	TEMP_KEYS_DIR=/tmp/.KEYS_DIR_TMP
+	BASE_CERTS_DIR=$MNT_CERT_DIR
+	BASE_KEYS_DIR=$MNT_CERT_PRIVATE_DIR
+	PREINSTALLED_CERTFILE=/etc/ssl/certs/preinstalled_certificate
+			
+
+	# If /etc/ssl/certs is not a symbolic link then create one.
+	if [ ! -L "$CERTS_DIR" ];then                              
+        	#Create temporary certs directory
+	        `rm -rf $TEMP_CERTS_DIR`           
+        	`mkdir  $TEMP_CERTS_DIR`
+                              
+	        #Backup existing contents to the newly created temporary certs directory
+		`cp -a $CERTS_DIR/* $TEMP_CERTS_DIR`
+                                        
+	        #Remove the existing non-symbolic certs directory
+        	`rm -rf  $CERTS_DIR`                             
+                        
+        	#Create a symbolic link to the certs directory located in $BASE_CERTS_DIR
+		`ln -s $BASE_CERTS_DIR $CERTS_DIR`
+                                             
+        	#Copy the backup contents.
+	        `cp -a $TEMP_CERTS_DIR/* $CERTS_DIR`
+
+		#Copy the preinstalled certificate to its destined location.
+		`mv $PREINSTALLED_CERTFILE $MNT_PREINSTALLED_CERT_FILE`
+	fi                                      
+  
+	# If /etc/ssl/private is not a symbolic link then create one.
+	if [ ! -L "$KEYS_DIR" ];then                                 
+        	#Create temporary  directory for storing private keys
+	        `rm -rf $TEMP_KEYS_DIR`                                
+        	`mkdir  $TEMP_KEYS_DIR`
+                             
+	        #Backup existing contents to the newly created temporary certs directory
+        	`cp  $KEYS_DIR/* $TEMP_KEYS_DIR`                                          
+                                      
+	        #Remove the existing non-symbolic certs directory
+        	`rm -rf  $KEYS_DIR`                                
+                         
+	        #Create a symbolic link to the certs directory located in $BASE_KEYS_DIR
+		`ln -s $BASE_KEYS_DIR $KEYS_DIR`
+                                           
+	        #Copy the backup contents.
+        	`cp  $TEMP_KEYS_DIR/* $KEYS_DIR`
+		`rm -rf $TEMP_KEYS_DIR`
+	fi                                 
+}
+
+
+boot() {
+	#Run in the background on core-2 to check for UBIFS  errors and reboot when error found. Terminated in zfinish script.
+	taskset 2 /bin/check_ubifs_error &
+
+	[ -f /proc/mounts ] || /sbin/mount_root
+	[ -f /proc/jffs2_bbc ] && echo "S" > /proc/jffs2_bbc
+	[ -f /proc/net/vlan/config ] && vconfig set_name_type DEV_PLUS_VID_NO_PAD
+
+	mkdir -p /var/run
+	mkdir -p /var/log
+	mkdir -p /var/lock
+	mkdir -p /var/lib
+	mkdir -p /var/state
+	mkdir -p /tmp/.uci
+	chmod 0700 /tmp/.uci
+	mkdir -p /tmp/.jail
+	touch /var/log/wtmp
+	touch /var/log/lastlog
+	touch /tmp/resolv.conf.auto
+	ln -sf /tmp/resolv.conf.auto /tmp/resolv.conf
+	grep -q debugfs /proc/filesystems && /bin/mount -o noatime -t debugfs debugfs /sys/kernel/debug
+	[ "$FAILSAFE" = "true" ] && touch /tmp/.failsafe
+
+	# Copying config files to running config path
+	mkdir -p /tmp/etc/config
+	cp /etc/config/* /tmp/etc/config/
+
+	echo -n "Mounting mnt partitions.."
+	mkdir -p /mnt/configcert /mnt/reserved /mnt/webrootdb /mnt/license /mnt/packages
+	mount -t yaffs2 /dev/mtdblock9 /mnt/configcert
+	mount -t yaffs2 /dev/mtdblock10 /mnt/config_bkup
+	mount -t yaffs2 /dev/mtdblock11 /mnt/webrootdb
+	mount -t yaffs2 /dev/mtdblock12 /mnt/license
+	mount -t yaffs2 /dev/mtdblock13 /mnt/packages
+	echo "done."
+
+        # load nvram.txt to replace /sbin/nvram.txt
+        nvram_partition="`cat /proc/mtd | grep nvram | awk '{print $1}' | cut -d : -f 1`"
+        if [ -n "$nvram_partition" ]; then
+                dd if=/dev/$nvram_partition of=/tmp/nvram.txt bs=4096 count=1
+                dd_result=`echo $?`
+		if [ $dd_result -eq 0 ]
+		then
+			mkdir -p /mnt/packages/wifi
+			cp -rf /tmp/nvram.txt /mnt/packages/wifi/nvram.txt && rm -rf /tmp/nvram.txt
+		else
+			cp -rf /sbin/nvram.txt.bak /mnt/packages/wifi/nvram.txt
+		fi
+        fi
+
+	# Check and create partition layout
+	if [ ! -d "$MNT_CERT_DIR_PATH" ];then
+		mkdir -p $MNT_CERT_DIR
+		mkdir -p $MNT_CERT_PRIVATE_DIR
+		mkdir -p $MNT_CERT_CA_DIR
+	fi
+
+	if [ ! -d "/mnt/configcert/config" ];then
+                mkdir -p /mnt/configcert/config
+		touch /mnt/configcert/config/rv16x_26x.cfg
+		touch  $MNT_CERT_FILE
+	fi
+
+	if [ ! -d "$MNT_CERT_FILE_DIR" ];then
+                mkdir -p $MNT_CERT_FILE_DIR
+		touch  $MNT_CERT_FILE
+	fi
+
+	if [ ! -f "/mnt/configcert/config/swupdateinfo" ] || [ `wc -l /mnt/configcert/config/swupdateinfo | cut -d " " -f 1` -lt 16 ];then
+		# This case arises, Either factory upgrade including partion upgrade [This covers first time programmmin ]
+        echo "boot: create swupdateinfo file" >> /tmp/asdtest
+		SWUPDATEINFOFILE="/mnt/configcert/config/swupdateinfo"
+		touch $SWUPDATEINFOFILE
+		echo "frm_available_version=\"\"" >> $SWUPDATEINFOFILE
+		echo "frm_last_check_time=\"\"" >> $SWUPDATEINFOFILE
+		echo "frm_latest_version=\"0.0.0.1\"" >> $SWUPDATEINFOFILE
+		echo "frm_latest_update_time=\"\"" >> $SWUPDATEINFOFILE
+		echo "usb_available_version=\"\"" >> $SWUPDATEINFOFILE
+		echo "usb_last_check_time=\"\"" >> $SWUPDATEINFOFILE
+		echo "image1_usb_latest_version=\"0.0.0.1\"" >> $SWUPDATEINFOFILE
+		echo "image1_usb_latest_update_time=\"\"" >> $SWUPDATEINFOFILE
+		echo "image1_usb_latest_update_timezone=\"\"" >> $SWUPDATEINFOFILE
+		echo "image2_usb_latest_version=\"0.0.0.1\"" >> $SWUPDATEINFOFILE
+		echo "image2_usb_latest_update_time=\"\"" >> $SWUPDATEINFOFILE
+		echo "image2_usb_latest_update_timezone=\"\"" >> $SWUPDATEINFOFILE
+		echo "sig_available_version=\"\"" >> $SWUPDATEINFOFILE
+		echo "sig_last_check_time=\"\"" >> $SWUPDATEINFOFILE
+		echo "sig_latest_version=\"0.0.0.1\"" >> $SWUPDATEINFOFILE
+		echo "sig_latest_update_time=\"\"" >> $SWUPDATEINFOFILE
+    else
+        echo "boot: swupdateinfo file exists" >> /tmp/asdtest
+	fi
+
+	if [ ! -d "/mnt/configcert/image1" ];then
+		mkdir -p /mnt/configcert/image1
+		touch /mnt/configcert/image1/firmware_time
+		touch /mnt/configcert/image1/firmware_version
+		touch /mnt/configcert/image1/img_version
+		touch /mnt/configcert/image1/md5sum_fw-rv16x_26x-img
+        fi
+
+        if [ ! -d "/mnt/configcert/image2" ];then
+		mkdir -p /mnt/configcert/image2
+		touch /mnt/configcert/image2/firmware_time
+		touch /mnt/configcert/image2/firmware_version
+		touch /mnt/configcert/image2/img_version
+		touch /mnt/configcert/image2/md5sum_fw-rv16x_26x-img
+        fi
+
+	# Certificate changes
+
+	openssldir_symbolic_link_test
+
+	rm -rf /etc/swupdateinfo
+	ln -sn /mnt/configcert/config/swupdateinfo /etc/swupdateinfo
+
+	cp -f $MNT_CERT_FILE $TMP_CERT_FILE
+	sed -i "s/^\toption useby.*/\toption useby '-'/g" $TMP_CERT_FILE
+	cp -f $MNT_PREINSTALLED_CERT_FILE $TMP_PREINSTALLED_CERT_FILE
+
+
+	#TODO:Temporary addition in PP. In BB2 , generate_default_cert is invoked by ucicfg daemon.
+	# DNI:invoked in ucicfg daemon when upgrade or factory default with cert
+	# /usr/bin/generate_default_cert
+
+	# mobile driver and script copy
+	if [ ! -f "/mnt/packages/mobile/etc/usb-modem.ver" ];then
+		mkdir -p /mnt/packages/mobile/
+		cp /etc/mobile/* /mnt/packages/mobile/ -rf
+	else
+		mobile_version=`cat /mnt/packages/mobile/etc/usb-modem.ver | sed 's/\.//g'`
+		backup_version=`cat /etc/mobile/etc/usb-modem.ver | sed 's/\.//g'`
+		if [ $backup_version -gt $mobile_version ];then
+			mkdir -p /mnt/packages/mobile/
+			cp /etc/mobile/* /mnt/packages/mobile/ -rf
+		fi
+	fi
+
+	/sbin/kmodloader
+
+	# allow wifi modules time to settle
+	sleep 1
+	/sbin/wifi detect > /tmp/wireless.tmp
+	[ -s /tmp/wireless.tmp ] && {
+		cat /tmp/wireless.tmp >> /etc/config/wireless
+	}
+	rm -f /tmp/wireless.tmp
+
+	/bin/board_detect
+	uci_apply_defaults
+	
+	# temporary hack until configd exists
+	/sbin/reload_config
+
+	config_load system
+	config_foreach system_config system
+
+	killall -q hotplug2
+	[ -x /sbin/hotplug2 ] && /sbin/hotplug2 --override --persistent \
+		--set-rules-file /etc/hotplug2.rules \
+		--set-coldplug-cmd /sbin/udevtrigger \
+		--max-children 1 >/dev/null 2>&1 &
+
+	# create /dev/root if it doesn't exist
+	[ -e /dev/root -o -h /dev/root ] || {
+		rootdev=$(awk 'BEGIN { RS=" "; FS="="; } $1 == "root" { print $2 }' < /proc/cmdline)
+		[ -n "$rootdev" ] && ln -s "$rootdev" /dev/root
+	}
+}
+
+stop() {
+	# Write time to hardware clock
+	hwclock -w
+}

@@ -1,0 +1,51 @@
+From 90d32327cc924c2508bd8746a23b307e5e50a848 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 19 Apr 2017 21:40:27 +0800
+Subject: [PATCH] fix Invalid virtual address 7fffffe0
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/shared/hnddma.c |   13 ++++++++++++-
+ 1 file changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/main/src/shared/hnddma.c b/main/src/shared/hnddma.c
+index eecf2e2..a805dcf 100644
+--- a/main/src/shared/hnddma.c
++++ b/main/src/shared/hnddma.c
+@@ -1811,6 +1811,9 @@ next_frame:
+ 
+ 	/* set actual length */
+ 	pkt_len = MIN((di->rxoffset + len), di->rxbufsize);
++#ifdef NCNB_CSKB
++	pkt_len = MAX((di->rxoffset + MIN_OFST), pkt_len);
++#endif
+ 
+ #if defined(D11_SPLIT_RX_FD)
+ 	if (di->sep_rxhdr) {
+@@ -1847,6 +1850,11 @@ next_frame:
+ 		memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + EXTRA_COPY);
+ #endif
+ 		PKTMSPDLENREF(head) = pkt_len - PKTMSPDOFSTREF(head);
++		if(pkt_len < PKTMSPDOFSTREF(head))
++		{
++			printk("%s: ERROR mspd buf overflow mspdlen = %d mspdoffset= %d pkt_len = %d  \n",  
++				__func__, PKTMSPDLENREF(head), PKTMSPDOFSTREF(head) , pkt_len);
++		}
+ 	}
+ #endif
+ 
+@@ -4397,7 +4405,10 @@ dma64_txfast(dma_info_t *di, void *p0, bool commit)
+ 			int ofstlen = len - PKTMSPDLEN(di->osh, p);
+ 			int mspd_ofst = PKTMSPDOFST((di->osh),p) - ofstlen;
+ 			void *pDst = (void*)((uchar*)PKTMSPDDATAREF(p) + mspd_ofst);
+-
++			if(mspd_ofst < 0)
++			{
++				printk("%s: overflow address 0x%p, mspd_ofst = %d\n", __func__, pDst, mspd_ofst);
++			}
+ 			if (!virt_addr_valid(pDst)) {
+ 				memmove(PKTMSPDDATAREF(p) - mspd_ofst, PKTMSPDDATAREF(p), PKTMSPDLENREF(p));
+ 				pDst = PKTMSPDDATAREFCHAR(p);
+-- 
+1.7.10
+

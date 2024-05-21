@@ -1,0 +1,447 @@
+#!/bin/sh /etc/rc.common
+START=20
+STOP=80
+
+. /lib/functions.sh
+
+board=$__this_device
+start() {
+
+	echo 45 > /sys/class/gpio/export
+	echo "out" >  /sys/class/gpio/gpio45/direction
+	echo 1  >  /sys/class/gpio/gpio45/value
+	sleep .2
+
+	sh /etc/init.d/bcm_init.sh
+	`iptables -F inter_vlan_routing`
+    `iptables -A inter_vlan_routing -j vlan_routing_hairpin_bypass`
+	`ip6tables -F inter_vlan_routing`
+	`iptables -F device_management`
+	`ip6tables -F device_management`
+	touch /tmp/sw_start
+}
+
+reload() {
+	config_load switch
+	args=""
+	switch_del_vlan
+	config_foreach switch_vlan switch_vlan
+
+	if [ "$board" = "RV160W" -o "$board" = "RV260W" ]; then
+		config_foreach switch_br_vlan switch_vlan
+	fi
+
+	config_foreach port port
+	config_foreach mirror mirror
+        if [ "$board" = "RV260" -o "$board" = "RV260P" -o "$board" = "RV260W" ]; then
+		config_foreach lag lag
+        fi
+	qos_switch
+	jumboframe
+	rm /tmp/switch-bkp
+	return 0
+
+
+}
+
+
+stop() {
+	killall robodiag
+	rmmod linux-user-bde.ko
+        rmmod linux-kernel-bde.ko
+        rm -rf /dev/linux-user-bde
+	return 0
+}
+
+jumboframe() {
+	
+	is_jumbo_config=$(grep -E "yyy|-switch.jframe" /tmp/switch_config)
+	[ -n "$is_jumbo_config" -o -f /tmp/sw_start ] || return 0
+	
+	isboot=$(uci_get_state system.core.booted)
+	status=$(uci get switch.jframe.status)
+
+	if [ "$status" == 0 -a "$isboot" == "" ]
+	then
+		return 0
+	fi
+
+        if [ "$status" == "0" ]                     
+        then                                        
+                rmmod /lib/modules/4.1.8/jumbo_frame                                                    
+                ifconfig eth2 down                                                                      
+                ifconfig eth2 mtu 1500                                                                  
+                ifconfig eth2 mtu 1500                                                                  
+                iface=$(uci show network | grep vlan | awk -F . '{print $2}' | uniq | grep -v interface)
+                echo $iface                                    
+                for i in $iface                                
+                do                                             
+                        iface_name=$(uci get network.$i.ifname)
+                        ifconfig $iface_name mtu 1500    
+                done                            
+                ifconfig eth2 up                     
+        elif [ "$status" == "1" ]                    
+        then                                         
+                insmod /lib/modules/4.1.8/jumbo_frame                                                   
+                ifconfig eth2 down                                                                      
+                ifconfig eth2 mtu 9000                                                                  
+                ifconfig eth2 mtu 9000                                                                  
+                iface=$(uci show network | grep vlan | awk -F . '{print $2}' | uniq | grep -v interface)
+                echo $iface                                    
+                for i in $iface                                
+                do                                             
+                        iface_name=$(uci get network.$i.ifname)
+                        ifconfig $iface_name mtu 9000
+                done            
+                ifconfig eth2 up
+        fi        
+	iface=$(ubus list | grep network.interface.vlan | cut -d . -f 3)
+	for i in $iface
+	do
+		ifup $i                      
+	done
+
+	if [ "$board" = "RV160W" -o "$board" = "RV260W" ]; then
+		wifi reload
+	fi
+}
+
+
+switch_del_vlan() {
+
+	is_delete_config=$(grep -E "yyy |-switch.vlan" /tmp/switch_config | awk -F '.' '{print $2}' | sed s/vlan//g)
+        [ -n "$is_delete_config" ] && 
+        {
+        	for i in $is_delete_config
+        	do
+        	/usr/sbin/bcmssdk -V 1 -v $i -d 1
+        	done
+        }
+}
+
+switch_vlan() {
+	local cfg=$1
+        
+	is_port_config=$(grep "switch.$cfg=" /tmp/switch_config)
+	[ -n "$is_port_config" -o -f /tmp/sw_start ] || return 0
+        
+	config_get vlan "$cfg" vlan
+	config_get ports "$cfg" ports
+	config_get routing "$cfg" routing
+	config_get dev_mgmt "$cfg" dev_mgmt
+
+	#logger -t testing "=== VLAN=$vlan,PORTS= $ports,ROUTING=$routing,dev_mgmt=$dev_mgmt ==="	 
+	
+	iface=$(uci get network.$cfg.ifname)
+	if [ "$routing" = "disable" ]
+        then
+                `iptables -w -A inter_vlan_routing --out-interface $iface -j DROP`
+                `ip6tables -w -A inter_vlan_routing --out-interface $iface -j DROP`
+        elif [ "$routing" = "enable" ]
+	then
+        	`iptables -w -D inter_vlan_routing --out-interface $iface -j DROP`
+        	`ip6tables -w -D inter_vlan_routing --out-interface $iface -j DROP`
+        fi
+
+	old_dev_mgmt=$(uci get /tmp/switch-bkp.vlan$vlan.dev_mgmt)
+	#logger -t testing "=== old_dev_mgmt=$old_dev_mgmt : $dev_mgmt new ==="	 
+	if [ "$old_dev_mgmt" != "$dev_mgmt" ]
+	then
+		if [ "$dev_mgmt" = "disable" ]
+		then
+			iptables -w -A device_management --in-interface $iface -p tcp -m multiport --destination-port 80,443 -j DROP
+			ip6tables -w -A device_management --in-interface $iface -p tcp -m multiport --destination-port 80,443 -j DROP
+		elif [ "$dev_mgmt" = "enable" ]
+		then
+			iptables -w -D device_management --in-interface $iface -p tcp -m multiport --destination-port 80,443 -j DROP
+			ip6tables -w -D device_management --in-interface $iface -p tcp -m multiport --destination-port 80,443 -j DROP
+		fi
+	fi
+                
+	string=""
+	for o in $ports; do
+		i=${o/t/-t}
+		local oIFS="$IFS"; IFS="-"
+		set $i
+		IFS="$oIFS"
+	
+	case $1 in
+	*lag*)
+        	l=$(uci get switch.$1.ports)
+                str1=""
+                for p in $l; do
+                if [ -n "$2" ];
+                then
+                str1="$str1 -t $p"
+                else
+                str1="$str1 -u $p"
+		fi
+		done
+                string="$string $str1"
+                 ;;
+	 *)
+		if [ -n "$2" ];
+                then
+                	string="$string -t $1"
+                else
+                	string="$string -u $1"
+                fi
+                ;;
+                esac
+                done
+	/usr/sbin/bcmssdk -V 1 -v $vlan -c 1 $string
+}
+
+switch_br_vlan() {
+
+        local cfg=$1
+	is_port_config=$(grep "switch.$cfg=" /tmp/switch_config)
+	[ -n "$is_port_config" -o -f /tmp/sw_start ] || return 0
+
+	config_get routing "$cfg" routing
+	config_get dev_mgmt "$cfg" dev_mgmt
+
+	if [ "$routing" = "disable" ]
+	then
+		`iptables -A inter_vlan_routing --out-interface br-$cfg -j DROP`
+		`ip6tables -A inter_vlan_routing --out-interface br-$cfg -j DROP`
+	elif [ "$routing" = "enable" ]
+	then
+		`iptables -D inter_vlan_routing --out-interface br-$cfg -j DROP`
+		`ip6tables -D inter_vlan_routing --out-interface br-$cfg -j DROP`
+	fi
+	
+	old_dev_mgmt=$(uci get /tmp/switch-bkp.$cfg.dev_mgmt)
+	#logger -t testing "=== Wireless old_dev_mgmt=$old_dev_mgmt : $dev_mgmt new ==="	 
+	if [ "$old_dev_mgmt" != "$dev_mgmt" ]
+	then
+		if [ "$dev_mgmt" = "disable" ]
+		then
+		iptables -w -A device_management --in-interface br-$cfg -p tcp -m multiport --destination-port 80,443 -j DROP
+		ip6tables -w -A device_management --in-interface br-$cfg -p tcp -m multiport --destination-port 80,443 -j DROP
+		elif [ "$dev_mgmt" = "enable" ]
+		then
+		iptables -w -D device_management --in-interface br-$cfg -p tcp -m multiport --destination-port 80,443 -j DROP
+		ip6tables -w -D device_management --in-interface br-$cfg -p tcp -m multiport --destination-port 80,443 -j DROP
+		fi
+	fi
+}
+
+port() {
+
+        local cfg=$1
+        is_port_config=$(grep -E "yyy|-switch.$cfg" /tmp/switch_config)
+        [ -n "$is_port_config" -o -f /tmp/sw_start ] || return 0
+
+	#logger -t testing "[ Port called with cfg=$cfg]"	 
+        config_get swport "$cfg" swport
+        config_get name "$cfg" name
+        config_get status "$cfg" status
+        config_get eee "$cfg" eee
+        config_get mode "$cfg" mode
+        config_get flow_control "$cfg" flow_control
+
+	#logger -t testing "[$name port=$swport status=$status eee=$eee mode=$mode flow_control=$flow_control]"	 
+        if [ $status = enable ];
+        then
+        	s=1
+        else
+        	s=0
+        fi
+        /usr/sbin/bcmssdk -L 1 -p $swport -s $s -f $flow_control -e $eee -m $mode
+}
+
+mirror() {
+	
+        local cfg=$1
+        
+        is_mirror_config=$(grep "switch.$cfg" /tmp/switch_config)
+        [ -n "$is_mirror_config" -o -f /tmp/sw_start ] || return 0
+        
+        config_get status "$cfg" status
+        config_get m "$cfg" mirror_dest
+        config_get p "$cfg" mirror_ports
+        if [ $status = "disable" ]
+        then
+        	/usr/sbin/bcmssdk -M 1 -d 1
+        elif [ $status = "enable" ]
+        then
+		/usr/sbin/bcmssdk -M 1 -d 1
+        	str=""
+        	for x in $p; do
+                	str="$str -p $x"
+        	done
+
+		#logger -t testing "Mirror m=$m str=$str"	 
+		/usr/sbin/bcmssdk -M 1 -m $m $str
+	fi
+}
+
+lag() {
+	local cfg=$1
+	
+	is_lag_config=$(grep "switch.$cfg" /tmp/switch_config)
+	[ -n "$is_lag_config" -o -f /tmp/sw_start ] || return 0
+
+	config_get state "$cfg" state
+	config_get ports "$cfg" ports
+	trunk_id=$(echo ${cfg:3})
+
+	[ -n "$state" -a "$state" = "up" ] || 
+	{
+		/usr/sbin/bcmssdk -T 1 -d $trunk_id
+		return 0
+	}
+	str1=""
+	for x in $ports; do
+		str1="$str1 -p $x"
+	done
+	#logger -t testing "LAG ports = $str1 trunk=$trunk_id"
+	/usr/sbin/bcmssdk -T 1 -m 1 $str1 -g $trunk_id
+}
+
+qos_switch() {
+
+        is_qos_switch_config=$(grep "qos" /tmp/qos_switch_config)
+        is_lag_config=$(grep "switch.lag..state=" /tmp/switch_config)
+        [ -n "$is_lag_config" ] && {
+                is_qos_switch_config="lag"
+        }
+        [ -n "$is_qos_switch_config" -o -f /tmp/sw_start ] || return 0
+
+        qos_mode=$(uci get qos_switch.mode.type)
+
+        if [ $qos_mode = "port" ]
+        then
+        mode_no=1
+        elif [ $qos_mode = "dscp" ]
+        then
+        mode_no=2
+        elif [ $qos_mode = "cos" ]
+        then
+        mode_no=3
+        fi
+
+        switch_queueing
+        /usr/sbin/bcmssdk -Q 1 -s $mode_no -t 1
+        
+	if [ $qos_mode = "port" ]
+        then
+        switch_classification_port_based
+        else
+        config_load qos_switch
+        config_foreach switch_classification_others switch_classification
+        fi
+
+}
+
+switch_classification_port_based() {
+	if [ "$board" = "RV160" -o "$board" = "RV160W" ]; then
+		ports="1 2 3 4"                               
+	elif [ "$board" = "RV260" -o "$board" = "RV260W" -o "$board" = "RV260P" ]; then
+		ports="1 2 3 4 5 6 7 8"                                                                       
+        fi                                                                               
+        
+	x=$ports
+#        /usr/sbin/bcmssdk -Q 1 -s 3 -c 0 -q 1
+#        /usr/sbin/bcmssdk -Q 1 -s 3 -c 1 -q 1
+#        /usr/sbin/bcmssdk -Q 1 -s 3 -c 2 -q 2
+#        /usr/sbin/bcmssdk -Q 1 -s 3 -c 3 -q 3
+#        /usr/sbin/bcmssdk -Q 1 -s 3 -c 4 -q 3
+#        /usr/sbin/bcmssdk -Q 1 -s 3 -c 5 -q 4
+#        /usr/sbin/bcmssdk -Q 1 -s 3 -c 6 -q 4
+#        /usr/sbin/bcmssdk -Q 1 -s 3 -c 7 -q 4
+
+        config_load switch
+        config_foreach switch_classification_port_based_lag lag
+
+        rem_ports=$x
+        for p in $rem_ports;do
+        queue=$(uci get qos_switch.port$p.queue)
+        ## switch queueing for ports out of lag ##
+        /usr/sbin/bcmssdk -Q 1 -s 1 -p $p -q $queue
+        done
+
+}
+
+switch_classification_port_based_lag() {
+
+        lag_name=$1
+        lag_state=$(uci get switch.$lag_name.state)
+
+        [ "$lag_state" = "up" ] || return 0
+        lag_ports=$(uci get switch.$lag_name.ports)
+        queue=$(uci get qos_switch.$lag_name.queue)
+
+        ## switch classification for ports in lag_name ##
+        for p in $lag_ports;do
+		p=$((p+1))
+        	/usr/sbin/bcmssdk -Q 1 -s 1 -p $p -q $queue
+        	x=$(echo "$x" | sed "s@$p@@")
+        done
+
+}
+
+switch_classification_others() {
+
+        local cfg=$1
+        config_get queue "$cfg" queue
+
+        tmp=$(echo ${cfg:0:3})
+
+        if [ $tmp = "dsc" -a $qos_mode = "dscp" ]
+        then
+        dscp=$(echo ${cfg:4})
+        /usr/sbin/bcmssdk -Q 1 -s 2 -d $dscp -q $queue
+
+        elif [ $tmp = "cos" -a $qos_mode = "cos" ]
+        then
+        cos=$(echo ${cfg:3})
+	cos=$(expr $cos "-" 1)
+        /usr/sbin/bcmssdk -Q 1 -s 3 -c $cos -q $queue
+        fi
+
+}
+
+switch_queueing() {
+	if [ "$board" = "RV160" -o "$board" = "RV160W" ]; then
+		ports="1 2 3 4"                               
+	elif [ "$board" = "RV260" -o "$board" = "RV260W" -o "$board" = "RV260P" ]; then
+		ports="1 2 3 4 5 6 7 8"                                                                       
+        fi                                                                               
+ 
+        x=$ports
+        config_load switch
+        config_foreach switch_queueing_lag lag
+
+        rem_ports=$x
+        ## switch queueing for remaining ports ##
+        for p in $rem_ports;do
+        q1_wt=$(uci get qos_switch.port$p.q1_weight)
+        q2_wt=$(uci get qos_switch.port$p.q2_weight)
+        q3_wt=$(uci get qos_switch.port$p.q3_weight)
+        q4_wt=$(uci get qos_switch.port$p.q4_weight)
+
+        /usr/sbin/bcmssdk -Q 1 -p $p -1 $q1_wt -2 $q2_wt -3 $q3_wt -4 $q4_wt -o 1
+        done
+}
+switch_queueing_lag() {
+
+        lag_name=$1
+        lag_state=$(uci get switch.$lag_name.state)
+
+        [ "$lag_state" = "up" ] || return 0
+        lag_ports=$(uci get switch.$lag_name.ports)
+
+        q1_wt=$(uci get qos_switch.$lag_name.q1_weight)
+        q2_wt=$(uci get qos_switch.$lag_name.q2_weight)
+        q3_wt=$(uci get qos_switch.$lag_name.q3_weight)
+        q4_wt=$(uci get qos_switch.$lag_name.q4_weight)
+
+        ## switch queueing for ports in lag_name ##
+        for p in $lag_ports;do
+		p=$((p+1))
+        	/usr/sbin/bcmssdk -Q 1 -p $p -1 $q1_wt -2 $q2_wt -3 $q3_wt -4 $q4_wt -o 1
+        	x=$(echo "$x" | sed "s@$p@@")
+        done
+}

@@ -1,0 +1,31 @@
+--- a/main/src/wl/sys/wlc_ap.c	2017-04-21 15:12:45.340671642 +0800
++++ b/main/src/wl/sys/wlc_ap.c	2017-04-21 15:26:33.953671574 +0800
+@@ -1541,7 +1541,7 @@
+ 				(bsscfg->SSID && strcmp(bsscfg->SSID, last_logmac[wlc->pub->unit].ssid) != 0) &&
+ 				strcmp(sa, last_logmac[wlc->pub->unit].mac) != 0) {
+ 				printk(KERN_NOTICE "RADIO %s SSID %s prevent %s\n",
+-					   wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, sa);
++					   CHSPEC_IS2G(bsscfg->target_bss->chanspec) ? "2.4G" : "5G", bsscfg->SSID, sa);
+ 				strcpy(last_logmac[wlc->pub->unit].ssid, bsscfg->SSID);
+ 				strcpy(last_logmac[wlc->pub->unit].mac, sa);
+ 			}
+@@ -2664,7 +2664,7 @@
+ 		reassoc ? "re" : ""));
+ 
+ 	printk(KERN_NOTICE "RADIO %s SSID %s %s %sconnected\n",
+-		wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, sa,
++		CHSPEC_IS2G(bsscfg->target_bss->chanspec) ? "2.4G" : "5G", bsscfg->SSID, sa,
+ 		reassoc ? "re" : "");
+ #ifdef CONFIG_C2K_RV160_260
+ 	sta_connection++;
+--- a/main/src/wl/sys/wlc_psta.c	2017-04-21 15:29:24.316671447 +0800
++++ b/main/src/wl/sys/wlc_psta.c	2017-04-21 15:29:10.157671611 +0800
+@@ -467,7 +467,7 @@
+ 		WL_ERROR(("wl%d: Proxy STA %s link is already gone !!??\n",
+ 		          psta->pub->unit, bcm_ether_ntoa(&psta_ha, eabuf)));
+ 			printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
+-				   psta->pub->unit == 0 ? "2.4G" : "5G", scb->bsscfg->SSID,
++				   CHSPEC_IS2G(scb->bsscfg->target_bss->chanspec) ? "2.4G" : "5G", scb->bsscfg->SSID,
+ 				   bcm_ether_ntoa(&psta_ha, eabuf));
+ #ifdef CONFIG_C2K_RV160_260
+ 			if (sta_connection > 0)

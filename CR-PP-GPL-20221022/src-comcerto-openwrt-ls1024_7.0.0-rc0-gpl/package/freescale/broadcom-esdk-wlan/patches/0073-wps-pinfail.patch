@@ -1,0 +1,133 @@
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ap.c b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+index 09a9754..7440a6c 100755
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ap.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+@@ -329,6 +329,7 @@ wpsap_process_msg(wpsap_wksp_t *wps_wksp, char *buf, uint32 len, uint32 msgtype)
+ 			else if (retVal == WPS_ERR_REGISTRATION_PINFAIL) {
+ 				wps_ui_set_env("wps_pinfail", "1");
+ 				wps_set_conf("wps_pinfail", "1");
++				wps_set_conf("wps_reg_pinfail", "1");
+ 			}
+ 			else if (retVal == WPS_ERR_ENROLLMENT_PINFAIL)
+ 				retVal = WPS_ERR_ENROLLMENT_PINFAIL;
+@@ -1391,6 +1392,7 @@ wpsap_close_session(wpsap_wksp_t *wps_wksp, int opcode)
+ 
+ 		wps_ui_set_env("wps_pinfail", "0");
+ 		wps_set_conf("wps_pinfail", "0");
++		wps_set_conf("wps_reg_pinfail", "0");
+ 
+ 		if (restart)
+ 			wps_wksp->return_code = WPS_RESULT_SUCCESS_RESTART;
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ui.c b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+index 243a9ef..79d54d6 100755
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ui.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+@@ -61,6 +61,7 @@ static wps_ui_str_t _wps_ui_cmd_str[] = {
+ 	{WPS_UI_CMD_AP_PIN_TIMEOUT,	"WPS ap pin timeout"},
+ 	{WPS_UI_CMD_AP_PIN_EXPIRE,	"WPS ap pin expire"},
+ 	{WPS_UI_CMD_BOTH_SSID,	"WPS both ssid"},
++	{WPS_UI_CMD_REG_PINFAIL,	"WPS reg pin fail"},
+ #ifdef WPS_FAIL_10_LOCK_FOREVER
+ 	{WPS_UI_CMD_AP_PIN_UNLOCK, "WPS ap pin unlock"},
+ #endif
+@@ -131,6 +132,7 @@ typedef struct {
+ 	char wps_ap_pin[16];
+ 	char wps_ap_pin_cnt[16];
+ 	char wps_both_ssid[16];
++    char wps_reg_pinfail[4];
+ } wps_ui_t;
+ 
+ static wps_hndl_t ui_hndl;
+@@ -1255,6 +1257,8 @@ all_found:
+ 				wps_strncpy(ui->wps_ifname, value, sizeof(ui->wps_ifname));
+ 			else if (!strcmp(name, "wps_ap_pin"))
+ 				wps_strncpy(ui->wps_ap_pin, value, sizeof(ui->wps_ap_pin));
++			else if (!strcmp(name, "wps_reg_pinfail"))
++				wps_strncpy(ui->wps_reg_pinfail, value, sizeof(ui->wps_reg_pinfail));
+ 			else if (!strcmp(name, "wps_both_ssid"))
+ 				wps_strncpy(ui->wps_both_ssid, value, sizeof(ui->wps_both_ssid));
+ 			else if (!strcmp(name, "wps_ap_pin_cnt"))
+@@ -1432,6 +1436,9 @@ wps_ui_do_set(char *buf)
+ 		wps_set_conf("wps_ap_pin_cnt", ui->wps_ap_pin_cnt);
+ 		syslog(LOG_NOTICE, "WPS set ap device pin timeout %s", ui->wps_ap_pin_cnt);
+ 	}
++	else if (ui->wps_config_command == WPS_UI_CMD_REG_PINFAIL) {
++		wps_set_conf("wps_reg_pinfail", ui->wps_reg_pinfail);
++	}
+ 	else if (ui->wps_config_command == WPS_UI_CMD_AP_PIN_EXPIRE) {
+ 		wps_set_ap_pin_expire();
+ 	}
+diff --git a/main/components/apps/wps/brcm_apps/include/wps_ui.h b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+index 3bd5082..6e2b26a 100755
+--- a/main/components/apps/wps/brcm_apps/include/wps_ui.h
++++ b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+@@ -54,6 +54,7 @@
+ #ifdef WPS_FAIL_10_LOCK_FOREVER
+ #define WPS_UI_CMD_AP_PIN_UNLOCK      94
+ #endif
++#define WPS_UI_CMD_REG_PINFAIL		93
+ 
+ 
+ #define IS_WPS_UI_CMD_NFC(cmd)	((cmd) == WPS_UI_CMD_NFC_WR_CFG || \
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
+index 7df804a..7eca355 100755
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
+@@ -52,6 +52,7 @@ typedef struct {
+ 	char wps_ap_pin[16];
+ 	char wps_ap_pin_timeout[16];
+ 	char wps_both_ssid[16];
++    char wps_reg_pinrail[4];
+ } wps_env_t;
+ 
+ typedef struct {
+@@ -79,6 +80,7 @@ static wps_str_t _cmd_str[] = {
+ 	{WPS_UI_CMD_AP_PIN_UNLOCK,	"WPS ap pin lock"},	
+ #endif
+ 	{WPS_UI_CMD_BOTH_SSID,	"WPS both ssid"},
++	{WPS_UI_CMD_REG_PINFAIL,	"WPS reg pin fail"},
+ 	{0,		NULL}
+ };
+ 
+@@ -655,6 +657,21 @@ wps_ap_pin_timeout(char *ap_pin_timeout)
+ }
+ 
+ static void
++wps_reg_pinfail(char *pinfail)
++{
++	char uibuf[512];
++	struct strbuf b;
++
++	str_binit(&b, uibuf, sizeof(uibuf));
++
++	str_bprintf(&b, "SET ");
++	str_bprintf(&b, "wps_config_command=%d ", WPS_UI_CMD_REG_PINFAIL);
++	str_bprintf(&b, "wps_reg_pinfail=%s ", pinfail == NULL ? "0" : pinfail);
++
++	set_wps_env(uibuf);
++}
++
++static void
+ wps_ap_pin_expire(void)
+ {
+ 	char uibuf[512];
+@@ -1004,6 +1021,7 @@ main(int argc, char *argv[])
+ 		strcmp(command, "wps_ap_pin") != 0 &&
+ 		strcmp(command, "wps_both_ssid") != 0 &&
+ 		strcmp(command, "wps_ap_pin_to") != 0 &&
++		strcmp(command, "wps_reg_pinfail") != 0 &&
+ 		strcmp(command, "wps_ap_pin_expire") != 0 &&
+ #ifdef WPS_FAIL_10_LOCK_FOREVER
+ 		strcmp(command, "wps_ap_pin_unlock") != 0 &&
+@@ -1044,6 +1062,11 @@ main(int argc, char *argv[])
+ 		return 0;
+ 	}
+ 
++	if (!strcmp(command, "wps_reg_pinfail")) {
++		wps_reg_pinfail(*argv);
++		return 0;
++	}
++
+ 	if (!strcmp(command, "wps_ap_pin_to")) {
+ 		wps_ap_pin_timeout(*argv);
+ 		return 0;

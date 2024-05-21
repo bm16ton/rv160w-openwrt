@@ -1,0 +1,13 @@
+#! /bin/sh
+# 03-03-2017: harry.lin <harry.lin@deltaww.com>
+# Add burn in test for facotry test require
+
+case "$1" in
+	"start")
+		/mnt/packages/burn_in/factory-burn-in start
+		;;
+	"stop")
+		/mnt/packages/burn_in/factory-burn-in stop
+		;;
+esac
+exit 0

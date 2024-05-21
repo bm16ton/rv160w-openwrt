@@ -1,0 +1,150 @@
+From 2d7a378311b2c736881f0f62dad183759f47db3f Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:36:44 +0800
+Subject: [PATCH 25/63] missed-syslog-for-wps
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/apps/wps_ap.c     |    7 +++++++
+ .../components/apps/wps/brcm_apps/apps/wps_monitor.c |   18 ++++++++++++++++++
+ main/components/apps/wps/brcm_apps/apps/wps_ui.c     |    4 ++++
+ 3 files changed, 29 insertions(+)
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ap.c b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+index 2f4840e..a099039 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ap.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+@@ -56,6 +56,8 @@
+ #include <wps_nfc.h>
+ #endif
+ 
++#include <syslog.h>
++
+ #include <bcmnvram.h>
+ static void wpsap_start_WPSReg(wpsap_wksp_t *ap_wksp);
+ 
+@@ -1289,6 +1291,9 @@ wpsap_close_session(wpsap_wksp_t *wps_wksp, int opcode)
+ 				break;
+ 			}
+ 
++			ether_etoa(wps_wksp->mac_sta, tmp);
++			syslog(LOG_NOTICE, "WPS client %s connect successfully", tmp);
++
+ 			/* Fill in psk */
+ 			p_tlvKey = (CTlvNwKey *)p_tlvEncr->nwKey;
+ 			nwKey = (char *)p_tlvKey->m_data;
+@@ -1353,6 +1358,7 @@ wpsap_close_session(wpsap_wksp_t *wps_wksp, int opcode)
+ 			ether_etoa(wps_wksp->mac_sta, tmp);
+ 			wps_ui_set_env("wps_sta_mac", tmp);
+ 			wps_set_conf("wps_sta_mac", tmp);
++			syslog(LOG_NOTICE, "WPS client %s connect successfully", tmp);
+ 
+ 			/*
+ 			 * According to WPS sepc 1.0h Section 10.3 page 79 middle,
+@@ -1497,6 +1503,7 @@ wpsap_check_timeout(wpsap_wksp_t *wps_wksp)
+ 			}
+ 		} else {
+ 			wps_setProcessStates(WPS_TIMEOUT);
++			syslog(LOG_NOTICE, "WPS process Timeout");
+ 		}
+ 	}
+ 
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_monitor.c b/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
+index 0298f1f..f31d0f4 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
+@@ -41,6 +41,8 @@
+ #ifdef __CONFIG_WFI__
+ #include <wps_wfi.h>
+ #endif /* __CONFIG_WFI__ */
++#include <syslog.h>
++#include <bcmnvram.h>
+ 
+ extern void wps_setProcessStates(int state);
+ extern int wps_getProcessStates();
+@@ -217,6 +219,7 @@ wps_deauthenticate(unsigned char *bssid, unsigned char *sta_mac, int reason)
+ 	char *next = NULL;
+ 	char wl_mac[SIZE_6_BYTES];
+ 	char *wl_hwaddr = NULL, *wl_mode = NULL;
++	char mac_tmp[100];
+ 
+ 	/* Check mac */
+ 	imax = wps_get_ess_num();
+@@ -252,6 +255,9 @@ found:
+ 
+ 	TUTRACE((TUTRACE_INFO, "%s\n", ifname));
+ 
++	ether_etoa(sta_mac, mac_tmp);
++	wps_set_conf("wps_client_mac", mac_tmp);
++
+ 	/* Issue wl driver deauth */
+ 	return wps_wl_deauthenticate(ifname, sta_mac, reason);
+ }
+@@ -537,6 +543,8 @@ wps_dispatch()
+ 			TUTRACE((TUTRACE_INFO, "ret value = %d, wps_app ->sc_mode = %d \n",
+ 				ret, wps_app->sc_mode));
+ 
++			char *mac_tmp = NULL;
++
+ #ifdef WPS_ADDCLIENT_WWTP
+ 			/* Clear wps_ui_hndl */
+ 			if (ret == WPS_RESULT_SUCCESS ||
+@@ -545,6 +553,15 @@ wps_dispatch()
+ 			}
+ #endif /* WPS_ADDCLIENT_WWTP */
+ 
++			if (ret != WPS_RESULT_SUCCESS &&
++				ret != WPS_RESULT_SUCCESS_RESTART) {
++					mac_tmp = nvram_get("wps_client_mac");
++					if (mac_tmp) {
++						syslog(LOG_NOTICE, "WPS client %s connect failed", mac_tmp);
++						wps_set_conf("wps_client_mac", "");
++					}
++			}
++
+ 			/* wps_close_session will clean up 'mode' now */
+ 			sc_mode = wps_app->sc_mode;
+ 
+@@ -651,6 +668,7 @@ wps_dispatch()
+ 		}
+ 	}
+ 	else if (ret == WPS_ERR_OPEN_SESSION) {
++		syslog(LOG_WARNING, "WPS ap start failed.");
+ 		TUTRACE((TUTRACE_ERR, "Session open failed\n"));
+ 
+ 		/* wps operation completed. close session */
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ui.c b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+index 5da132e..79bc07e 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ui.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+@@ -35,6 +35,7 @@
+ #endif
+ 
+ #include <bcmnvram.h>
++#include <syslog.h>
+ 
+ extern void wps_setProcessStates(int state);
+ 
+@@ -556,6 +557,7 @@ void wps_ui_update_dev_pin_timeout()
+ 		if ((now < wps_device_pin_start_time) ||
+ 			((now - wps_device_pin_start_time) >= ap_timeout)) {
+ 			wps_set_conf("wps_ap_pin_to", "1");
++			syslog(LOG_NOTICE, "WPS ap device pin timeout.");
+ 		} else {
+ 			rest = ap_timeout - (now - wps_device_pin_start_time);
+ 			sprintf(prest, "%d", rest);
+@@ -1362,9 +1364,11 @@ wps_ui_do_set(char *buf)
+ 	}
+ 	else if (ui->wps_config_command == WPS_UI_CMD_AP_PIN) {
+ 		wps_set_conf("wps_device_pin", ui->wps_ap_pin);
++		syslog(LOG_NOTICE, "WPS set ap device pin %s", ui->wps_ap_pin);
+ 	}
+ 	else if (ui->wps_config_command == WPS_UI_CMD_AP_PIN_TIMEOUT) {
+ 		wps_set_conf("wps_ap_pin_cnt", ui->wps_ap_pin_cnt);
++		syslog(LOG_NOTICE, "WPS set ap device pin timeout %s", ui->wps_ap_pin_cnt);
+ 	}
+ 	else {
+ 		/* Add in PF #3 */
+-- 
+1.7.10
+

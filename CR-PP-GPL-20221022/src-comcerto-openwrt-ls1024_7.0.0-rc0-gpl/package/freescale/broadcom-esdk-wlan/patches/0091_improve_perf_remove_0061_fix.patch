@@ -1,0 +1,28 @@
+diff --git a/main/src/shared/hnddma.c b/main/src/shared/hnddma.c
+index 6157cc2..dfc6aea 100644
+--- a/main/src/shared/hnddma.c
++++ b/main/src/shared/hnddma.c
+@@ -110,7 +110,9 @@ static inline void __memcpy(void *dst, void *src, unsigned int len)
+ {
+ 	void *end = src + len;
+ 
++#ifndef CONFIG_C2K_RV16X_26X
+ 	BUG_ON(!virt_addr_valid(dst));
++#endif
+ 
+ 	dst = (void *)((unsigned long)dst & ~0x3);
+ 	src = (void *)((unsigned long)src & ~0x3);
+@@ -4394,11 +4396,13 @@ dma64_txfast(dma_info_t *di, void *p0, bool commit)
+ 			int ofstlen = len - PKTMSPDLEN(di->osh, p);
+ 			int mspd_ofst = PKTMSPDOFST((di->osh),p) - ofstlen;
+ 			void *pDst = (void*)((uchar*)PKTMSPDDATAREF(p) + mspd_ofst);
++#ifndef CONFIG_C2K_RV16X_26X
+ 			if (!virt_addr_valid(pDst)) {
+ 				memmove(PKTMSPDDATAREF(p) - mspd_ofst, PKTMSPDDATAREF(p), PKTMSPDLENREF(p));
+ 				pDst = PKTMSPDDATAREFCHAR(p);
+ 				printk("%s: illegal address 0x%p, mspd_ofst = %d\n", __func__, pDst, mspd_ofst);
+ 			}
++#endif
+ 			memcpy(pDst, data, ofstlen);
+ 			pa = DMA_MAP(di->osh, pDst, len, DMA_TX, p, &di->txp_dmah[txout]);
+ 		}

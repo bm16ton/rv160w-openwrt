@@ -1,0 +1,108 @@
+#!/bin/sh
+# 2017-04-13: li.zhang <li.zhang@deltaww.com>
+# modify the ps command
+# 2017-03-13: li.zhang <li.zhang@deltaww.com>
+# Add 4g hotplug files
+. /lib/functions.sh
+. /lib/netifd/netifd-proto.sh
+
+# USB_STATUS in "USBx:dev_device:mount_point:type:status" format
+USB_CONN_STATUS=/var/USBCONNSTATUS
+DEVMODEM=/dev/modem
+USB_NUM=
+
+USBPORT1="usb3"
+USBPORT2="usb1"
+
+find_4g_iface() {
+	local cfg="$1"
+	local tty="$2"
+	local usb_num="$3"
+	local proto
+	config_get proto "$cfg" proto
+	[ "$proto" = qmi ] || [ "$proto" = mobile ] || return 0
+
+	tmp=`echo $cfg | grep $usb_num`
+	[ -n "$tmp" ] && [ "$ACTION" = add ] && {
+		exist=`ps -w | grep connect_detect | grep -v grep |wc -l`
+			 
+		if [ "$exist" = "0" ];then
+			/usr/bin/connect_detect.sh &
+		fi
+
+		enable=`uci get network.$cfg.enable` >/dev/null 2>&1
+		if [ "$enable" = 0 ];then
+			uci set network.$cfg.enable=1
+			cp /tmp/.uci/network /tmp/networkconfig
+			uci commit network
+			#/etc/init.d/network reload
+			ubus call network reload
+                        /sbin/mtu-mac-enable reload
+		fi
+	}
+	
+	# bypass state vars here because 00-netstate could clobber .device
+	if [ "$cfg" = "usb1" ] && [ "$usb_num" = 1 ];then
+		if [ "$ACTION" = add ]; then
+			available=1
+		else
+			available=0
+		fi
+		proto_set_available "$cfg" $available
+	fi
+	if [ "$cfg" = "usb2" ] && [ "$usb_num" = 2 ];then
+		if [ "$ACTION" = add ]; then
+			available=1
+		else
+			available=0
+		fi
+		proto_set_available "$cfg" $available
+	fi
+	if [ "$ACTION" = remove ]; then
+		killall -9 connect_detect.sh
+		killall -9 uqmi
+		uci delete network.$cfg.cid
+		uci delete network.$cfg.pdh
+		uci commit
+	fi
+
+}	
+
+case "$DEVICENAME" in
+	cdc-wdm*)
+		USB_NUM=
+		tmp=`echo $DEVPATH | grep $USBPORT1`
+                # Check which port the com port is connected.
+                if [ -n "$tmp" ];then
+                        USB_NUM=1
+                else
+                        USB_NUM=2
+                fi
+
+		if [ "$ACTION" = add ]; then
+			ln -sf /dev/$DEVICENAME $DEVMODEM$USB_NUM	
+			logger -t mobile -p local0.info "usb${USB_NUM}: Detected 4G device"
+			# Update the USB Connection Status
+                        usbconnstatus=`cat $USB_CONN_STATUS | grep "^USB$USB_NUM"`
+                        if [ -n "$usbconnstatus" ];then
+	                    `sed -i "/^USB$USB_NUM:/c\USB$USB_NUM:$DEVICENAME:$DEVMODEM$USB_NUM:4G:1" $USB_CONN_STATUS`
+	                else
+	                     echo "USB$USB_NUM:$DEVICENAME:$DEVMODEM$USB_NUM:4G:1" >> $USB_CONN_STATUS
+	                fi
+		fi
+		if [ "$ACTION" = remove ]; then
+			usbport=`cat $USB_CONN_STATUS | grep "$DEVICENAME" | cut -d : -f 1`
+			if [ -n "$usbport" ];then
+				rm -rf $DEVMODEM$USB_NUM
+				`sed -i "/^USB$USB_NUM:/c\USB$USB_NUM::::0" $USB_CONN_STATUS`
+			fi
+			# Delete the dongle statistics
+			`sh /usr/bin/update_mobile.sh "del" "$DEVMODEM$USB_NUM"`
+			logger -t mobile -p local0.info "usb${USB_NUM}: 4G device removed"
+		fi
+		[ -e "/dev/$DEVICENAME" ] || [ "$ACTION" = remove ] || exit 0
+		config_load network
+		config_foreach find_4g_iface interface "/dev/$DEVICENAME" "$USB_NUM"	
+	;;
+esac
+

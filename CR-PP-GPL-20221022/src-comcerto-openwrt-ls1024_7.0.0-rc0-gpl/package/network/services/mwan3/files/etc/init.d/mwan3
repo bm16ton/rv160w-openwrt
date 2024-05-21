@@ -1,0 +1,37 @@
+#!/bin/sh /etc/rc.common
+START=19
+EXTRA_COMMANDS="route_update"
+EXTRA_HELP="    route_update  Update routes in mwan3"
+
+start() {
+	[ "$__this_device" != "RV160" ] && [ "$__this_device" != "RV160W" ] && {
+		/usr/sbin/mwan3 start
+	}
+}
+
+stop() {
+	[ "$__this_device" != "RV160" ] && [ "$__this_device" != "RV160W" ] && {
+		/usr/sbin/mwan3 stop
+	}
+}
+
+restart() {
+	stop
+	start
+}
+
+route_update() {
+        ACTION=rtupd /sbin/hotplug-call iface
+}
+
+boot() {
+	# Don't start on boot, mwan3 is started by hotplug event.
+	iptables-restore /etc/firewall_rv26x-defaults.txt
+	ip6tables-restore /etc/firewall6_rv26x-defaults.txt
+
+	[ "$__this_device" != "RV160" ] && [ "$__this_device" != "RV160W" ] && {
+		iptables-restore < /usr/sbin/mwan3-default-rules
+		ip rule add pref 2254 fwmark 0xfe00/0xff00 unreachable
+	}
+	return 0
+}

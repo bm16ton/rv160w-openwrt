@@ -1,0 +1,26 @@
+From 21a50e11d68f53ca91d11b428a09c7b6a44e3222 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:58:52 +0800
+Subject: [PATCH 43/63] enable-wps20-testbed
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/router/Makefile |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/main/components/router/Makefile b/main/components/router/Makefile
+index fafaa57..208968b 100644
+--- a/main/components/router/Makefile
++++ b/main/components/router/Makefile
+@@ -306,7 +306,7 @@ endif
+ ifeq ($(CONFIG_WPS),y)
+ export CFLAGS += -D__CONFIG_WPS__
+ # WFA WPS 2.0 Testbed extra caps
+-#export CFLAGS += -DWFA_WPS_20_TESTBED
++export CFLAGS += -DWFA_WPS_20_TESTBED
+ #export CFLAGS += -DWFA_WPS_20_NFC_TESTBED -DWFA_WPS_20_NFC_TESTBED_DEBUG
+ endif
+ 
+-- 
+1.7.10
+

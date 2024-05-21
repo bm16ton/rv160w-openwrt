@@ -1,0 +1,44 @@
+# 2017-03-20: Manish Tiwari <mansh.tiwari@nxp.com>
+# Diag shell removal fixes checkins.
+diff -ruaN a/src/appl/diag/system.c b/src/appl/diag/system.c
+--- a/src/appl/diag/system.c	2017-03-08 12:06:06.546054570 +0530
++++ b/src/appl/diag/system.c	2017-03-08 12:06:02.726054498 +0530
+@@ -2328,6 +2328,7 @@
+         cli_out("Boot flags: initialization scripts NOT loaded\n");
+     }
+ 
++
+ #if defined(BCM_EA_SUPPORT)
+ #if defined(BCM_TK371X_SUPPORT)
+     if(BCM_E_NONE == soc_ea_do_init(soc_ndev)){
+@@ -2388,6 +2389,9 @@
+     DISPLAY_SW_STATE_MEM ;
+     DISPLAY_MEM_PRINTF(("%s(): Just before BCM shell\r\n",__FUNCTION__)) ;
+ 
++
++/* Instead of going to shell starting ROBOSERVER */
++/*
+     while (1) {
+     sh_process(-1, "BCM", TRUE);
+ #ifdef NO_SAL_APPL
+@@ -2405,6 +2409,12 @@
+ #endif
+ #endif
+     }
++*/
++
++	printf(" =========== DIAG Finished ========== \n");
++
++
++
+ }
+ 
+ #define SYSTEM_INIT_CHECK(action, description)          \
+@@ -2446,6 +2456,7 @@
+ 
+     if (SOC_IS_ROBO(unit)) {
+ #if defined(BCM_ROBO_SUPPORT)
++	printf("BCM_ROBO_SUPPORT is enabled\n");
+         SYSTEM_INIT_CHECK(soc_robo_reset_init(unit), "Device reset");
+ 
+         LOG_INFO(BSL_LS_APPL_ARL,

@@ -1,0 +1,41 @@
+From 504f0848d5207f7e5f2a0339200b5c74a91f0f59 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 20:01:54 +0800
+Subject: [PATCH 47/63] add-character-grave-accent
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/linux/wps_linux_main.c |    3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index 2d0f7a1..367c081 100755
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -556,6 +556,7 @@ set_wsec(char *ifname, void *credential, int mode)
+ 
+ 	for (ssid_len_idx = 0; ssid_len_idx < cur_ssid_len; ssid_len_idx++) {
+ 		if ((cur_ssid.SSID[ssid_len_idx] == '\\') ||
++		   	(cur_ssid.SSID[ssid_len_idx] == '`') ||
+ 		   	(cur_ssid.SSID[ssid_len_idx] == '"')) {
+ 			if (cur_ssid.SSID[ssid_len_idx] == '\\') {
+ 				*p_cur_ssid++ = '\\';
+@@ -569,6 +570,7 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	
+ 	for (ssid_len_idx = 0; ssid_len_idx < new_ssid_len; ssid_len_idx++) {
+ 		if ((cred->ssid[ssid_len_idx] == '\\') ||
++		   	(cred->ssid[ssid_len_idx] == '`') ||
+ 		   	(cred->ssid[ssid_len_idx] == '"')) {
+ 			if (cred->ssid[ssid_len_idx] == '\\') {
+ 				*p_new_ssid++ = '\\';
+@@ -582,6 +584,7 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	
+ 	for (ssid_len_idx = 0; ssid_len_idx < temp_key_len; ssid_len_idx++) {
+ 		if ((temp_key[ssid_len_idx] == '\\') ||
++		   	(temp_key[ssid_len_idx] == '`') ||
+ 		   	(temp_key[ssid_len_idx] == '"')) {
+ 			if (temp_key[ssid_len_idx] == '\\') {
+ 				*p_temp_key++ = '\\';
+-- 
+1.7.10
+

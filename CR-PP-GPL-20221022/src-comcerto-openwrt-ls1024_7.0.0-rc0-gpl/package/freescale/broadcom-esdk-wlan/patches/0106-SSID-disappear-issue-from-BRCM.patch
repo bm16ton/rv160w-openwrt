@@ -1,0 +1,38 @@
+From 368d7b0172498d003a355bd2a1f3b34666ab3ccf Mon Sep 17 00:00:00 2001
+From: Veeresh Sajjan  <veeresh.sajjan@nxp.com>
+Date: Fri, 6 Jul 2018 17:55:00 +0530
+Subject: [PATCH] SSID disappear issue patch fix from BRCM
+
+Signed-off-by:Veeresh Sajjan <veeresh.sajjan@nxp.com>
+---
+ main/src/wl/phy/wlc_phy_ac.c | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/main/src/wl/phy/wlc_phy_ac.c b/main/src/wl/phy/wlc_phy_ac.c
+index c00ca6e..f42a93a 100644
+--- a/main/src/wl/phy/wlc_phy_ac.c
++++ b/main/src/wl/phy/wlc_phy_ac.c
+@@ -4479,6 +4479,10 @@ wlc_phy_cals_acphy(phy_info_t *pi, uint8 searchmode)
+ 	if (NORADIO_ENAB(pi->pubpi))
+ 		return;
+ 
++    if (wlc_phy_eu_edcrs_status_acphy(pi)){
++        return;
++    }
++
+ 	PHY_CAL(("wl%d: Running ACPHY periodic calibration: Searchmode: %d. phymode: 0x%x \n",
+ 	         pi->sh->unit, searchmode, phy_get_phymode(pi)));
+ #ifdef ATE_BUILD
+@@ -4668,9 +4672,6 @@ wlc_phy_cals_acphy(phy_info_t *pi, uint8 searchmode)
+ 		}
+ #endif /* WLENT_BCM43570 */
+ 
+-        	if (wlc_phy_eu_edcrs_status_acphy(pi))
+-			return;
+-
+ 		/* carry out all phases "en bloc", for comments see the various phases below */
+ 		pi->cal_info->last_cal_time     = pi->sh->now;
+ 		accal->chanspec = pi->radio_chanspec;
+-- 
+1.9.1
+

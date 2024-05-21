@@ -1,0 +1,57 @@
+From 48ac5de454fecc10fa7a26aa4493ec0cfad5209b Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:21:14 +0800
+Subject: [PATCH 22/63] wpa-wpa2-ncnb-fix
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_rx.c |   19 ++++++++++++++++---
+ 1 file changed, 16 insertions(+), 3 deletions(-)
+
+diff --git a/main/src/wl/sys/wlc_rx.c b/main/src/wl/sys/wlc_rx.c
+index 4de552d..3569506 100644
+--- a/main/src/wl/sys/wlc_rx.c
++++ b/main/src/wl/sys/wlc_rx.c
+@@ -975,6 +975,13 @@ wlc_recv(wlc_info_t *wlc, void *p)
+ 		 * The latter drops the perimeter lock and anything can happen!
+ 		 */
+ #ifdef NCNB_CSKB
++		if ((fc & FC_WEP) || ntoh16(*((uint16 *)(PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p)))) == ETHER_TYPE_802_1X) {
++			if(likely(PKTMSPDDATA(osh,p))) {
++				int datalen = PKTMSPDLEN(osh,p) - PKTMSPDOFST(osh,p);
++				int ofstlen = D11_PHY_HDR_LEN + DOT11_A3_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN - (pad_present ? 2 : 0);
++				memcpy(PKTDATA(osh,p) + ofstlen , PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p),datalen);
++			}
++		} 
+ 		PKTMSPDLENREF(p) = 0;
+ #endif
+ 		wlc_recvdata(wlc, osh, wrxh, p);
+@@ -1112,9 +1119,6 @@ wlc_recvdata(wlc_info_t *wlc, osl_t *osh, wlc_d11rxhdr_t *wrxh, void *p)
+ 
+ #ifdef NCNB_CSKB
+     wep_enabled = (f.fc & 0x4000) ? TRUE : FALSE;
+-    if(wep_enabled) {
+-        PKTMSPDOFSTREF(p) +=  4;
+-    }
+ #endif
+ 	f.type = FC_TYPE(f.fc);
+ 	f.subtype = (f.fc & FC_SUBTYPE_MASK) >> FC_SUBTYPE_SHIFT;
+@@ -2035,6 +2039,15 @@ wlc_recvdata(wlc_info_t *wlc, osl_t *osh, wlc_d11rxhdr_t *wrxh, void *p)
+   }
+ #endif
+ 
++#ifdef NCNB_CSKB
++       if(wep_enabled) {
++               PKTMSPDOFSTREF(p) += 4 ;
++               if (bsscfg->WPA_auth) {
++                       PKTMSPDOFSTREF(p) += 4 ;
++               }
++       }
++#endif
++
+ #ifdef WLAMPDU
+ 	if (SCB_AMPDU(scb) && !f.ismulti && !promisc_frame)
+ 		wlc_ampdu_recvdata(wlc->ampdu_rx, scb, &f);
+-- 
+1.7.10
+

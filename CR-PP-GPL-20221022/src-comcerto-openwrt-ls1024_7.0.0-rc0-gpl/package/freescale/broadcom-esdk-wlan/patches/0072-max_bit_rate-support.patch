@@ -1,0 +1,51 @@
+--- a/sys/src/wl/exe/wlu.c	2017-06-14 13:59:20.695679543 +0800
++++ b/sys/src/wl/exe/wlu.c	2017-06-14 13:56:01.913679619 +0800
+@@ -237,6 +237,7 @@
+ static cmd_func_t wlu_dump, wlu_mempool, wlu_srdump, wlu_srvar;
+ static cmd_func_t wlu_ciswrite, wlu_cisupdate, wlu_cisdump;
+ static cmd_func_t wl_rate, wl_rate_mrate, wl_bss_max;
++static cmd_func_t wl_max_rate;
+ static cmd_func_t wl_channel, wl_chanspec, wl_rclass, wl_dfs_ap_move, wl_sc_chan;
+ static cmd_func_t wl_phy_vcore;
+ static cmd_func_t wl_dfs_max_safe_tx;
+@@ -927,6 +928,7 @@
+ #else
+ 	"Set the long retry limit.  (integer [1, 255])" },
+ #endif
++    { "maxrate", wl_max_rate, WLC_GET_MAX_RATE, -1, "Get Max Rate." },
+ 	{ "rate", wl_rate_mrate, WLC_GET_RATE, -1,
+ 	"force a fixed rate:\n"
+ 	"\tvalid values for 802.11a are (6, 9, 12, 18, 24, 36, 48, 54)\n"
+@@ -9224,6 +9226,32 @@
+ 	return rate_buf;
+ }
+ 
++static int
++wl_max_rate(void *wl, cmd_t *cmd, char **argv)
++{
++	int error;
++	int val;
++
++	/* toss the command name from the args */
++	argv++;
++
++	if ((!strcmp(cmd->name, "maxrate"))) {
++		/* it is "maxrate" */
++		if (!*argv) {
++			/* it is "maxrate" get. handle it here */
++			/* WLC_GET_MAX_RATE processing */
++			if ((error = wlu_get(wl, cmd->get, &val, sizeof(int))) < 0)
++				return error;
++
++			val = dtoh32(val);
++			wl_printrate(val);
++			return 0;
++		}
++	}
++
++	return error;
++}
++
+ /* handles both "rate" and "mrate", which makes the flow a bit complex */
+ static int
+ wl_rate_mrate(void *wl, cmd_t *cmd, char **argv)

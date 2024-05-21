@@ -1,0 +1,14 @@
+# 2017-03-20: Manish Tiwari <mansh.tiwari@nxp.com>
+# Enabled PHY_SPEED_GET function to remove error logs on console.
+diff -ruaN a/src/soc/common/phyctrl.c b/src/soc/common/phyctrl.c
+--- a/src/soc/common/phyctrl.c	2017-03-08 18:19:40.746475365 +0530
++++ b/src/soc/common/phyctrl.c	2017-03-08 18:19:56.938475669 +0530
+@@ -1591,7 +1591,7 @@
+ 
+     INT_MCU_LOCK(unit);
+     if (SOC_SUCCESS(rv)) {
+-        //rv = (PHY_SPEED_GET(pd, unit, port, speed));
++        rv = (PHY_SPEED_GET(pd, unit, port, speed));
+     }
+     INT_MCU_UNLOCK(unit);
+     

@@ -1,0 +1,83 @@
+#!/bin/sh 
+# 2017-03-24: li.zhang <li.zhang@deltaww.com>
+# modify the sig_strength value
+USB1_GET_STRENGTH=0 #USB1_SIGNAL_CHECK
+USB2_GET_STRENGTH=0 #USB2_SIGNAL_CHECK
+
+modem1="/dev/modem1"
+modem2="/dev/modem2"
+
+if [ "$USB1_GET_STRENGTH" = 1 ];then
+	proto=`uci get network.usb1.proto` >/dev/null 2>&1
+	[ -n "$proto" ] && {
+		modem="_modem1"
+		if [ "$proto" = "qmi" ];then
+			sig_strength=`qmicli -d $modem1 --nas-get-signal-strength | awk '/Current:/{getline; print}' | cut -d : -f 2 | sed -e "s/^ *//g" | sed -e "s/'//g"` >/dev/null 2>&1
+		elif [ "$proto" = "3g" ];then
+			# Get the comport to use
+			comport=`cat /tmp/stats/3g/COMPORT${modem}` >/dev/null 2>&1
+			[ -z "$comport" ] && comport=$modem1
+			`gcom sig -d $comport > /tmp/stats/3g/STRENGTH${modem}` >/dev/null 2>&1
+			signal=`cat /tmp/stats/3g/STRENGTH${modem} | grep "Signal Quality:" | cut -d : -f 2 | cut -d , -f 1 | sed -e "s/^ *//g"` >/dev/null 2>&1
+			if [ -n "$signal" ];then
+				case $signal in
+		                        99)
+                		        	sig_strength="not known"
+                        		;;
+                        	[3-9][1-9])
+                                		sig_strength="> -51 dBm"
+                        		;;
+                        		*)
+                                		sig_strength=`cat /etc/gcom/3g_signallist | grep "^$signal:" | cut -d : -f 2` >/dev/null 2>&1
+                        		;;
+                		esac
+			else
+				sig_strength=""
+			fi
+		fi
+
+sig_strength=`echo $sig_strength | sed "s/[a-z,A-Z,\>,\ ]//g"`
+
+#Update the statistics
+confd_cmd -o <<EOF
+set /usb-modems-state/usb-modem{$modem1}/signal-strength "$sig_strength"
+EOF
+	}
+fi
+
+if [ "$USB2_GET_STRENGTH" = 1 ];then
+	proto=`uci get network.usb2.proto` >/dev/null 2>&1
+	[ -n "$proto" ] && {
+		modem="_modem2"
+		if [ "$proto" = "qmi" ];then
+			sig_strength=`qmicli -d $modem2 --nas-get-signal-strength | awk '/Current:/{getline; print}' | cut -d : -f 2 | sed -e "s/^ *//g" | sed -e "s/'//g"` >/dev/null 2>&1
+		elif [ "$proto" = "3g" ];then
+			# Get the comport to use
+			comport=`cat /tmp/stats/3g/COMPORT${modem}` >/dev/null 2>&1
+			[ -z "$comport" ] && comport=$modem2
+			`gcom sig -d $comport > /tmp/stats/3g/STRENGTH${modem}` >/dev/null 2>&1
+			signal=`cat /tmp/stats/3g/STRENGTH${modem} | grep "Signal Quality:" | cut -d : -f 2 | cut -d , -f 1 | sed -e "s/^ *//g"` >/dev/null 2>&1
+			if [ -n "$signal" ];then
+				case $signal in
+		                        99)
+                		        	sig_strength="not known"
+                        		;;
+                        	[3-9][1-9])
+                                		sig_strength="> -51 dBm"
+                        		;;
+                        		*)
+                                		sig_strength=`cat /etc/gcom/3g_signallist | grep "^$signal:" | cut -d : -f 2` >/dev/null 2>&1
+                        		;;
+                		esac
+			else
+				sig_strength=
+			fi
+		fi
+
+#Update the statistics
+confd_cmd -o <<EOF
+set /usb-modems-state/usb-modem{$modem2}/signal-strength "$sig_strength"
+EOF
+	}
+fi
+

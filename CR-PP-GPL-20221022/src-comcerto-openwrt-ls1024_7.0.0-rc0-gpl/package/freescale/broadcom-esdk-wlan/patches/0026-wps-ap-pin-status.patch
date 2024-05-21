@@ -1,0 +1,152 @@
+From 37a09e75aeb3f62ddc43ba6fcaba7e57550cc46a Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:37:11 +0800
+Subject: [PATCH 26/63] wps-ap-pin-status
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/apps/wps_ui.c   |   33 ++++++++++++++++++++
+ .../components/apps/wps/brcm_apps/include/wps_ui.h |    2 ++
+ .../apps/wps/brcm_apps/linux/wps_linux_cmd.c       |   21 +++++++++++++
+ 3 files changed, 56 insertions(+)
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ui.c b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+index 79bc07e..aa09998 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ui.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+@@ -59,6 +59,7 @@ static wps_ui_str_t _wps_ui_cmd_str[] = {
+ 	{WPS_UI_CMD_MSGLEVEL,	"WPS msglevel"},
+ 	{WPS_UI_CMD_AP_PIN,	"WPS ap pin"},
+ 	{WPS_UI_CMD_AP_PIN_TIMEOUT,	"WPS ap pin timeout"},
++	{WPS_UI_CMD_AP_PIN_EXPIRE,	"WPS ap pin expire"},
+ 	{0,		NULL}
+ };
+ 
+@@ -1280,6 +1281,34 @@ all_found:
+ 	return 0;
+ }
+ 
++void wps_set_ap_pin_expire(void)
++{
++	int ap_timeout = 0;
++	char *value = NULL;
++	unsigned long now;
++	unsigned long rest;
++	char prest[32] = {0};
++
++	if (nvram_get("wps_device_pin_g") != NULL) {
++		(void) time((time_t*)&now);
++
++		value = nvram_safe_get("wps_ap_pin_cnt");
++		ap_timeout = atoi(value);
++		ap_timeout = (ap_timeout > 0 ? ap_timeout : WPS_OVERALL_TIMEOUT);
++		
++		if ((now < wps_device_pin_start_time) ||
++			((now - wps_device_pin_start_time) >= ap_timeout)) {
++			wps_set_conf("wps_ap_pin_expire", "0");
++		} else {
++			rest = ap_timeout - (now - wps_device_pin_start_time);
++			sprintf(prest, "%d", rest);
++			wps_set_conf("wps_ap_pin_expire", prest);
++		}
++	}
++
++	return;
++}
++
+ static int
+ wps_ui_do_set(char *buf)
+ {
+@@ -1364,12 +1393,16 @@ wps_ui_do_set(char *buf)
+ 	}
+ 	else if (ui->wps_config_command == WPS_UI_CMD_AP_PIN) {
+ 		wps_set_conf("wps_device_pin", ui->wps_ap_pin);
++		wps_set_conf("wps_device_pin_g", ui->wps_ap_pin);
+ 		syslog(LOG_NOTICE, "WPS set ap device pin %s", ui->wps_ap_pin);
+ 	}
+ 	else if (ui->wps_config_command == WPS_UI_CMD_AP_PIN_TIMEOUT) {
+ 		wps_set_conf("wps_ap_pin_cnt", ui->wps_ap_pin_cnt);
+ 		syslog(LOG_NOTICE, "WPS set ap device pin timeout %s", ui->wps_ap_pin_cnt);
+ 	}
++	else if (ui->wps_config_command == WPS_UI_CMD_AP_PIN_EXPIRE) {
++		wps_set_ap_pin_expire();
++	}
+ 	else {
+ 		/* Add in PF #3 */
+ 		if (ui->wps_config_command == WPS_UI_CMD_START &&
+diff --git a/main/components/apps/wps/brcm_apps/include/wps_ui.h b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+index dfaf5bf..211caa3 100644
+--- a/main/components/apps/wps/brcm_apps/include/wps_ui.h
++++ b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+@@ -48,6 +48,7 @@
+ #define WPS_UI_CMD_MSGLEVEL		99
+ #define WPS_UI_CMD_AP_PIN		98
+ #define WPS_UI_CMD_AP_PIN_TIMEOUT		97
++#define WPS_UI_CMD_AP_PIN_EXPIRE		96
+ 
+ #define IS_WPS_UI_CMD_NFC(cmd)	((cmd) == WPS_UI_CMD_NFC_WR_CFG || \
+ 				 (cmd) == WPS_UI_CMD_NFC_RD_CFG || \
+@@ -125,6 +126,7 @@ char *wps_ui_get_env(char *name);
+ void wps_ui_set_env(char *name, char *value);
+ void wps_ui_reset_env();
+ int wps_ui_process_msg(char *buf, int buflen);
++void wps_set_ap_pin_expire(void);
+ 
+ #ifdef WPS_ADDCLIENT_WWTP
+ int wps_ui_is_SET_cmd(char *buf, int buflen);
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
+index ff9fac8..d31d353 100644
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
+@@ -73,6 +73,7 @@ static wps_str_t _cmd_str[] = {
+ 	{WPS_UI_CMD_MSGLEVEL,	"WPS msglevel"},
+ 	{WPS_UI_CMD_AP_PIN,	"WPS ap pin"},
+ 	{WPS_UI_CMD_AP_PIN_TIMEOUT,	"WPS ap pin timeout"},
++	{WPS_UI_CMD_AP_PIN_EXPIRE,	"WPS ap pin expire"},
+ 	{0,		NULL}
+ };
+ 
+@@ -630,6 +631,20 @@ wps_ap_pin_timeout(char *ap_pin_timeout)
+ 	set_wps_env(uibuf);
+ }
+ 
++static void
++wps_ap_pin_expire(void)
++{
++	char uibuf[512];
++	struct strbuf b;
++
++	str_binit(&b, uibuf, sizeof(uibuf));
++
++	str_bprintf(&b, "SET ");
++	str_bprintf(&b, "wps_config_command=%d ", WPS_UI_CMD_AP_PIN_EXPIRE);
++
++	set_wps_env(uibuf);
++}
++
+ static int
+ wps_pin_check(char *pin_string)
+ {
+@@ -947,6 +962,7 @@ main(int argc, char *argv[])
+ 		strcmp(command, "configap") != 0 &&
+ 		strcmp(command, "wps_ap_pin") != 0 &&
+ 		strcmp(command, "wps_ap_pin_to") != 0 &&
++		strcmp(command, "wps_ap_pin_expire") != 0 &&
+ 		strcmp(command, "addenrollee") != 0 &&
+ 		strcmp(command, "enroll") != 0 &&
+ #ifdef WPS_NFC_DEVICE
+@@ -987,6 +1003,11 @@ main(int argc, char *argv[])
+ 		wps_ap_pin_timeout(*argv);
+ 		return 0;
+ 	}
++
++	if (!strcmp(command, "wps_ap_pin_expire")) {
++		wps_ap_pin_expire();
++		return 0;
++	}
+ 	
+ 	/*
+ 	  * Process ifname
+-- 
+1.7.10
+

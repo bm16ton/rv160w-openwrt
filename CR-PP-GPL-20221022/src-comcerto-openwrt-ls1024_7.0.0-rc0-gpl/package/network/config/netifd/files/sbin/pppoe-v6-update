@@ -1,0 +1,20 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /lib/netifd/netifd-proto.sh
+
+#logger -t testing "Called pppoe-script $0 with args:$@"
+
+#assuming interface name is arg 1
+#Eg: proto_init_update ppoe-wan16p 1 1
+proto_init_update $1 1 1
+
+#a valid IPv6 address is for arg 2. and prefix for arg 3
+#Eg: proto_add_ipv6_address 6667::386c:56f4:af5:c3fb 64
+proto_add_ipv6_address $2 $3
+
+section=`echo $1 | awk -F '-' '{printf $2}'`
+#now send_update function should be called with interface section.
+proto_send_update $section
+
+exit 0

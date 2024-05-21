@@ -1,0 +1,135 @@
+From b4a359c11fbcdd2dec34bf6078d02fdac211b398 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:10:13 +0800
+Subject: [PATCH 32/63] add-wps-pin-checksum
+Content-Type: text/plain; charset="utf-8"
+
+---
+ .../apps/wps/brcm_apps/linux/wps_linux_pincheck.c  |   49 ++++++++++++++++++++
+ main/components/router/wps/Makefile                |   16 ++++++-
+ 2 files changed, 63 insertions(+), 2 deletions(-)
+ create mode 100644 main/components/apps/wps/brcm_apps/linux/wps_linux_pincheck.c
+
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_pincheck.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_pincheck.c
+new file mode 100644
+index 0000000..597c015
+--- /dev/null
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_pincheck.c
+@@ -0,0 +1,49 @@
++#include <typedefs.h>
++#include <bcmutils.h>
++#include <wlutils.h>
++#include <uci.h>
++
++static int
++wl_wpsPincheck(char *pin_string)
++{
++	unsigned long PIN = strtoul(pin_string, NULL, 10);
++	unsigned long int accum = 0;
++	unsigned int len = strlen(pin_string);
++
++	if (len != 4 && len != 8)
++		return -1;
++
++	if (len == 8) {
++		accum += 3 * ((PIN / 10000000) % 10);
++		accum += 1 * ((PIN / 1000000) % 10);
++		accum += 3 * ((PIN / 100000) % 10);
++		accum += 1 * ((PIN / 10000) % 10);
++		accum += 3 * ((PIN / 1000) % 10);
++		accum += 1 * ((PIN / 100) % 10);
++		accum += 3 * ((PIN / 10) % 10);
++		accum += 1 * ((PIN / 1) % 10);
++
++		if (0 == (accum % 10))
++			return 0;
++	}
++	else if (len == 4)
++		return 0;
++
++	return -1;
++}
++
++int main(int argc, char **argv)
++{
++	int ret = -1;
++
++	if (argc != 2)
++		return -1;
++
++	ret = wl_wpsPincheck(argv[1]);
++	if (ret != 0) {
++		printf("2");
++		return 2;
++	}
++
++	return 0;
++}
+diff --git a/main/components/router/wps/Makefile b/main/components/router/wps/Makefile
+index d5fbb02..669a35b 100644
+--- a/main/components/router/wps/Makefile
++++ b/main/components/router/wps/Makefile
+@@ -127,6 +127,10 @@ WPS_PINGEN := brcm_apps/linux/wps_linux_pingen.c
+ WPS_PINGENOBJS := $(foreach file, $(WPS_PINGEN), \
+ 	 $(patsubst %.c,obj/wps/%.o,$(file)))
+ 
++WPS_PINCHECK := brcm_apps/linux/wps_linux_pincheck.c
++WPS_PINCHECKOBJS := $(foreach file, $(WPS_PINCHECK), \
++	 $(patsubst %.c,obj/wps/%.o,$(file)))
++
+ WPS_OSL := $(WPS_ROUTERHALFILES)
+ WPS_OSL += brcm_apps/linux/wps_linux_main.c
+ 
+@@ -144,9 +148,9 @@ WPS_DIRS := $(foreach file, $(WPS_OSLOBJS), \
+ WPS_DIRLIST = $(sort $(WPS_DIRS))
+ 
+  ifneq ($(wildcard ./prebuilt),)
+- all: osl wps_monitor wps_cli wps_pingen
++ all: osl wps_monitor wps_cli wps_pingen wps_pin_check
+  else
+- all: mkversion sta_build_check dirs variants_build osl wps_monitor wps_cli wps_pingen
++ all: mkversion sta_build_check dirs variants_build osl wps_monitor wps_cli wps_pingen wps_pin_check
+  endif
+ 
+  osl:
+@@ -161,6 +165,7 @@ WPS_DIRLIST = $(sort $(WPS_DIRS))
+ 	+$(MAKE) parallel=true $(WPS_OSLOBJS)
+ 	+$(MAKE) parallel=true $(WPS_CLIOBJS)
+ 	+$(MAKE) parallel=true $(WPS_PINGENOBJS)
++	+$(MAKE) parallel=true $(WPS_PINCHECKOBJS)
+ 
+ $(WPS_OSLOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
+ 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
+@@ -168,6 +173,8 @@ $(WPS_CLIOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
+ 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
+ $(WPS_PINGENOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
+ 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
++$(WPS_PINCHECKOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
++	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
+ 
+ 
+ # Variants build rules
+@@ -206,6 +213,9 @@ wps_cli : objs FORCE
+ wps_pingen : objs FORCE
+ 	$(CC) $(LIBPATH) $(WPS_PINGENOBJS) -l$(WPS_LIB_FILE) $(WPSM_LIBS) $(LDFLAGS) -o $@
+ 
++wps_pin_check : objs FORCE
++	$(CC) $(LIBPATH) $(WPS_PINCHECKOBJS) -l$(WPS_LIB_FILE) $(WPSM_LIBS) $(LDFLAGS) -o $@
++
+ FORCE:
+ 
+ 
+@@ -221,8 +231,10 @@ install: all
+ 	install wps_monitor $(INSTALLDIR)/wps/bin
+ 	install wps_cli $(INSTALLDIR)/wps/bin
+ 	install wps_pingen $(INSTALLDIR)/wps/bin
++	install wps_pin_check $(INSTALLDIR)/wps/bin
+ 	$(STRIP) $(INSTALLDIR)/wps/bin/wps_monitor
+ 	$(STRIP) $(INSTALLDIR)/wps/bin/wps_cli
+ 	$(STRIP) $(INSTALLDIR)/wps/bin/wps_pingen
++	$(STRIP) $(INSTALLDIR)/wps/bin/wps_pin_check
+ 
+ .PHONY: all clean install libs dirs osl
+-- 
+1.7.10
+

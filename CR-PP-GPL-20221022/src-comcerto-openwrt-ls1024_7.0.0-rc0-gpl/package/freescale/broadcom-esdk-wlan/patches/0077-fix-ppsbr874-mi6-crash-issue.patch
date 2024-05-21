@@ -1,0 +1,27 @@
+From 1e6024b385480a11c88aa745927975fc4c4e35a9 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 23 Aug 2017 01:51:33 +0800
+Subject: [PATCH] fix-ppsbr675-mi6-crash-issue
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_vht.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/main/src/wl/sys/wlc_vht.c b/main/src/wl/sys/wlc_vht.c
+index 44e01a1..269a282 100755
+--- a/main/src/wl/sys/wlc_vht.c
++++ b/main/src/wl/sys/wlc_vht.c
+@@ -2929,7 +2929,9 @@ wlc_frameaction_vht(wlc_vht_info_t *vhti, uint action_id, struct scb *scb,
+ 		wlc_vht_set_scb_opermode_enab(vhti, scb, TRUE);
+ 		wlc_vht_update_scb_oper_mode(vhti, scb, oper_mode);
+ #ifdef WL_MU_TX
++	if (MU_TX_ENAB(wlc)) {
+ 		wlc_mutx_bw_policy_update(wlc->mutx, FALSE);
++	}
+ #endif
+ 		break;
+ 	case DOT11_VHT_ACTION_GID_MGMT:
+-- 
+2.7.4
+

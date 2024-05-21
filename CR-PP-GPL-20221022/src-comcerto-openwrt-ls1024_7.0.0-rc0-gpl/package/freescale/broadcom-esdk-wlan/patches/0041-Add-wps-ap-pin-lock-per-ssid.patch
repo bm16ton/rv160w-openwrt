@@ -1,0 +1,703 @@
+From 1cb0247abcd2d550b5f422f29e474eb010798314 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:43:45 +0800
+Subject: [PATCH 41/63] Add-wps-ap-pin-lock-per-ssid
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/apps/wps_ap.c   |    7 +-
+ .../apps/wps/brcm_apps/apps/wps_aplockdown.c       |  268 +++++++++++++++++++-
+ main/components/apps/wps/brcm_apps/apps/wps_ie.c   |   15 +-
+ .../apps/wps/brcm_apps/apps/wps_monitor.c          |    4 +
+ main/components/apps/wps/brcm_apps/apps/wps_ui.c   |   21 ++
+ .../apps/wps/brcm_apps/include/wps_aplockdown.h    |   11 +-
+ .../components/apps/wps/brcm_apps/include/wps_ui.h |    5 +
+ .../apps/wps/brcm_apps/linux/wps_linux_cmd.c       |   31 +++
+ .../apps/wps/brcm_apps/linux/wps_linux_main.c      |   31 ++-
+ 9 files changed, 374 insertions(+), 19 deletions(-)
+ mode change 100644 => 100755 main/components/apps/wps/brcm_apps/apps/wps_ap.c
+ mode change 100644 => 100755 main/components/apps/wps/brcm_apps/apps/wps_aplockdown.c
+ mode change 100644 => 100755 main/components/apps/wps/brcm_apps/apps/wps_ie.c
+ mode change 100644 => 100755 main/components/apps/wps/brcm_apps/apps/wps_monitor.c
+ mode change 100644 => 100755 main/components/apps/wps/brcm_apps/apps/wps_ui.c
+ mode change 100644 => 100755 main/components/apps/wps/brcm_apps/include/wps_aplockdown.h
+ mode change 100644 => 100755 main/components/apps/wps/brcm_apps/include/wps_ui.h
+ mode change 100644 => 100755 main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
+ mode change 100644 => 100755 main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ap.c b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+old mode 100644
+new mode 100755
+index c73be50..09a9754
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ap.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+@@ -1576,7 +1576,12 @@ found:
+ 	switch (sc_mode) {
+ 	case SCMODE_AP_ENROLLEE:
+ 		/* If AP is under aplockdown mode, disable all configuring to AP */
+-		if (wps_aplockdown_islocked()) {
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++		if (wps_aplockdown_islocked(ifname))
++#else
++		if (wps_aplockdown_islocked())
++#endif
++		{
+ 			TUTRACE((TUTRACE_INFO, "AP in lock up state, deny AP configuring\n"));
+ 			return WPS_ERR_OPEN_SESSION;
+ 		}
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_aplockdown.c b/main/components/apps/wps/brcm_apps/apps/wps_aplockdown.c
+old mode 100644
+new mode 100755
+index a0e3ccd..8d7e527
+--- a/main/components/apps/wps/brcm_apps/apps/wps_aplockdown.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_aplockdown.c
+@@ -20,8 +20,17 @@
+ #include <wps_aplockdown.h>
+ #include <wps_ui.h>
+ #include <wps_ie.h>
++#include <bcmnvram.h>
++
++#ifndef IFNAMSIZ
++#define IFNAMSIZ 16
++#endif
++
+ 
+ typedef struct {
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	char wl_name[IFNAMSIZ];
++#endif
+ 	unsigned int force_on;
+ 	unsigned int locked;
+ 	unsigned int time;
+@@ -30,11 +39,25 @@ typedef struct {
+ 	int failed_cnt;
+ } WPS_APLOCKDOWN;
+ 
++
++/*AP PIN has been locked permanently due to excessive(10 times) failed attempts*/
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++#define WPS_APLOCKDOWN_START_CNT	10
++#define WPS_APLOCKDOWN_DEF_FOREVER_CNT  10
++#define MAX_VAP_NUM  8
++#else
+ #define WPS_APLOCKDOWN_START_CNT	3
+ #define	WPS_APLOCKDOWN_DEF_FOREVER_CNT	4
+-#define	WPS_APLOCKDOWN_FOREVER_CNT	10
++#endif
++#define	WPS_APLOCKDOWN_FOREVER_CNT 10
++
+ 
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++static WPS_APLOCKDOWN wps_aplockdown[MAX_VAP_NUM];
++static int wlname_index=0;
++#else
+ static WPS_APLOCKDOWN wps_aplockdown;
++#endif
+ 
+ int
+ wps_aplockdown_init()
+@@ -42,19 +65,54 @@ wps_aplockdown_init()
+ 	char *p;
+ 	int start_cnt = 0;
+ 	int forever_cnt = 0;
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	char prefix[] = "wlXXXXXXXXXX_";
++	char tmp[100];
++	int index=0;
++	memset(&tmp,0,sizeof(tmp));
++	memset(&prefix,0,sizeof(prefix));
++#endif
+ 
+ 	memset(&wps_aplockdown, 0, sizeof(wps_aplockdown));
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++
++	for(index=0;index<8;index++)
++	{
++		/*we find the wl interface, go out the loop*/
++		if(0 == index)
++		{
++			snprintf(prefix, sizeof(prefix), "wl0");
++		}
++		else if(4 == index)
++		{
++			snprintf(prefix, sizeof(prefix), "wl1");
++		}
++		else if(index < 4 && index >0)
++		{
++			snprintf(prefix, sizeof(prefix), "wl0.%d", index);
++		}
++		else if(index > 4)
++		{
++			snprintf(prefix, sizeof(prefix), "wl1.%d", index%4);
++		}
++		
++		strcpy(wps_aplockdown[index].wl_name,prefix);
++		sprintf(tmp,"%s_wps_aplockdown_forceon",prefix);
++	
++		if(!strcmp(wps_safe_get_conf(tmp),"1")) {
++			wps_aplockdown[index].force_on = 1;
++		}
++		else
++		{
++			wps_aplockdown[index].force_on = 0;
++		}
++		
++	}
++#endif
+ 
+-	if (!strcmp(wps_safe_get_conf("wps_aplockdown_forceon"), "1")) {
+-		wps_aplockdown.force_on = 1;
++	wps_ui_set_env("wps_aplockdown", "0");
++	wps_set_conf("wps_aplockdown", "0");
+ 
+-		wps_ui_set_env("wps_aplockdown", "1");
+-		wps_set_conf("wps_aplockdown", "1");
+-	}
+-	else {
+-		wps_ui_set_env("wps_aplockdown", "0");
+-		wps_set_conf("wps_aplockdown", "0");
+-	}
+ 
+ 	/* check lock start count */
+ 	if ((p = wps_get_conf("wps_lock_start_cnt")))
+@@ -80,6 +138,14 @@ wps_aplockdown_init()
+ 		start_cnt = forever_cnt;
+ 
+ 	/* Save to structure */
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	for(index=0;index<8;index++)
++	{
++		wps_aplockdown[index].start_cnt = start_cnt;
++		wps_aplockdown[index].forever_cnt = forever_cnt;
++	}
++
++#else
+ 	wps_aplockdown.start_cnt = start_cnt;
+ 	wps_aplockdown.forever_cnt = forever_cnt;
+ 
+@@ -88,28 +154,114 @@ wps_aplockdown_init()
+ 		wps_aplockdown.force_on,
+ 		wps_aplockdown.start_cnt,
+ 		wps_aplockdown.forever_cnt));
++#endif
++
+ 
+ 	return 0;
+ }
++	
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	int 
++	wps_aplockdown_add(char *ifname)
++#else
+ 
+ int
+ wps_aplockdown_add(void)
++#endif
+ {
+ 	unsigned long now;
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	char prefix[] = "wlXXXXXXXXXX_";
++	int index,index2;
++	char *ifname_both_ssid=NULL;
++	
++	memset(&prefix,0,sizeof(prefix));
++	/* Prefix */
++	snprintf(prefix, sizeof(prefix), "%s_", ifname);	
++#endif	
+ 
+ 	time((time_t *)&now);
+ 
+ 	TUTRACE((TUTRACE_INFO, "Error of config AP pin fail in %d!\n", now));
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	for(index=0;index<8;index++)
++	{
++		/*we find the wl interface, go out the loop*/
++		if(0 == strcmp(wps_aplockdown[index].wl_name,ifname))
++			break;
++	}
++#endif
+ 
+ 	/*
+ 	 * Add PIN failed count
+ 	 */
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	if (1 == wps_aplockdown[index].force_on)
++	{
++		return wps_aplockdown[index].locked;
++	}
++	
++	if (wps_aplockdown[index].failed_cnt < wps_aplockdown[index].forever_cnt)
++	wps_aplockdown[index].failed_cnt++;
++#else
+ 	if (wps_aplockdown.failed_cnt < wps_aplockdown.forever_cnt)
+ 		wps_aplockdown.failed_cnt++;
+-
++#endif
+ 	/*
+ 	 * Lock it if reach start count.
+ 	 */
++#ifdef WPS_FAIL_10_LOCK_FOREVER	
++	if (wps_aplockdown[index].failed_cnt >= wps_aplockdown[index].start_cnt) {
++		wps_aplockdown[index].locked = 1;
++		wps_aplockdown[index].time = now;
++
++		wps_ui_set_env("wps_aplockdown", "1");
++		wps_set_conf("wps_aplockdown", "1");	
++		char wps_name[32];
++		memset(&wps_name,0,sizeof(wps_name));
++		sprintf(wps_name,"%swps_aplockdown_forceon",prefix);
++	
++		wps_set_conf(wps_name, "1");
++		wps_aplockdown[index].force_on=1;
++		TUTRACE((TUTRACE_ERR,"AP pin mode, ifname= %s\n",ifname));
++		/* reset the IE */	
++		wps_ie_set(ifname, NULL);
++		
++		
++		memset(&wps_name,0,sizeof(wps_name));
++		sprintf(wps_name,"%s_wps_both_ssid",wps_aplockdown[index].wl_name);
++		TUTRACE((TUTRACE_ERR,"%s(%d)name=%s\n",__FUNCTION__,__LINE__,wps_name));
++		ifname_both_ssid=nvram_safe_get(wps_name);
++		TUTRACE((TUTRACE_ERR,"%s(%d)ifname_with_same_ssid=%s\n",__FUNCTION__,__LINE__,ifname_both_ssid));
++		if(strlen(ifname_both_ssid) != 0)
++		{
++			TUTRACE((TUTRACE_ERR, "%s(%d) vap with same ssid is %s\n",__FUNCTION__,__LINE__,ifname_both_ssid));
++			for(index2=0;index2<8;index2++)
++			{
++				/*we find the wl interface with same ssid*/
++				if(0 == strcmp(wps_aplockdown[index2].wl_name,ifname_both_ssid))
++				{
++					TUTRACE((TUTRACE_ERR, "%s(%d) \n",__FUNCTION__,__LINE__));
++					memset(&wps_name,0,sizeof(wps_name));
++					sprintf(wps_name,"%s_wps_aplockdown_forceon",wps_aplockdown[index2].wl_name);
++					TUTRACE((TUTRACE_ERR,"vap with same ssid is set to AP pin lock, ifname= %s\n",wps_aplockdown[index2].wl_name));
++					wps_set_conf(wps_name, "1");
++					wps_aplockdown[index2].force_on=1;
++					break;
++				}
++			
++			}
++		}
++
++		TUTRACE((TUTRACE_ERR, "AP interface=%s is lock down now\n",ifname));
++	}
++	TUTRACE((TUTRACE_INFO, "Fail AP pin trial count = %d!\n", wps_aplockdown[index].failed_cnt));
++	wlname_index=index;
++
++	return wps_aplockdown[index].locked;
++
++#else
++
+ 	if (wps_aplockdown.failed_cnt >= wps_aplockdown.start_cnt) {
+ 		wps_aplockdown.locked = 1;
+ 		wps_aplockdown.time = now;
+@@ -126,6 +278,7 @@ wps_aplockdown_add(void)
+ 	TUTRACE((TUTRACE_INFO, "Fail AP pin trial count = %d!\n", wps_aplockdown.failed_cnt));
+ 
+ 	return wps_aplockdown.locked;
++#endif	
+ }
+ 
+ int
+@@ -133,7 +286,19 @@ wps_aplockdown_check(void)
+ {
+ 	unsigned long now;
+ 	int ageout;
++	
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++if (wps_aplockdown[wlname_index].locked == 0)
++	return 0;
+ 
++/* check lock forever */
++if (wps_aplockdown[wlname_index].force_on ||
++	wps_aplockdown[wlname_index].failed_cnt >= wps_aplockdown[wlname_index].forever_cnt)
++{
++	return 1;
++}
++
++#else
+ 	if (wps_aplockdown.locked == 0)
+ 		return 0;
+ 
+@@ -141,15 +306,36 @@ wps_aplockdown_check(void)
+ 	if (wps_aplockdown.force_on ||
+ 	    wps_aplockdown.failed_cnt >= wps_aplockdown.forever_cnt)
+ 		return 1;
+-
++#endif
+ 	/* wps_aplockdown.failed_cnt will always >= wps_aplockdown.start_cnt,
+ 	 * so, ageout start from 1 minutes.
+ 	 */
++#ifdef WPS_FAIL_10_LOCK_FOREVER	
++	ageout = (1 << (wps_aplockdown[wlname_index].failed_cnt - wps_aplockdown[wlname_index].start_cnt)) * 60;
++#else
+ 	ageout = (1 << (wps_aplockdown.failed_cnt - wps_aplockdown.start_cnt)) * 60;
+-
++#endif
+ 	time((time_t *)&now);
+ 
+ 	/* Lock release check */
++#ifdef WPS_FAIL_10_LOCK_FOREVER	
++#if 0
++if ((unsigned long)(now - wps_aplockdown[wlname_index].time) > ageout) {
++	
++		/* unset apLockDown indicator */
++		wps_aplockdown[wlname_index].locked = 0;
++
++		wps_ui_set_env("wps_aplockdown", "0");
++		wps_set_conf("wps_aplockdown", "0");
++
++		/* reset the IE */
++		wps_ie_set(NULL, NULL);
++
++		TUTRACE((TUTRACE_INFO, "Unlock AP lock down\n"));
++
++	}
++#endif
++#else
+ 	if ((unsigned long)(now - wps_aplockdown.time) > ageout) {
+ 		/* unset apLockDown indicator */
+ 		wps_aplockdown.locked = 0;
+@@ -163,22 +349,76 @@ wps_aplockdown_check(void)
+ 		TUTRACE((TUTRACE_INFO, "Unlock AP lock down\n"));
+ 	}
+ 
++#endif
++
++
++
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	return wps_aplockdown[wlname_index].locked;
++#else
++
+ 	return wps_aplockdown.locked;
++#endif
+ }
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++
++int
++wps_aplockdown_islocked(char *ifname)
++
++#else
+ 
+ int
+ wps_aplockdown_islocked()
++#endif
+ {
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	int index=0;
++	char tmp[100];
++	char *lock_value=NULL;
++
++	for(index=0;index<8;index++)
++	{
++		/*we find the wl interface, go out the loop*/
++		if(0 == strcmp(wps_aplockdown[index].wl_name,ifname))
++			break;
++	}
++	memset(tmp,0,sizeof(tmp));
++	sprintf(tmp,"%s_wps_aplockdown_forceon",ifname);		
++	lock_value = nvram_safe_get(tmp);	
++	TUTRACE((TUTRACE_INFO, "%s(%d)lock_value=%s\n",__FUNCTION__,__LINE__,lock_value));
++
++	if(!strcmp(lock_value,"2"))
++	{/*unlock the ap pin from GUI*/
++		wps_aplockdown[index].force_on = 0;
++		wps_aplockdown[index].locked=0;
++		wps_aplockdown[index].failed_cnt=0;
++		wps_set_conf(tmp, "0");
++		TUTRACE((TUTRACE_INFO, "%s(%d) force_on=0 \n",__FUNCTION__,__LINE__));	
++	}
++
++	return wps_aplockdown[index].locked | wps_aplockdown[index].force_on;
++
++#else
++
+ 	return wps_aplockdown.locked | wps_aplockdown.force_on;
++#endif
+ }
+ 
+ int
+ wps_aplockdown_cleanup()
+ {
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	/* Cleanup dynamic variables */
++	wps_aplockdown[wlname_index].locked = 0;
++	wps_aplockdown[wlname_index].time = 0;
++	wps_aplockdown[wlname_index].failed_cnt = 0;
++
++#else
++
+ 	/* Cleanup dynamic variables */
+ 	wps_aplockdown.locked = 0;
+ 	wps_aplockdown.time = 0;
+ 	wps_aplockdown.failed_cnt = 0;
+-
++#endif
+ 	return 0;
+ }
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ie.c b/main/components/apps/wps/brcm_apps/apps/wps_ie.c
+old mode 100644
+new mode 100755
+index 1243336..ad32057
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ie.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ie.c
+@@ -195,7 +195,12 @@ wps_set_prb_rsp_IE(int ess_id, char *ifname, CTlvSsrIE *ssrmsg)
+ 	tlv_serialize(WPS_ID_SC_STATE, bufObj, &scState, WPS_ID_SC_STATE_S);
+ 
+ 	/* AP Setup Locked - optional if false */
+-	if (wps_aplockdown_islocked()) {
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	if (wps_aplockdown_islocked(ifname)) 
++#else
++	if (wps_aplockdown_islocked())
++#endif
++	{
+ 		data8 = 0x1;
+ 		tlv_serialize(WPS_ID_AP_SETUP_LOCKED, bufObj, &data8, WPS_ID_AP_SETUP_LOCKED_S);
+ 	}
+@@ -437,7 +442,13 @@ wps_set_beacon_IE(int ess_id, char *ifname, CTlvSsrIE *ssrmsg)
+ 	tlv_serialize(WPS_ID_SC_STATE, bufObj, &data8, WPS_ID_SC_STATE_S);
+ 
+ 	/* AP Setup Locked - optional if false */
+-	if (wps_aplockdown_islocked()) {
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++         if (wps_aplockdown_islocked(ifname))
++#else
++         if (wps_aplockdown_islocked())
++#endif
++
++	{
+ 		data8 = 0x1;
+ 		tlv_serialize(WPS_ID_AP_SETUP_LOCKED, bufObj, &data8, WPS_ID_AP_SETUP_LOCKED_S);
+ 	}
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_monitor.c b/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
+old mode 100644
+new mode 100755
+index 575ed86..e1222bd
+--- a/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
+@@ -586,7 +586,11 @@ wps_dispatch()
+ 
+ 			case SCMODE_AP_ENROLLEE:
+ 				if (ret == WPS_RESULT_ENROLLMENT_PINFAIL) {
++#ifdef WPS_FAIL_10_LOCK_FOREVER					
++					wps_aplockdown_add(hndl->ifname);
++#else
+ 					wps_aplockdown_add();
++#endif
+ 				}
+ #ifdef WPS_ADDCLIENT_WWTP
+ 				else if (ret == WPS_RESULT_ENROLLMENT_M2DFAIL &&
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ui.c b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+old mode 100644
+new mode 100755
+index 3017833..243a9ef
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ui.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+@@ -61,6 +61,9 @@ static wps_ui_str_t _wps_ui_cmd_str[] = {
+ 	{WPS_UI_CMD_AP_PIN_TIMEOUT,	"WPS ap pin timeout"},
+ 	{WPS_UI_CMD_AP_PIN_EXPIRE,	"WPS ap pin expire"},
+ 	{WPS_UI_CMD_BOTH_SSID,	"WPS both ssid"},
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	{WPS_UI_CMD_AP_PIN_UNLOCK, "WPS ap pin unlock"},
++#endif
+ 	{0,		NULL}
+ };
+ 
+@@ -1432,6 +1435,24 @@ wps_ui_do_set(char *buf)
+ 	else if (ui->wps_config_command == WPS_UI_CMD_AP_PIN_EXPIRE) {
+ 		wps_set_ap_pin_expire();
+ 	}
++#ifdef WPS_FAIL_10_LOCK_FOREVER	
++	else if (ui->wps_config_command == WPS_UI_CMD_AP_PIN_UNLOCK) {
++		char ifname[32] = {0};
++		char *ifname_both_ssid=NULL;
++		sprintf(ifname, "%s_wps_aplockdown_forceon", ui->wps_ifname);
++		wps_set_conf(ifname, "2");
++		memset(&ifname,0,sizeof(ifname));
++		sprintf(ifname, "%s_wps_both_ssid", ui->wps_ifname);
++		ifname_both_ssid=nvram_get(ifname);
++		if(ifname_both_ssid != NULL)
++		{
++			memset(&ifname,0,sizeof(ifname));
++			sprintf(ifname, "%s_wps_aplockdown_forceon", ifname_both_ssid);
++			wps_set_conf(ifname, "0");
++		}
++		
++	}	
++#endif
+ 	else {
+ 		/* Add in PF #3 */
+ 		if (ui->wps_config_command == WPS_UI_CMD_START &&
+diff --git a/main/components/apps/wps/brcm_apps/include/wps_aplockdown.h b/main/components/apps/wps/brcm_apps/include/wps_aplockdown.h
+old mode 100644
+new mode 100755
+index d2d933d..6e5f7e1
+--- a/main/components/apps/wps/brcm_apps/include/wps_aplockdown.h
++++ b/main/components/apps/wps/brcm_apps/include/wps_aplockdown.h
+@@ -18,9 +18,18 @@
+ #ifndef __WPS_APLOCKDOWN_H__
+ #define __WPS_APLOCKDOWN_H__
+ 
++#define WPS_FAIL_10_LOCK_FOREVER
+ int wps_aplockdown_init();
++
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++int wps_aplockdown_add(char *ifname);
++int wps_aplockdown_islocked(char *ifname);
++#else
+ int wps_aplockdown_add(void);
+-int wps_aplockdown_check(void);
+ int wps_aplockdown_islocked();
++#endif
++
++int wps_aplockdown_check(void);
++
+ int wps_aplockdown_cleanup();
+ #endif	/* __WPS_APLOCKDOWN_H__ */
+diff --git a/main/components/apps/wps/brcm_apps/include/wps_ui.h b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+old mode 100644
+new mode 100755
+index 73f8e74..3bd5082
+--- a/main/components/apps/wps/brcm_apps/include/wps_ui.h
++++ b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+@@ -23,6 +23,7 @@
+ 
+ #ifndef __WPS_UI_H__
+ #define __WPS_UI_H__
++#include <wps_aplockdown.h>
+ 
+ /*
+  * WPS module
+@@ -50,6 +51,10 @@
+ #define WPS_UI_CMD_AP_PIN_TIMEOUT		97
+ #define WPS_UI_CMD_AP_PIN_EXPIRE		96
+ #define WPS_UI_CMD_BOTH_SSID		95
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++#define WPS_UI_CMD_AP_PIN_UNLOCK      94
++#endif
++
+ 
+ #define IS_WPS_UI_CMD_NFC(cmd)	((cmd) == WPS_UI_CMD_NFC_WR_CFG || \
+ 				 (cmd) == WPS_UI_CMD_NFC_RD_CFG || \
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
+old mode 100644
+new mode 100755
+index c0c4edc..7df804a
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
+@@ -75,6 +75,9 @@ static wps_str_t _cmd_str[] = {
+ 	{WPS_UI_CMD_AP_PIN,	"WPS ap pin"},
+ 	{WPS_UI_CMD_AP_PIN_TIMEOUT,	"WPS ap pin timeout"},
+ 	{WPS_UI_CMD_AP_PIN_EXPIRE,	"WPS ap pin expire"},
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	{WPS_UI_CMD_AP_PIN_UNLOCK,	"WPS ap pin lock"},	
++#endif
+ 	{WPS_UI_CMD_BOTH_SSID,	"WPS both ssid"},
+ 	{0,		NULL}
+ };
+@@ -665,6 +668,24 @@ wps_ap_pin_expire(void)
+ 	set_wps_env(uibuf);
+ }
+ 
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++static void
++wps_ap_pin_unlock(char *ifname)
++{
++	char uibuf[512];
++	struct strbuf b;
++
++	str_binit(&b, uibuf, sizeof(uibuf));
++
++	str_bprintf(&b, "SET ");
++	str_bprintf(&b, "wps_config_command=%d ", WPS_UI_CMD_AP_PIN_UNLOCK);
++	str_bprintf(&b, "wps_ifname=%s ", ifname);
++	set_wps_env(uibuf);
++}
++
++#endif
++
++
+ static int
+ wps_pin_check(char *pin_string)
+ {
+@@ -984,6 +1005,9 @@ main(int argc, char *argv[])
+ 		strcmp(command, "wps_both_ssid") != 0 &&
+ 		strcmp(command, "wps_ap_pin_to") != 0 &&
+ 		strcmp(command, "wps_ap_pin_expire") != 0 &&
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++		strcmp(command, "wps_ap_pin_unlock") != 0 &&
++#endif
+ 		strcmp(command, "addenrollee") != 0 &&
+ 		strcmp(command, "enroll") != 0 &&
+ #ifdef WPS_NFC_DEVICE
+@@ -1048,6 +1072,13 @@ main(int argc, char *argv[])
+ 		wps_both_ssid(ifname, *argv);
+ 		return 0;
+ 	}
++	
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	if (!strcmp(command, "wps_ap_pin_unlock")) {
++		wps_ap_pin_unlock(ifname);
++		return 0;
++	}
++#endif
+ 
+ 	/*
+ 	  * Process method
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+old mode 100644
+new mode 100755
+index f4ef0b6..5a0d6a2
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -61,7 +61,7 @@ typedef u_int8_t u8;
+ #include <wps_wl.h>
+ 
+ #define WPSM_PID_FILE_PATH	"/tmp/wps_monitor.pid"
+-
++#include <wps_aplockdown.h>
+ extern void RAND_linux_init();
+ void wps_osl_build_conf();
+ 
+@@ -948,7 +948,36 @@ wps_osl_build_conf()
+ 	wps_conf_buf_ptr = wps_conf_buf;
+ 
+ 	/* Start config print */
++#ifdef WPS_FAIL_10_LOCK_FOREVER
++	int index=0;
++
++	for(index=0;index<8;index++)
++	{
++		memset(&prefix,0,sizeof(prefix));
++		memset(&tmp,0,sizeof(tmp));
++		/*we find the wl interface, go out the loop*/
++		if(0 == index)
++		{
++			snprintf(prefix, sizeof(prefix), "wl0");
++		}
++		else if(4 == index)
++		{
++			snprintf(prefix, sizeof(prefix), "wl1");
++		}
++		else if(index < 4 && index >0)
++		{
++			snprintf(prefix, sizeof(prefix), "wl0.%d", index);
++		}
++		else if(index > 4)
++		{
++			snprintf(prefix, sizeof(prefix), "wl1.%d", index%4);
++		}
++		sprintf(tmp,"%s_wps_aplockdown_forceon",prefix);
++		print_conf(NULL, NULL, tmp, NULL);
++	}
++#else
+ 	print_conf(NULL, NULL, "wps_aplockdown_forceon", NULL);
++#endif
+ 	print_conf(NULL, NULL, "wps_lock_start_cnt", NULL);
+ 	print_conf(NULL, NULL, "wps_lock_forever_cnt", NULL);
+ 	print_conf(NULL, NULL, "wps_device_pin", NULL);
+-- 
+1.7.10
+

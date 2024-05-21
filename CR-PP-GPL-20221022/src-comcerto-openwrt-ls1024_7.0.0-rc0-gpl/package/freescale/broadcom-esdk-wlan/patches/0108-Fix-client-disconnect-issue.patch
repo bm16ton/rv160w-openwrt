@@ -1,0 +1,430 @@
+From b9d19c886073e10f7369bf339aa03e7db8ca06e9 Mon Sep 17 00:00:00 2001
+From: Veeresh Sajjan <veeresh.sajjan@nxp.com>
+Date: Mon, 6 May 2019 15:24:39 +0530
+Subject: [PATCH] Fix for wireless clients disconnect issue
+
+Signed-off-by: Veeresh Sajjan <veeresh.sajjan@nxp.com>
+---
+ keymgmt/src/km_iovars.c |   7 ++
+ nas/nas.c               |  14 +++-
+ nas/wpa.c               | 171 ++++++++++++++++++++++++++++++++++++++++++++++++
+ nas/wpa.h               |   7 ++
+ phy/wlc_phy_cmn.c       |   2 +-
+ 5 files changed, 199 insertions(+), 2 deletions(-)
+
+diff --git a/keymgmt/src/km_iovars.c b/keymgmt/src/km_iovars.c
+index f5fb9ad..0a1167a 100644
+--- a/main/src/wl/keymgmt/src/km_iovars.c
++++ b/main/src/wl/keymgmt/src/km_iovars.c
+@@ -163,6 +163,13 @@ km_doiovar(void *ctx, const bcm_iovar_t *vi, uint32 actionid,
+ 		key_id = (wlc_key_id_t)wl_key.index;
+ 		ea = &wl_key.ea;
+ 
++//		scb = km_find_scb(km, bsscfg, ea, FALSE /* !create */);
++//		if (scb)
++//		{
++//			/*Flush the old keys before inserting the new keys. */
++//			wlc_keymgmt_reset(km, NULL, scb);
++//		}
++//
+ 		KM_LOG(("wl%d: %s: key id %02x addr %s\n",  KM_UNIT(km), __FUNCTION__,
+ 			key_id,  bcm_ether_ntoa(ea, eabuf)));
+ 
+diff --git a/nas/nas.c b/nas/nas.c
+index dfcb534..1e42a50 100644
+--- a/main/components/router/nas/nas.c
++++ b/main/components/router/nas/nas.c
+@@ -263,8 +263,16 @@ lookup_sta(nas_t *nas, struct ether_addr *ea, sta_lookup_mode_t mode)
+ 		if (nas->flags & NAS_FLAG_AUTHENTICATOR)
+ 			sta->suppl.state = sta->suppl.retry_state = WPA_AUTHENTICATION2;
+ #ifdef BCMSUPPL
++#if 1 /* WLENT */
++		if (nas->flags & NAS_FLAG_SUPPLICANT) {
++			sta->suppl.state = sta->suppl.retry_state = WPA_SUP_AUTHENTICATION;
++			nas->flags &= ~NAS_FLAG_GTK_PLUMBED;
++			nas->flags &= ~NAS_FLAG_IGTK_PLUMBED;
++		}
++#else
+ 		if (nas->flags & NAS_FLAG_SUPPLICANT)
+ 			sta->suppl.state = sta->suppl.retry_state = WPA_SUP_AUTHENTICATION;
++#endif /* WLENT */
+ 		sta->suppl.pk_state = EAPOL_SUP_PK_UNKNOWN;
+ #endif
+ 		sta->pae.state = INITIALIZE;
+@@ -347,7 +355,7 @@ pae_state(nas_t *nas, nas_sta_t *sta, int state)
+ 		sta->pae.state = CONNECTING;
+ 		sta->rxauths = 0;
+ 		/* Fall through */
+-        break;
++//        break;
+ 
+ 	case CONNECTING:
+ 		dbg(nas, "Connecting %s", ether_etoa((uchar *)&sta->ea, eabuf));
+@@ -991,7 +999,11 @@ driver_message_dispatch(nas_t *nas, bcm_event_t *dpkt)
+ 
+ 		/* ignore errors from STAs we don't know about. */
+ 		if (sta)
++#if 1 /* WLENT_AP */
++			wpa_mic_error(nas->wpa, sta, TRUE, FALSE);
++#else
+ 			wpa_mic_error(nas->wpa, sta, TRUE);
++#endif
+ 		break;
+ 
+ #ifdef WLWNM
+diff --git a/nas/wpa.c b/nas/wpa.c
+index 7005079..b49968c 100644
+--- a/main/components/router/nas/wpa.c
++++ b/main/components/router/nas/wpa.c
+@@ -1098,7 +1098,11 @@ static void wpa_send_mic_failure(wpa_t *wpa, nas_sta_t *sta)
+ }
+ 
+ void
++#if 1 /* WLENT_AP */
++wpa_mic_error(wpa_t *wpa, nas_sta_t *msta, bool from_driver, bool pairwise)
++#else
+ wpa_mic_error(wpa_t *wpa, nas_sta_t *msta, bool from_driver)
++#endif
+ {
+ 	time_t now, since;
+ 	nas_t *nas = wpa->nas;
+@@ -1106,6 +1110,25 @@ wpa_mic_error(wpa_t *wpa, nas_sta_t *msta, bool from_driver)
+ #ifdef BCMDBG
+ 	char eabuf[ETHER_ADDR_STR_LEN];
+ #endif
++#if 1 /* WLENT_AP */
++	bool mic_error_prohibit = FALSE;
++	bool nas_aes_only = WSEC_AES_ENABLED(wpa->nas->wsec) && !WSEC_TKIP_ENABLED(wpa->nas->wsec);
++	bool nas_mixed = WSEC_AES_ENABLED(wpa->nas->wsec) && WSEC_TKIP_ENABLED(wpa->nas->wsec);
++	bool sta_aes_only = WSEC_AES_ENABLED(msta->wsec) && !WSEC_TKIP_ENABLED(msta->wsec);
++
++	/*
++	 * 1. Do not accept any MIC error report if authenticator does not support TKIP.
++	 * 2. Do not accept MIC error report for pairwise key from AES clients if
++	 *    authenticator supports MIXED(AES+TKIP) mode.
++	 * 3. Do not send MIC error report for pairwise key if supplicant supports AES only.
++	 */
++	mic_error_prohibit = (((nas->flags & NAS_FLAG_AUTHENTICATOR) && nas_aes_only) ||
++		((nas->flags & NAS_FLAG_AUTHENTICATOR) && nas_mixed && sta_aes_only && pairwise) ||
++		((nas->flags & NAS_FLAG_SUPPLICANT) && nas_aes_only && pairwise));
++	if (mic_error_prohibit) {
++		return;
++	}
++#endif
+ 
+ 	now = time(NULL);
+ 
+@@ -1144,7 +1167,12 @@ wpa_mic_error(wpa_t *wpa, nas_sta_t *msta, bool from_driver)
+ 	}
+ 
+ 	/* If within the time limit we have to toss all the STAs. */
++#if 1 /* WLENT_AP */
++	if ((nas->MIC_failures != 0) && (nas->MIC_countermeasures == 0) &&
++		(since < WPA_TKIP_CM_DETECT)) {
++#else
+ 	if ((nas->MIC_failures != 0) && (since < WPA_TKIP_CM_DETECT)) {
++#endif
+ 		nas_sta_t *sta;
+ 
+ 		dbg(nas, "Second MIC failure in %d seconds, taking countermeasures",
+@@ -1800,7 +1828,9 @@ wpa_send_eapol(wpa_t *wpa, nas_sta_t *sta)
+ 					body->key_info |= htons(WPA_KEY_SECURE);
+ 				if ((sta->mode & (WPA2 | WPA2_PSK)))
+ 					body->key_info |= htons(WPA_KEY_SECURE);
++#if 0 /* WLENT */
+ 				sta->suppl.pk_state = EAPOL_SUP_PK_DONE;
++#endif
+ 				break;
+ 			default:
+ 				dbg(nas, "Unexpected supplicant pk state %d", sta->suppl.pk_state);
+@@ -2907,6 +2937,9 @@ wpa_ptkinitdone(wpa_t *wpa, nas_sta_t *sta, eapol_header_t *eapol)
+ 	nas_t *nas = wpa->nas;
+ 	ushort key_info;
+ 	unsigned int required_flags, prohibited_flags;
++#if 1 /* WLENT_AP */
++	unsigned short data_len;
++#endif
+ 
+ 	/* Check that the packet looks like the correct response */
+ 	required_flags = WPA_KEY_PAIRWISE | WPA_KEY_MIC;
+@@ -2924,6 +2957,17 @@ wpa_ptkinitdone(wpa_t *wpa, nas_sta_t *sta, eapol_header_t *eapol)
+ 		return 0;
+ 	}
+ 
++#if 1 /* WLENT_AP */
++	/* Vulnerability: message confusion fix, the data must be empty. */
++	data_len = ntohs(body->data_len);
++	if (data_len != 0) {
++		dbg(wpa->nas, "Key data is not vaild");
++		dbg(wpa->nas, "Key data in 4-way handshake message #4");
++		dump(wpa->nas, body->data, data_len);
++		return 0;
++	}
++#endif
++
+ 	/* check the replay counter */
+ 	if (bcmp(body->replay, sta->suppl.replay, REPLAY_LEN) != 0) {
+ 		/* Ignore this message. */
+@@ -3124,7 +3168,11 @@ wpa_setkeysdone(wpa_t *wpa, nas_sta_t *sta, eapol_header_t *eapol)
+ 	 */
+ 	MIC_failure_flags = WPA_KEY_ERROR | WPA_KEY_REQ | WPA_KEY_MIC;
+ 	if ((key_info & MIC_failure_flags) == MIC_failure_flags) {
++#if 1 /* WLENT_AP */
++		wpa_mic_error(wpa, sta, FALSE, key_info & WPA_KEY_PAIRWISE);
++#else
+ 		wpa_mic_error(wpa, sta, FALSE);
++#endif
+ 		return;
+ 	}
+ 
+@@ -3201,6 +3249,9 @@ eapol_sup_process_key(wpa_t *wpa, eapol_header_t *eapol, nas_sta_t *sta)
+ 	bool UpdatePTK = FALSE;
+ 	bool UpdateGTK = FALSE;
+ 	eapol_sup_pk_state_t state = EAPOL_SUP_PK_UNKNOWN;
++#if 1 /* WLENT */
++	uint8 t_gtk[TKIP_TK_LEN];
++#endif
+ 
+ 	/* get replay counter from recieved frame */
+ 	bcopy(body->replay, sta->suppl.replay, REPLAY_LEN);
+@@ -3230,12 +3281,24 @@ eapol_sup_process_key(wpa_t *wpa, eapol_header_t *eapol, nas_sta_t *sta)
+ 		sta->suppl.state = WPA_SUP_STAKEYSTARTP;
+ 		/* 4-way handshke message 1 - reset state to EAPOL_SUP_PK_MSG1 */
+ 		if (!(key_info & WPA_KEY_MIC)) {
++#if 0 /* WLENT */
+ 			nas_set_key(wpa->nas, &sta->ea, NULL, 0, 0, 0, 0, 0);
++#endif
+ 			sta->suppl.pk_state = EAPOL_SUP_PK_MSG1;
+ 		}
++#if 1 /* WLENT */
++		/* 4-way handshake message 3 - validate current state.
++		 * Accept retransmitted message 3
++		 */
++		else if ((sta->suppl.pk_state != EAPOL_SUP_PK_MSG3) &&
++			(sta->suppl.pk_state != EAPOL_SUP_PK_DONE)) {
++			return state;
++		}
++#else
+ 		/* 4-way handshake message 3 - validate current state */
+ 		else if (sta->suppl.pk_state != EAPOL_SUP_PK_MSG3)
+ 			return state;
++#endif
+ 	}
+ 	else
+ 		sta->suppl.state = WPA_SUP_STAKEYSTARTG;
+@@ -3248,6 +3311,14 @@ eapol_sup_process_key(wpa_t *wpa, eapol_header_t *eapol, nas_sta_t *sta)
+ 			dbg(wpa->nas, "!Failed");
+ 			/* bcopy(suppl->snonce, TSNonce, NONCE_LEN); */
+ 			if (key_info & WPA_KEY_INSTALL) {
++#if 1 /* WLENT */
++				/* Ignore M3 if anonce is different from that of M1 */
++				if (bcmp(body->nonce, sta->suppl.anonce, NONCE_LEN)) {
++					dbg(wpa->nas, "anonce in key message 3 doesn't"
++						" match anonce in key message 1, discard pkt");
++					return EAPOL_SUP_PK_ERROR;
++				}
++#endif
+ 				if ((sta->mode & (WPA2 | WPA2_PSK))) {
+ 					bcm_tlv_t *rsnie;
+ 					int len = ntohs(body->data_len);
+@@ -3260,11 +3331,24 @@ eapol_sup_process_key(wpa_t *wpa, eapol_header_t *eapol, nas_sta_t *sta)
+ 					else
+ 						dbg(wpa->nas, "didn't find rsnie");
+ 
++#if 1 /* WLENT */
++					memset(t_gtk, 0, sizeof(t_gtk));
++					memcpy(t_gtk, wpa->gtk, wpa->gtk_len);
++#endif
+ 					if (!(UpdateGTK = wpa_extract_gtk(wpa, sta, eapol))) {
+ 						err(wpa->nas, "extraction of gtk from eapol message"
+ 						    " failed");
+ 						return EAPOL_SUP_PK_UNKNOWN;
+ 					}
++#if 1 /* WLENT */
++					/* If GTK is the same as the previous one,
++					 * do not reinstall it
++					 */
++					else if (!bcmp(t_gtk, wpa->gtk, wpa->gtk_len) &&
++						(wpa->nas->flags & NAS_FLAG_GTK_PLUMBED)) {
++						UpdateGTK = FALSE;
++					}
++#endif
+ 
+ 				} else
+ 				/* Check message 3 WPA IE against probe response IE. */
+@@ -3279,14 +3363,53 @@ eapol_sup_process_key(wpa_t *wpa, eapol_header_t *eapol, nas_sta_t *sta)
+ 					return EAPOL_SUP_PK_ERROR;
+ 				}
+ 			}
++#if 1 /* WLENT */
++			/* If this is Message 1 */
++			if (!(key_info & WPA_KEY_MIC)) {
++				/* Calculate PTK only if anonce is different from previous one */
++				if (bcmp(body->nonce, sta->suppl.anonce, NONCE_LEN)) {
++					bcopy(body->nonce, sta->suppl.anonce, NONCE_LEN);
++					wpa_calc_ptk(wpa, sta);
++				}
++			}
++#else
+ 			bcopy(body->nonce, sta->suppl.anonce, NONCE_LEN);
+ 			wpa_calc_ptk(wpa, sta);
++#endif
+ 		}
+ 
+ 		if (state == EAPOL_SUP_PK_MICOK)  {
+ 			dbg(wpa->nas, "MICOK");
++#if 1 /* WLENT */
++			if (key_info & WPA_KEY_INSTALL) {
++				if (sta->suppl.pk_state == EAPOL_SUP_PK_DONE) {
++					/* Don't install a PTK if it is retransmitted M3 */
++					dbg(wpa->nas, "Retransmitted M3!!!.Ignore installation.");
++					/* Change the state so that M4 is sent */
++					sta->suppl.pk_state = EAPOL_SUP_PK_MSG3;
++				}
++				else if (sta->suppl.pk_state == EAPOL_SUP_PK_MSG3) {
++					/* Install a PTK only if it is different from
++					 * current one
++					 */
++					if (memcmp(sta->suppl.eapol_temp_ptk,
++						sta->suppl.temp_encr_key,
++						sta->suppl.ptk_len)) {
++						UpdatePTK = TRUE;
++					}
++					else {
++						dbg(wpa->nas, "Same PTK!!!.Ignore installation.");
++					}
++				}
++				else {
++					dbg(wpa->nas, "Wrong State!!!");
++					return EAPOL_SUP_PK_ERROR;
++				}
++			}
++#else
+ 			if (key_info & WPA_KEY_INSTALL)
+ 				UpdatePTK = TRUE;
++#endif /* WLENT */
+ 			else {
+ 				dbg(wpa->nas, "INSTALL flag not set in msg 3 key_info; no PTK"
+ 				    " installed");
+@@ -3295,19 +3418,48 @@ eapol_sup_process_key(wpa_t *wpa, eapol_header_t *eapol, nas_sta_t *sta)
+ 	} else if (state == EAPOL_SUP_PK_MICOK) {
+ 		dbg(wpa->nas, "Group, MICOK");
+ 	  if ((sta->mode & (WPA2 | WPA2_PSK))) {
++#if 1 /* WLENT */
++			memset(t_gtk, 0, sizeof(t_gtk));
++			memcpy(t_gtk, wpa->gtk, wpa->gtk_len);
++#endif
+ 			if (!(UpdateGTK = wpa_extract_gtk(wpa, sta, eapol))) {
+ 				err(wpa->nas, "extraction of gtk from eapol message failed");
+ 				return EAPOL_SUP_PK_UNKNOWN;
+ 			}
++#if 1 /* WLENT */
++			/* If GTK is the same as the previous one,
++			 * do not reinstall it
++			 */
++			else if (!bcmp(t_gtk, wpa->gtk, wpa->gtk_len) &&
++				(wpa->nas->flags & NAS_FLAG_GTK_PLUMBED)) {
++				UpdateGTK = FALSE;
++			}
++#endif /* WLENT */
++
+ 	  } else {
++#if 1 /* WLENT */
++		memset(t_gtk, 0, sizeof(t_gtk));
++		memcpy(t_gtk, wpa->gtk, wpa->gtk_len);
++#endif
+ 		/* Group Key */
+ 		if (!wpa_decr_gtk(wpa, sta, body)) {
+ 			dbg(wpa->nas, "unencrypt failed");
+ 			state = EAPOL_SUP_PK_MICFAILED;
+ 		} else {
++#if 1 /* WLENT */
++			dbg(wpa->nas, "unencrypt ok");
++			/* Install if is not the same as previous one */
++			if (bcmp(t_gtk, wpa->gtk, wpa->gtk_len) ||
++				!(wpa->nas->flags & NAS_FLAG_GTK_PLUMBED)) {
++				dbg(wpa->nas, "plumb gtk");
++				wpa_plumb_gtk(wpa, key_info & WPA_KEY_INSTALL);
++				/* nas_deauthenticate(wpa->nas, suppl->ea) */
++			}
++#else
+ 			dbg(wpa->nas, "unencrypt ok, plumb gtk");
+ 			wpa_plumb_gtk(wpa, key_info & WPA_KEY_INSTALL);
+ 			/* nas_deauthenticate(wpa->nas, suppl->ea) */
++#endif /* WLENT */
+ 		}
+ 	  }
+ 	} else {
+@@ -3332,11 +3484,30 @@ eapol_sup_process_key(wpa_t *wpa, eapol_header_t *eapol, nas_sta_t *sta)
+ 			dbg(wpa->nas, "nas_set_key() failed");
+ 			nas_deauthenticate(wpa->nas, &sta->ea, DOT11_RC_BUSY);
+ 		}
++#if 1 /* WLENT */
++		else {
++			memset(sta->suppl.eapol_temp_ptk, 0, sizeof(sta->suppl.eapol_temp_ptk));
++			memcpy(sta->suppl.eapol_temp_ptk, sta->suppl.temp_encr_key,
++				sta->suppl.ptk_len);
++			sta->suppl.pk_state = EAPOL_SUP_PK_DONE;
++		}
++#endif
+ 	}
+ 	if (UpdateGTK == TRUE) {
+ 		dbg(wpa->nas, "UpdateGTK");
+ 		wpa_plumb_gtk(wpa, key_info & WPA_KEY_INSTALL);
+ 	}
++#if 1 /* WLENT */
++	if ((key_info & WPA_KEY_PAIRWISE) &&
++		(key_info & WPA_KEY_INSTALL)) {
++		/* In case of M3, UpdatePTK will be false only if it is retransmission
++		 * So set the state to EAPOL_SUP_PK_DONE without installing the key
++		 */
++		if (UpdatePTK == FALSE) {
++			sta->suppl.pk_state = EAPOL_SUP_PK_DONE;
++		}
++	}
++#endif /* WLENT */
+ 	if ((state == EAPOL_SUP_PK_MICOK) && (key_info & WPA_KEY_SECURE)) {
+ #ifdef BCMDBG
+ 		char eabuf[ETHER_ADDR_STR_LEN];
+diff --git a/nas/wpa.h b/nas/wpa.h
+index 9350f87..35b4225 100644
+--- a/main/components/router/nas/wpa.h
++++ b/main/components/router/nas/wpa.h
+@@ -145,6 +145,9 @@ typedef struct wpa_suppl {
+ #ifdef BCMSUPPL
+ 	/* need to differentiate message 1 and 3 in 4 way handshake */
+ 	eapol_sup_pk_state_t pk_state;
++#if 1 /* WLENT */
++	uint8 eapol_temp_ptk[TKIP_PTK_LEN];     /* Temp PTK */
++#endif
+ #endif
+ } wpa_suppl_t;
+ 
+@@ -248,7 +251,11 @@ extern void initialize_global_key_counter(wpa_t *wpa);
+ extern void initialize_gmk(wpa_t *wpa);
+ extern int wpa_driver_assoc_msg(wpa_t *wpa, bcm_event_t *dpkt, nas_sta_t *sta);
+ extern int wpa_driver_disassoc_msg(wpa_t *wpa, bcm_event_t  *dpkt, nas_sta_t *sta);
++#if 1 /* WLENT_AP */
++extern void wpa_mic_error(wpa_t *wpa, nas_sta_t *sta, bool from_driver, bool pairwise);
++#else
+ extern void wpa_mic_error(wpa_t *wpa, nas_sta_t *sta, bool from_driver);
++#endif
+ extern int wpa_set_suppl(wpa_t *wpa, nas_sta_t *sta, uint32 mode, uint32 wsec, uint32 algo);
+ #ifdef BCMSUPPL
+ extern void wpa_request(wpa_t *wpa, nas_sta_t *sta);
+diff --git a/phy/wlc_phy_cmn.c b/phy/wlc_phy_cmn.c
+index f71a4c1..22179d1 100755
+--- a/main/src/wl/phy/wlc_phy_cmn.c
++++ b/main/src/wl/phy/wlc_phy_cmn.c
+@@ -3955,7 +3955,7 @@ wlc_phy_aci_update_ma(phy_info_t *pi)
+ 	int32 bphy_badplcp_delta = 0;
+ 	int32 ofdm_badplcp_delta = 0;
+ 
+-	if (ACPHY_ENABLE_FCBS_HWACI(pi))
++	if (!ACPHY_ACI_GBD(pi))
+ 		return;
+ 
+ 	ASSERT(pi->interf != NULL);
+-- 
+2.7.4
+

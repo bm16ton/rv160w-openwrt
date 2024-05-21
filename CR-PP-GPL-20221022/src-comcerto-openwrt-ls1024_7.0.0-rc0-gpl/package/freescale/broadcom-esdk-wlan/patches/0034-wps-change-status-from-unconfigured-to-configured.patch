@@ -1,0 +1,262 @@
+From 4df4ad3fc19bc03b448ae2c170f908e3862b6238 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:17:33 +0800
+Subject: [PATCH 34/63] wps-change-status-from-unconfigured-to-configured
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/apps/wps_ap.c   |   16 ++++++++++-
+ main/components/apps/wps/brcm_apps/apps/wps_ie.c   |   29 ++++++++++++++++++--
+ .../apps/wps/brcm_apps/apps/wps_libupnp.c          |    9 ++++++
+ main/components/apps/wps/brcm_apps/apps/wps_ui.c   |    8 ++++++
+ .../apps/wps/brcm_apps/linux/wps_linux_main.c      |   23 ++++++++++++++++
+ main/components/router/Makefile                    |    1 +
+ 6 files changed, 83 insertions(+), 3 deletions(-)
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ap.c b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+index a099039..c73be50 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ap.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+@@ -214,7 +214,12 @@ wps_setWpsIE(void *bcmdev, uint8 scState, uint8 selRegistrar,
+ 
+ 	/* setup default data to ssrmsg */
+ 	ssrmsg.version.m_data = WPS_VERSION;
+-	ssrmsg.scState.m_data = scState;
++	char if_tmp[100] = {0};
++	sprintf(if_tmp, "%s_wps_oob", wps_wksp->ifname);
++	if (!strcmp(nvram_safe_get(if_tmp), "disabled"))
++		ssrmsg.scState.m_data = scState;
++	else
++		ssrmsg.scState.m_data = WPS_SCSTATE_UNCONFIGURED;
+ 	ssrmsg.selReg.m_data = selRegistrar;
+ 	ssrmsg.devPwdId.m_data = devPwdId;
+ 	ssrmsg.selRegCfgMethods.m_data = selRegCfgMethods;
+@@ -463,9 +468,18 @@ wpsap_readConfigure(wpsap_wksp_t *wps_wksp, DevInfo *ap_devinfo)
+ 
+ 	/* raw OOB config state (per-ESS) */
+ 	sprintf(tmp, "ess%d_wps_oob", wps_wksp->ess_id);
++#ifdef FREESCALE_ARCH_WPS
++	char if_tmp[100] = {0};
++	sprintf(if_tmp, "%s_wps_oob", wps_wksp->ifname);
++	if ((!strcmp(wps_safe_get_conf(tmp), "disabled") &&
++		 !strcmp(nvram_safe_get(if_tmp), "disabled")) ||
++	    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
++		wps_wksp->config_state = WPS_SCSTATE_CONFIGURED;
++#else
+ 	if (!strcmp(wps_safe_get_conf(tmp), "disabled") ||
+ 	    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
+ 		wps_wksp->config_state = WPS_SCSTATE_CONFIGURED;
++#endif
+ 	else
+ 		wps_wksp->config_state = WPS_SCSTATE_UNCONFIGURED;
+ 
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ie.c b/main/components/apps/wps/brcm_apps/apps/wps_ie.c
+index ddb66d8..1243336 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ie.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ie.c
+@@ -28,6 +28,7 @@
+ #include <wps_ui.h>
+ #include <wps_aplockdown.h>
+ #include <wps_ie.h>
++#include <bcmnvram.h>
+ 
+ #ifdef WFA_WPS_20_TESTBED
+ #define STR_ATTR_LEN(str, max) ((uint16)((b_zlength) ? 0 : strlen(str)))
+@@ -160,9 +161,14 @@ wps_set_prb_rsp_IE(int ess_id, char *ifname, CTlvSsrIE *ssrmsg)
+ 	/* Version */
+ 	tlv_serialize(WPS_ID_VERSION, bufObj, &version, WPS_ID_VERSION_S);
+ 
++	char if_tmp[100] = {0};
+ 	/* Simple Config State */
+ 	if (ssrmsg) {
+-		scState = ssrmsg->scState.m_data;
++		sprintf(if_tmp, "%s_wps_oob", ifname);
++		if (!strcmp(nvram_safe_get(if_tmp), "disabled"))
++			scState = ssrmsg->scState.m_data;
++		else
++			scState = WPS_SCSTATE_UNCONFIGURED;
+ 	}
+ 	else {
+ 		/* According to WPS 2.0 section "Wi-Fi Simple Configuration State"
+@@ -172,8 +178,15 @@ wps_set_prb_rsp_IE(int ess_id, char *ifname, CTlvSsrIE *ssrmsg)
+ 		 * neighboring device tries to run WSC
+ 		 */
+ 		sprintf(tmp, "ess%d_wps_oob", ess_id);
++#ifdef FREESCALE_ARCH_WPS
++		sprintf(if_tmp, "%s_wps_oob", ifname);
++		if ((!strcmp(wps_safe_get_conf(tmp), "disabled") &&
++			 !strcmp(nvram_safe_get(if_tmp), "disabled")) ||
++		    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
++#else
+ 		if (!strcmp(wps_safe_get_conf(tmp), "disabled") ||
+ 		    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
++#endif
+ 			scState = WPS_SCSTATE_CONFIGURED;
+ 		else
+ 			scState = WPS_SCSTATE_UNCONFIGURED;
+@@ -390,9 +403,14 @@ wps_set_beacon_IE(int ess_id, char *ifname, CTlvSsrIE *ssrmsg)
+ 	/* Version */
+ 	tlv_serialize(WPS_ID_VERSION, bufObj, &version, WPS_ID_VERSION_S);
+ 
++	char if_tmp[100] = {0};
+ 	/* Simple Config State */
+ 	if (ssrmsg) {
+-		data8 = ssrmsg->scState.m_data;
++		sprintf(if_tmp, "%s_wps_oob", ifname);
++		if (!strcmp(wps_safe_get_conf(if_tmp), "disabled"))
++			data8 = ssrmsg->scState.m_data;
++		else
++			data8 = WPS_SCSTATE_UNCONFIGURED;
+ 	}
+ 	else {
+ 		/* According to WPS 2.0 section "Wi-Fi Simple Configuration State"
+@@ -402,8 +420,15 @@ wps_set_beacon_IE(int ess_id, char *ifname, CTlvSsrIE *ssrmsg)
+ 		 * neighboring device tries to run WSC
+ 		 */
+ 		sprintf(tmp, "ess%d_wps_oob", ess_id);
++#ifdef FREESCALE_ARCH_WPS
++		sprintf(if_tmp, "%s_wps_oob", ifname);
++		if ((!strcmp(wps_safe_get_conf(tmp), "disabled") &&
++			 !strcmp(nvram_safe_get(if_tmp), "disabled")) ||
++		    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
++#else
+ 		if (!strcmp(wps_safe_get_conf(tmp), "disabled") ||
+ 		    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
++#endif
+ 			data8 = WPS_SCSTATE_CONFIGURED;
+ 		else
+ 			data8 = WPS_SCSTATE_UNCONFIGURED;
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_libupnp.c b/main/components/apps/wps/brcm_apps/apps/wps_libupnp.c
+index bd609aa..b6820ab 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_libupnp.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_libupnp.c
+@@ -32,6 +32,7 @@
+ 
+ #include <upnp.h>
+ #include <WFADevice.h>
++#include <bcmnvram.h>
+ 
+ static upnp_attached_if *upnpif_head = 0;
+ static unsigned long upnpssr_time = 0;
+@@ -774,8 +775,16 @@ wps_upnp_create_device_info(upnp_attached_if *upnp_if)
+ 	 * neighboring device tries to run WSC
+ 	 */
+ 	sprintf(tmp, "ess%d_wps_oob", upnp_if->ess_id);
++#ifdef FREESCALE_ARCH_WPS
++	char if_tmp[100] = {0};
++	sprintf(if_tmp, "%s_wps_oob", upnp_if->wl_name);
++	if ((!strcmp(wps_safe_get_conf(tmp), "disabled") &&
++		 !strcmp(nvram_safe_get(if_tmp), "disabled")) ||
++	    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
++#else
+ 	if (!strcmp(wps_safe_get_conf(tmp), "disabled") ||
+ 	    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
++#endif
+ 		devInfo.scState = WPS_SCSTATE_CONFIGURED;
+ 	else
+ 		devInfo.scState = WPS_SCSTATE_UNCONFIGURED;
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ui.c b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+index 883e25c..38843ea 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ui.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+@@ -376,8 +376,16 @@ wps_ui_start_pending(char *wps_ifname)
+ 			 */
+ 			/* Get builtin register scState */
+ 			sprintf(temp, "ess%d_wps_oob", i);
++#ifdef FREESCALE_ARCH_WPS
++			char if_tmp[100] = {0};
++			sprintf(if_tmp, "%s_wps_oob", wps_ifname);
++			if ((!strcmp(wps_safe_get_conf(temp), "disabled") &&
++				 !strcmp(nvram_safe_get(if_tmp), "disabled")) ||
++			    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
++#else
+ 			if (!strcmp(wps_safe_get_conf(temp), "disabled") ||
+ 			    !strcmp(wps_safe_get_conf("wps_oob_configured"), "1"))
++#endif
+ 				scState = WPS_SCSTATE_CONFIGURED;
+ 			else
+ 				scState = WPS_SCSTATE_UNCONFIGURED;
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index 4387840..75f1acc 100644
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -351,6 +351,7 @@ set_wsec(char *ifname, void *credential, int mode)
+ 			both_mark = 1;
+ 			memset(both_ifname, 0, sizeof(both_ifname));
+ 			strncpy(both_ifname, radio_result, strlen(radio_result)-1);
++			wps_osl_set_conf(strcat_r(both_prefix, "wps_oob", tmp), "disabled");
+ 		}
+ 
+ 		pclose(fp);
+@@ -583,6 +584,9 @@ wps_set_wsec(int ess_id, char *wps_ifname, void *credential, int mode)
+ 	char *wlnames = wps_ifname;
+ 	char *next = NULL;
+ 	char ifname[IFNAMSIZ];
++#ifdef FREESCALE_ARCH_WPS
++	char if_tmp[100] = {0};
++#endif
+ 
+ 	if (wps_ifname == NULL || credential == NULL) {
+ 		TUTRACE((TUTRACE_ERR, "wps_set_wsec: Invaild argument\n"));
+@@ -613,6 +617,10 @@ wps_set_wsec(int ess_id, char *wps_ifname, void *credential, int mode)
+ 			sprintf(prefix, "lan%d_", instance);
+ 		wps_osl_set_conf(strcat_r(prefix, "wps_oob", tmp),
+ 			"disabled");
++#ifdef FREESCALE_ARCH_WPS
++		sprintf(if_tmp, "%s_wps_oob", wps_ifname);
++		wps_osl_set_conf(if_tmp, "disabled");
++#endif
+ 
+ 		wps_osl_set_conf(strcat_r(prefix, "wps_reg", tmp),
+ 			"enabled");
+@@ -655,6 +663,11 @@ wps_set_wsec(int ess_id, char *wps_ifname, void *credential, int mode)
+ 
+ 		/* Set OOB and built-in reg (Per-ESS) */
+ 		if (mode == SCMODE_AP_REGISTRAR) {
++#ifdef FREESCALE_ARCH_WPS
++			sprintf(if_tmp, "%s_wps_oob", wps_ifname);
++			wps_osl_set_conf(if_tmp, "disabled");
++#endif
++
+ 			wps_osl_set_conf(strcat_r(prefix, "wps_oob", tmp),
+ 				"disabled");
+ 			TUTRACE((TUTRACE_INFO, "OOB state configed\n"));
+@@ -663,6 +676,11 @@ wps_set_wsec(int ess_id, char *wps_ifname, void *credential, int mode)
+ 				"enabled");
+ 			TUTRACE((TUTRACE_INFO, "built-in registrar enabled\n"));
+ 		} else if (mode == SCMODE_AP_ENROLLEE) {
++#ifdef FREESCALE_ARCH_WPS
++			sprintf(if_tmp, "%s_wps_oob", wps_ifname);
++			wps_osl_set_conf(if_tmp, "disabled");
++#endif
++
+ 			wps_osl_set_conf(strcat_r(prefix, "wps_oob", tmp),
+ 				"disabled");
+ 			TUTRACE((TUTRACE_INFO, "OOB state configed\n"));
+@@ -672,6 +690,11 @@ wps_set_wsec(int ess_id, char *wps_ifname, void *credential, int mode)
+ 		/* STA ess interfaces */
+ 		if (osifname_to_nvifname(wlnames, prefix, sizeof(prefix)) == 0) {
+ 			strcat(prefix, "_");
++#ifdef FREESCALE_ARCH_WPS
++			sprintf(if_tmp, "%s_wps_oob", wps_ifname);
++			wps_osl_set_conf(if_tmp, "disabled");
++#endif
++
+ 			wps_osl_set_conf(strcat_r(prefix, "wps_oob", tmp), "disabled");
+ 		}
+ 		else {
+diff --git a/main/components/router/Makefile b/main/components/router/Makefile
+index efb1c25..fafaa57 100644
+--- a/main/components/router/Makefile
++++ b/main/components/router/Makefile
+@@ -909,6 +909,7 @@ endif
+ ifeq ($(WLTEST),1)
+ export CFLAGS += -DWLTEST
+ endif
++export CFLAGS += -DFREESCALE_ARCH_WPS
+ 
+ export CFLAGS += -DBCMDBG
+ 
+-- 
+1.7.10
+

@@ -1,0 +1,50 @@
+From f8f7c3132b332a3212863c86b8d3c2a4b3fa932f Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:29:49 +0800
+Subject: [PATCH 52/63] update-wps_daemon-to-support-stop-wps_monitor
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/linux/wps_daemon.c |   15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_daemon.c b/main/components/apps/wps/brcm_apps/linux/wps_daemon.c
+index ccf4e98..4da069e 100644
+--- a/main/components/apps/wps/brcm_apps/linux/wps_daemon.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_daemon.c
+@@ -2,18 +2,31 @@
+ #include <stdlib.h>
+ #include <signal.h>
+ 
++static int wps_mask = 0;
++
+ void wps_restart(int sig)
+ {
+ 	sleep(1);
+ 	system("/usr/bin/wps_reload.sh");
+ }
+ 
++void wps_stop(int sig)
++{
++	wps_mask = 1;
++	system("start-stop-daemon -K -q -s SIGTERM -n wps_monitor 2>/dev/null");
++}
++
+ int main(void)
+ {
+ 	signal(SIGUSR2, wps_restart);
++	signal(SIGTERM, wps_stop);
++
++	while (1) {
++		if (wps_mask == 1)
++			break;
+ 
+-	while (1)
+ 		sleep(1);
++	}
+ 
+ 	return 0;
+ }
+-- 
+1.7.10
+

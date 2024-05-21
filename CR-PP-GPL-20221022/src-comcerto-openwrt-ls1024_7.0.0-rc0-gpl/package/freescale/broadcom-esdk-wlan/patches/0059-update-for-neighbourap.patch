@@ -1,0 +1,211 @@
+From 9aa2c063550b833239fb65bf585d1c0299e84119 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:35:27 +0800
+Subject: [PATCH 59/63] update-for-neighbourap
+Content-Type: text/plain; charset="utf-8"
+
+---
+ sys/src/wl/exe/wlu.c |  159 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 159 insertions(+)
+
+diff --git a/sys/src/wl/exe/wlu.c b/sys/src/wl/exe/wlu.c
+index 1fa528c..058e66d 100755
+--- a/sys/src/wl/exe/wlu.c
++++ b/sys/src/wl/exe/wlu.c
+@@ -13087,6 +13087,22 @@ dump_rateset(uint8 *rates, uint count)
+ 	printf("]");
+ }
+ 
++void
++dump_rateset_simple(uint8 *rates, uint count)
++{
++	uint i;
++	uint r;
++	bool b;
++
++	for (i = 0; i < count; i++) {
++		r = rates[i] & 0x7f;
++		b = rates[i] & 0x80;
++		if (r == 0)
++			break;
++		printf("%d%s ", (r / 2), (r % 2)?".5":"");
++	}
++}
++
+ /* Helper routine to print the infrastructure mode while pretty printing the BSS list */
+ static const char *
+ capmode2str(uint16 capability)
+@@ -13511,6 +13527,30 @@ dump_networks(char *network_buf)
+ }
+ 
+ static void
++dump_networks_simple(char *network_buf)
++{
++	wl_scan_results_t *list = (wl_scan_results_t*)network_buf;
++	wl_bss_info_t *bi;
++	uint i;
++
++	if (list->count == 0)
++		return;
++	else if (list->version != WL_BSS_INFO_VERSION &&
++	         list->version != LEGACY2_WL_BSS_INFO_VERSION &&
++	         list->version != LEGACY_WL_BSS_INFO_VERSION) {
++		fprintf(stderr, "Sorry, your driver has bss_info_version %d "
++			"but this program supports only version %d.\n",
++			list->version, WL_BSS_INFO_VERSION);
++		return;
++	}
++
++	bi = list->bss_info;
++	for (i = 0; i < list->count; i++, bi = (wl_bss_info_t*)((int8*)bi + dtoh32(bi->length))) {
++		dump_bss_info_simple(bi);
++	}
++}
++
++static void
+ bcm_wps_version(uint8 *wps_ie)
+ {
+ 	uint16 wps_len;
+@@ -13944,6 +13984,48 @@ dump_bss_info(wl_bss_info_t *bi)
+ 	printf("\n");
+ }
+ 
++void
++dump_bss_info_simple(wl_bss_info_t *bi)
++{
++	char ssidbuf[SSID_FMT_BUF_LEN];
++	char chspec_str[CHANSPEC_STR_LEN];
++	wl_bss_info_107_t *old_bi;
++	int mcs_idx = 0, start_idx = 0;
++	bool start_idx_valid = FALSE;
++	uint16 capability;
++
++	/* Convert version 107 to 109 */
++	if (dtoh32(bi->version) == LEGACY_WL_BSS_INFO_VERSION) {
++		old_bi = (wl_bss_info_107_t *)bi;
++		bi->chanspec = CH20MHZ_CHSPEC(old_bi->channel);
++		bi->ie_length = old_bi->ie_length;
++		bi->ie_offset = sizeof(wl_bss_info_107_t);
++	} else {
++		/* do endian swap and format conversion for chanspec if we have
++		 * not created it from legacy bi above
++		 */
++		bi->chanspec = wl_chspec_from_driver(bi->chanspec);
++	}
++
++	printf("%s,", wl_ether_etoa(&bi->BSSID));
++
++	wl_format_ssid(ssidbuf, bi->SSID, bi->SSID_len);
++
++	printf("%d,", (int16)(dtoh16(bi->RSSI)));
++
++	printf("%s,", wf_chspec_ntoa(bi->chanspec, chspec_str));
++
++	capability = dtoh16(bi->capability);
++	if (capability & DOT11_CAP_PRIVACY)
++		printf("1,");
++	else
++		printf("0,");
++
++	dump_rateset_simple(bi->rateset.rates, dtoh32(bi->rateset.count));
++	printf(",");
++	printf("SSID:%s\n", ssidbuf);
++}
++
+ static int
+ wl_bcnlenhist(void *wl, cmd_t *cmd, char **argv)
+ {
+@@ -13996,6 +14078,7 @@ wl_bcnlenhist(void *wl, cmd_t *cmd, char **argv)
+ 	return err;
+ }
+ 
++#if (THIRD_PARTY_ARCH == 0)
+ static int
+ wl_dump_networks(void *wl, cmd_t *cmd, char **argv)
+ {
+@@ -14057,6 +14140,82 @@ exit:
+ 	free(dump_buf_orig);
+ 	return ret;
+ }
++#else
++static int
++wl_dump_networks(void *wl, cmd_t *cmd, char **argv)
++{
++	int ret;
++	char *dump_buf, *dump_buf_orig;
++	uint32 status = 0;
++	bool iscan = FALSE;
++	int simple_output = 0;
++
++	dump_buf_orig = dump_buf = malloc(WL_DUMP_BUF_LEN);
++	if (dump_buf == NULL) {
++		fprintf(stderr, "Failed to allocate dump buffer of %d bytes\n", WL_DUMP_BUF_LEN);
++		return BCME_NOMEM;
++	}
++
++	iscan = (cmd->get != WLC_SCAN_RESULTS);
++	if (iscan) {
++		int buflen = 1920;	/* usually fits about 10 BSS infos */
++
++		if (*(++argv)) {
++			char *endptr = NULL;
++			buflen = strtol(*argv, &endptr, 0);
++			if (*endptr != '\0') {
++				ret = BCME_USAGE_ERROR;
++				goto exit;
++			}
++		}
++		ret = wl_get_iscan(wl, dump_buf, buflen);
++	} else {
++		argv++;
++
++		if (!*argv || (strcmp(argv[0], "0") == 0)) {
++			simple_output = 0;
++		} else {
++			simple_output = 1;
++		}
++
++		ret = wl_get_scan(wl, WLC_SCAN_RESULTS, dump_buf, WL_DUMP_BUF_LEN);
++	}
++
++	if (ret == 0) {
++		if (iscan) {
++			status = dtoh32(((wl_iscan_results_t *)dump_buf)->status);
++			dump_buf += OFFSETOF(wl_iscan_results_t, results);
++		}
++		if (simple_output == 1)
++			dump_networks_simple(dump_buf);
++		else
++			dump_networks(dump_buf);
++		if (iscan) {
++			switch (status) {
++			case WL_SCAN_RESULTS_PARTIAL:
++				printf("iscanresults incomplete\n");
++				break;
++			case WL_SCAN_RESULTS_SUCCESS:
++				printf("iscanresults complete\n");
++				break;
++			case WL_SCAN_RESULTS_PENDING:
++				printf("iscanresults pending\n");
++				break;
++			case WL_SCAN_RESULTS_ABORTED:
++				printf("iscanresults aborted\n");
++				break;
++			default:
++				printf("iscanresults returned unknown status %d\n", status);
++				break;
++			}
++		}
++	}
++
++exit:
++	free(dump_buf_orig);
++	return ret;
++}
++#endif
+ 
+ static int
+ wl_dump_chanlist(void *wl, cmd_t *cmd, char **argv)
+-- 
+1.7.10
+

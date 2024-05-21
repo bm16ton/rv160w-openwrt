@@ -1,0 +1,113 @@
+From 894c5a0e20f580b8f6fe554a958fa0936afed6ef Mon Sep 17 00:00:00 2001
+From: Manish Tiwari <manish.tiwari@nxp.com>
+Date: Wed, 21 Mar 2018 19:12:06 +0530
+Subject: [PATCH] LLDP notification support added
+
+Signed-off-by: Manish Tiwari <manish.tiwari@nxp.com>
+---
+ src/source/ieee802_1x.c |   67 +++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 67 insertions(+)
+
+diff --git a/src/source/ieee802_1x.c b/src/source/ieee802_1x.c
+index 1a41dd9..c8a99e3 100644
+--- a/src/source/ieee802_1x.c
++++ b/src/source/ieee802_1x.c
+@@ -1,3 +1,7 @@
++/* 21/03/2018 Manish Tiwari <manish.tiwari@nxp.com>
++   LLDP notification support
++*/
++
+ /* 31/01/2018   Manish <manish.tiwari@nxp.com>
+    vlan support added for RV16x/RV26x
+ */
+@@ -31,6 +35,7 @@
+ #include <sys/types.h>
+ #include <arpa/inet.h>
+ 
++#define DOT1X_LLDP_PORT 27877
+ #define SIZE 256
+ extern u8 rv_prod_type_g;
+ 
+@@ -39,6 +44,66 @@ struct dot1x_vlan_hdr {
+ 	u16 eth_type;
+ };
+ 
++uint8_t  bitmap;
++/* This function will be called when a port status change (AUTH/UNAUTH).
++ * When port status change it will notify to LLDP daemon.
++ */
++int send_auth_info_to_lldp(int auth_port, int auth)
++{
++	int clientSocket, nBytes;
++	struct sockaddr_in serverAddr;
++	socklen_t addr_size;
++
++	/*Create UDP socket*/
++	clientSocket = socket(PF_INET, SOCK_DGRAM, 0);
++	if (clientSocket < 0)
++        {
++                perror("socket");
++                return -1;
++        }
++
++	/*Configure settings in address struct*/
++	serverAddr.sin_family = AF_INET;
++	serverAddr.sin_port = htons(DOT1X_LLDP_PORT);
++	serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
++	memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);
++
++	/*Initialize size variable to be used later on*/
++	addr_size = sizeof serverAddr;
++	
++	if(auth == 1)
++		bitmap |= (1 << auth_port);
++	else
++		bitmap &= ~(1 << auth_port);
++	 
++
++	/*Send message to server*/
++	nBytes = sendto(clientSocket,&bitmap,sizeof(bitmap),0,(struct sockaddr *)&serverAddr,addr_size);
++	if(nBytes < 0)
++	{
++		perror("sendto");
++	}
++	close(clientSocket);
++	
++	/* Writing data in a file to read by LLDP when it start for first time */	
++	FILE *fp=NULL;
++	char str[64];
++
++	sprintf(str,"echo %x > /tmp/stats/Dot1xPortStatus",bitmap);
++	if(NULL != (fp = popen(str,"w")))
++	{
++		DBGPRINT(RT_DEBUG_ERROR, "Written in file");
++		pclose(fp);
++	}
++	else
++	{
++		DBGPRINT(RT_DEBUG_ERROR,"Dot1xPortStatus write failed to /tmp/stats/Dot1xPortStatus");
++		pclose(fp);
++	}
++	return 0;
++}
++
++
+ int get_physical_portno(uint16_t nas_port)
+ {
+ 	if (rv_prod_type_g  == PROD_TYPE_RV_340) 
+@@ -521,10 +586,12 @@ void ieee802_1x_set_sta_authorized(rtapd *rtapd, struct sta_info *sta, int autho
+ 		if(authorized == 0)
+ 		{
+                 	sprintf(str, "/usr/sbin/bcmssdk -D 1 -p %d -a %d\n",sta->aid,0); //Un-authorized
++			send_auth_info_to_lldp(sta->aid, 0);
+ 		}
+ 		else if(authorized == 1)
+ 		{
+                 	sprintf(str, "/usr/sbin/bcmssdk -D 1 -p %d -a %d\n",sta->aid,1);//Authorized
++			send_auth_info_to_lldp(sta->aid, 1);
+ 		}
+         }
+ 	else
+-- 
+1.7.9.5
+

@@ -1,0 +1,30 @@
+#!/bin/sh /etc/rc.common
+START=40
+STOP=60
+
+start() {
+
+insmod /lib/modules/4.1.8/bcm_robo_drv
+
+major=$(cat /proc/devices | grep RoboDev | awk '{ print $1 }')
+device=$(cat /proc/devices | grep RoboDev | awk '{ print $2 }')
+
+mknod /dev/${device} c ${major} 0
+sleep 1
+#Enable IMP port
+bcmssdk -R 1 -e 1
+/etc/init.d/switch reload
+#Set the default registers i.e EEE, Auto power down
+bcmssdk -R 1 -i 1
+#Enable link monitor for LAN port UP/DOWN events
+/usr/sbin/bcmssdk -L 1 -l 1
+rm -rf /tmp/sw_start
+}
+
+stop() {
+/usr/sbin/bcmssdk -L 1 -l 0
+rmmod /lib/modules/4.1.8/bcm_robo_drv
+rm /dev/RoboDev
+
+}
+

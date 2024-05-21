@@ -1,0 +1,57 @@
+From eaeca894ea95f4023db60fb893aefee4ae25cc0a Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:07:49 +0800
+Subject: [PATCH 09/63] Fastpath-support-added
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/driver/wl_common.mk |    3 +--
+ main/src/wl/sys/wl_linux.c          |   11 +++++++++++
+ 2 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/main/components/driver/wl_common.mk b/main/components/driver/wl_common.mk
+index ab35fba..bbcf046 100644
+--- a/main/components/driver/wl_common.mk
++++ b/main/components/driver/wl_common.mk
+@@ -7,8 +7,7 @@ else ifeq ($(PLT),rv160w_260w)
+ ROUTER_COMA=0
+ KBUILD_CFLAGS += -DBCMDBG
+ ifeq ($(CONFIG_BRCM_CPKTC),y)
+-#KBUILD_CFLAGS += -DCPKTC -DPKTC -DPPFE_FASTPATH
+-#KBUILD_CFLAGS += -DNCNB_CSKB -DPPFE_FASTPATH -DCMEMCPY
++KBUILD_CFLAGS += -DPPFE_FASTPATH
+ endif
+ else ifeq ($(PLT),ls1021)
+ KBUILD_CFLAGS += -D__LS1024__ -DBCMPHY64OSL
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index 9a1feb5..555fe38 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -4940,6 +4940,10 @@ wl_ctf_forward(wl_info_t *wl, struct sk_buff *skb)
+ }
+ #endif /* HNDCTF */
+ 
++#ifdef PPFE_FASTPATH /* fastpath between wifi driver and vwd */
++extern int comcerto_wifi_rx_fastpath(struct sk_buff *skb);
++#endif
++
+ /*
+  * The last parameter was added for the build. Caller of
+  * this function should pass 1 for now.
+@@ -5073,6 +5077,13 @@ wl_sendup(wl_info_t *wl, wl_if_t *wlif, void *p, int numpkt)
+ 	}
+ #endif /* ! BCM_GMAC3 */
+ 
++#ifdef PPFE_FASTPATH 
++    /* If packet could be fast forwarded, then offload the packet to ethernet vwd driver */
++    if (likely(!comcerto_wifi_rx_fastpath(skb))) {
++        return;
++    }	
++#endif
++
+ #ifdef HNDCTF
+ #ifdef WLENT_VLAN
+     /* Skip CTF when WLENT_VLAN is enabled */
+-- 
+1.7.10
+

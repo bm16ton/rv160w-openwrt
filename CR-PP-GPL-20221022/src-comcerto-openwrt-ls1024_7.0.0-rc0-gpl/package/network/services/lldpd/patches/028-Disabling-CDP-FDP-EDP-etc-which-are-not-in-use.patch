@@ -1,0 +1,56 @@
+From d6d7484afd3b401102518ab910d3273390032e4e Mon Sep 17 00:00:00 2001
+From: Subramanyam <“reddi.m@nxp.com”>
+Date: Mon, 26 Apr 2021 12:57:42 +0530
+Subject: [PATCH] Disabling CDP,FDP,EDP etc which are not in use
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Subramanyam <“reddi.m@nxp.com”>
+---
+ configure | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/configure b/configure
+index 72c1b76..250ee62 100755
+--- a/configure
++++ b/configure
+@@ -18931,7 +18931,7 @@ fi
+ if test "${enable_cdp+set}" = set; then :
+   enableval=$enable_cdp; enable_cdp=$enableval
+ else
+-  enable_cdp=yes
++  enable_cdp=no
+ fi
+ 
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to enable Cisco Discovery Protocol" >&5
+@@ -18952,7 +18952,7 @@ $as_echo "no" >&6; }
+ if test "${enable_fdp+set}" = set; then :
+   enableval=$enable_fdp; enable_fdp=$enableval
+ else
+-  enable_fdp=yes
++  enable_fdp=no
+ fi
+ 
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to enable Foundry Discovery Protocol" >&5
+@@ -18973,7 +18973,7 @@ $as_echo "no" >&6; }
+ if test "${enable_edp+set}" = set; then :
+   enableval=$enable_edp; enable_edp=$enableval
+ else
+-  enable_edp=yes
++  enable_edp=no
+ fi
+ 
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to enable Extreme Discovery Protocol" >&5
+@@ -18994,7 +18994,7 @@ $as_echo "no" >&6; }
+ if test "${enable_sonmp+set}" = set; then :
+   enableval=$enable_sonmp; enable_sonmp=$enableval
+ else
+-  enable_sonmp=yes
++  enable_sonmp=no
+ fi
+ 
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether to enable SynOptics Network Management Protocol" >&5
+-- 
+2.7.4
+

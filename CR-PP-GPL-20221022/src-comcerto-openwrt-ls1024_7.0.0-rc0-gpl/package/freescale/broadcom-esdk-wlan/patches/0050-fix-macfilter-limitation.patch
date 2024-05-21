@@ -1,0 +1,100 @@
+From 3ad758e7893166bab79d7f47af880b502d15cdf1 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 20:04:12 +0800
+Subject: [PATCH 50/63] fix-macfilter-limitation
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/include/wlioctl.h   |    7 +++++--
+ main/src/wl/sys/wlc_bsscfg.h |    3 ---
+ sys/src/include/wlioctl.h    |    8 ++++++--
+ sys/src/wl/exe/wlu.c         |    5 +++++
+ 4 files changed, 16 insertions(+), 7 deletions(-)
+ mode change 100644 => 100755 sys/src/wl/exe/wlu.c
+
+diff --git a/main/src/include/wlioctl.h b/main/src/include/wlioctl.h
+index a6929ec..b65c52f 100755
+--- a/main/src/include/wlioctl.h
++++ b/main/src/include/wlioctl.h
+@@ -1316,6 +1316,9 @@ typedef struct maclist {
+ 	struct ether_addr ea[1];	/* variable length array of MAC addresses */
+ } maclist_t;
+ 
++/* mac list */
++#define MAXMACLIST	68     	/* max # source MAC matches */
++
+ #ifdef WLENT_MAC_BWLIST
+ /* For ioctls that take a list of MAC addresses */
+ struct maclist_ext {
+@@ -1324,8 +1327,8 @@ struct maclist_ext {
+ 	MAXMACLIST (defined in wlc_bsscfg.h) sets the size to 64.  Perhaps 
+ 	that define should be moved to this file.
+ 	*/
+-	struct ether_addr ea[64];	/* array of MAC addresses */
+-	struct ether_addr ea_mask[64];	/* array of MAC masks */
++	struct ether_addr ea[MAXMACLIST];	/* array of MAC addresses */
++	struct ether_addr ea_mask[MAXMACLIST];	/* array of MAC masks */
+ };
+ #endif /* WLENT_MAC_BWLIST */
+ 
+diff --git a/main/src/wl/sys/wlc_bsscfg.h b/main/src/wl/sys/wlc_bsscfg.h
+index 83a3f0f..52a63fe 100755
+--- a/main/src/wl/sys/wlc_bsscfg.h
++++ b/main/src/wl/sys/wlc_bsscfg.h
+@@ -70,9 +70,6 @@ struct scb;
+ #include <wlioctl.h>
+ #include <bcm_notif_pub.h>
+ 
+-/* mac list */
+-#define MAXMACLIST	64     	/* max # source MAC matches */
+-
+ #define WLC_BSSCFG_RATESET_DEFAULT	0
+ #define WLC_BSSCFG_RATESET_OFDM		1
+ #define WLC_BSSCFG_RATESET_MAX		WLC_BSSCFG_RATESET_OFDM
+diff --git a/sys/src/include/wlioctl.h b/sys/src/include/wlioctl.h
+index 34b3bf0..a3814e8 100755
+--- a/sys/src/include/wlioctl.h
++++ b/sys/src/include/wlioctl.h
+@@ -1392,6 +1392,10 @@ typedef struct maclist {
+ 	struct ether_addr ea[1];	/**< variable length array of MAC addresses */
+ } maclist_t;
+ 
++/* mac list */
++#define MAXMACLIST	68     	/* max # source MAC matches */
++
++
+ #ifdef WLENT_MAC_BWLIST
+ /* For ioctls that take a list of MAC addresses */
+ struct maclist_ext {
+@@ -1400,8 +1404,8 @@ struct maclist_ext {
+ 	MAXMACLIST (defined in wlc_bsscfg.h) sets the size to 64.  Perhaps 
+ 	that define should be moved to this file.
+ 	*/
+-	struct ether_addr ea[64];	/* array of MAC addresses */
+-	struct ether_addr ea_mask[64];	/* array of MAC masks */
++	struct ether_addr ea[MAXMACLIST];	/* array of MAC addresses */
++	struct ether_addr ea_mask[MAXMACLIST];	/* array of MAC masks */
+ };
+ #endif /* WLENT_MAC_BWLIST */
+ 
+diff --git a/sys/src/wl/exe/wlu.c b/sys/src/wl/exe/wlu.c
+old mode 100644
+new mode 100755
+index 1dfbcd2..1fa528c
+--- a/sys/src/wl/exe/wlu.c
++++ b/sys/src/wl/exe/wlu.c
+@@ -109,6 +109,11 @@
+ #define MAX_CHUNK_LEN 1408 /* 8 * 8 * 22 */
+ #endif
+ 
++#ifdef WLC_IOCTL_MAXLEN
++#undef WLC_IOCTL_MAXLEN
++#define WLC_IOCTL_MAXLEN (8192*3)
++#endif
++
+ #include <bcm_mpool_pub.h>
+ #include <proto/bcmipv6.h>
+ 
+-- 
+1.7.10
+

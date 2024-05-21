@@ -1,0 +1,63 @@
+From 047bc3cead68cd139eaf27bac722395cf49bbf4c Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:25:12 +0800
+Subject: [PATCH 51/63] fix-compiler-error-for-linux-4.1.8
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/router/Makefile     |    3 +++
+ main/components/router/wps/Makefile |    1 +
+ main/src/build-rv160w_260w.sh       |    7 ++++---
+ 3 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/main/components/router/Makefile b/main/components/router/Makefile
+index 208968b..b25c026 100644
+--- a/main/components/router/Makefile
++++ b/main/components/router/Makefile
+@@ -2563,6 +2563,9 @@ driver_build-install:
+ 
+ driver_build-clean:
+ 	$(MAKE) -C $(LINUXDIR) SUBDIRS=$(BRCM_DRIVER_BUILD_DIR)/main/components/driver clean
++	find $(BRCM_DRIVER_BUILD_DIR) -name "*.o" | xargs rm -f
++	find $(BRCM_DRIVER_BUILD_DIR) -name "*.o.cmd" | xargs rm -f
++	find $(BRCM_DRIVER_BUILD_DIR) -name "*.order" | xargs rm -f
+ 
+ #WLENT_TP_DUMP
+ tpdump: dummy
+diff --git a/main/components/router/wps/Makefile b/main/components/router/wps/Makefile
+index f5e0893..c607dd4 100644
+--- a/main/components/router/wps/Makefile
++++ b/main/components/router/wps/Makefile
+@@ -234,6 +234,7 @@ clean:
+ 	find -name obj | xargs rm -rf
+ 	rm -rf lib
+ 	find -name wps_monitor | xargs rm -f
++	rm -f wps_cli wps_pingen wps_pin_check wps_daemon
+ 
+ # install
+ install: all
+diff --git a/main/src/build-rv160w_260w.sh b/main/src/build-rv160w_260w.sh
+index 049f62d..cb079e2 100755
+--- a/main/src/build-rv160w_260w.sh
++++ b/main/src/build-rv160w_260w.sh
+@@ -8,13 +8,14 @@ export DEST_APPS_DIR=${ESDK_PATH}/package/freescale/broadcom-esdk-wlan/files/c2k
+ export DEST_MODULE=${ESDK_PATH}/package/freescale/broadcom-esdk-wlan/files/c2krv16x-26x/wl-${ESDK_VER}-5.00.3.ko
+ export LINUX_VERSION=3.2.54
+ export LOCAL_PLATFORM=rv160w_260w-glibc
+-export LOCAL_TOOLCHAIN_PATH=${ESDK_PATH}/staging_dir/toolchain-arm_v7-a_gcc-4.5-linaro_glibc-2.14.1_eabi/bin
+-export STAGING_DIR=${ESDK_PATH}/staging_dir/target-arm_v7-a_glibc-2.14.1_eabi
++export LOCAL_TOOLCHAIN_PATH=${ESDK_PATH}/staging_dir/toolchain-arm_cortex-a9_gcc-4.8-linaro_glibc-2.19_eabi/bin
++export STAGING_DIR=${ESDK_PATH}/staging_dir/target-arm_cortex-a9_glibc-2.19_eabi
+ export PATH=${PATH}:${LOCAL_TOOLCHAIN_PATH}
+ export LOCAL_CROSS_COMPILE=arm-openwrt-linux-
+ export LOCAL_TOOCHAIN=${BOARD_ARCH}
++export LOCAL_CROSS_COMPILE=arm-openwrt-linux-gnueabi-
+ export BRCM_DRIVER_BUILD_DIR=$PWD/../../
+-export LINUXDIR=${ESDK_PATH}/build_dir/linux-comcerto2000_hgw/linux-3.2.54
++export LINUXDIR=${ESDK_PATH}/build_dir/target-arm_cortex-a9_glibc-2.19_eabi/linux-comcerto2000_hgw/linux-${LINUX_VERSION}
+ 
+ export WLTEST=1
+ 
+-- 
+1.7.10
+

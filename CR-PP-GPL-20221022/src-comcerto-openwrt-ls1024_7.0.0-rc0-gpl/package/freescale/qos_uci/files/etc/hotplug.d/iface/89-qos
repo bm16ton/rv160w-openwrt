@@ -1,0 +1,26 @@
+#!/bin/sh
+# This script is executed as part of the hotplug event with
+# HOTPLUG_TYPE=iface, triggered by various scripts when an interface
+# is configured (ACTION=ifup) or deconfigured (ACTION=ifdown).  The
+# interface is available as INTERFACE, the real device as DEVICE.
+. /lib/functions.sh
+
+[ "$DEVICE" == "lo" ] && exit 0
+local isboot=$(uci_get_state system.core.booted)
+[ "$isboot" != "1" ] && {
+	#When system is in boot phase, qos doesn't need to handle hotplug
+	exit 0
+}
+                 
+case "$ACTION" in
+	ifup)
+
+	if [ "$(echo $INTERFACE | grep -E "wan1|wan2")" ]; then
+		/etc/init.d/qos handle_hotplug_WAN
+	fi
+
+	if [[ "$INTERFACE" == "usb1" || "$INTERFACE" == "usb2" ]]; then
+		/etc/init.d/qos handle_hotplug_USB
+	fi
+	;;
+esac

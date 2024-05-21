@@ -1,0 +1,88 @@
+From 1d76ecc2b2be25628a1099f7d3100ea2be8b198f Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 17:34:02 +0800
+Subject: [PATCH 01/63] pkg-build-support
+Content-Type: text/plain; charset="utf-8"
+
+---
+ build/Makefile                |   15 ++++++++++++++
+ build/broadcom_esdk_config.mk |   45 +++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 60 insertions(+)
+ create mode 100644 build/Makefile
+ create mode 100644 build/broadcom_esdk_config.mk
+
+diff --git a/build/Makefile b/build/Makefile
+new file mode 100644
+index 0000000..080f5ca
+--- /dev/null
++++ b/build/Makefile
+@@ -0,0 +1,15 @@
++# Kernel configuration
++include broadcom_esdk_config.mk
++
++# Variables that we used in broadcom wl driver build
++export PLT:=${PLT}
++export LINUXDIR:=${LINUX_DIR}
++export LOCAL_CROSS_COMPILE:=${TARGET_CROSS}
++export ARCH:=${LINUX_KARCH}
++
++# Make wl driver modules and install
++all:
++	cd ../main/src && $(MAKE) -C ../components/router/ driver_build PLT=${PLT}
++	cd ../main/src && $(MAKE) -C ../components/router/ driver_build-install PLT=${PLT}
++	cd ../main/src && $(MAKE)
++	cd ../main/src && $(MAKE) -C ../components/router remove_unused_files
+diff --git a/build/broadcom_esdk_config.mk b/build/broadcom_esdk_config.mk
+new file mode 100644
+index 0000000..1464136
+--- /dev/null
++++ b/build/broadcom_esdk_config.mk
+@@ -0,0 +1,45 @@
++# Broadcom wl driver config
++
++export WLTEST=1
++export USE_FREESCALE_ARCH=1 	# This is used for "nvram"
++export TARGET_STRIP=1
++export INSTALL_MOD_STRIP=1
++export THIRD_PARTY_ARCH=1
++export BCMDBG_ENABLE=1		# wl driver debug
++
++# Kernal config for wl driver build
++
++export CONFIG_HND=y
++#export CONFIG_ET=m
++#export CONFIG_ET_47XX=y
++# CONFIG_ET_ALL_PASSIVE_ON is not set
++#export CONFIG_ET_ALL_PASSIVE_RUNTIME=y
++# export CONFIG_BCM_CTF=m
++#export CONFIG_BCM_FA=y
++# CONFIG_BCM_GMAC3 is not set
++# CONFIG_WL_EMULATOR is not set
++# CONFIG_BCM57XX is not set
++export CONFIG_WL=m
++# CONFIG_DHDAP is not set
++# CONFIG_WAPI is not set
++# CONFIG_WL_USE_AP is not set
++# CONFIG_WL_USE_AP_SDSTD is not set
++# CONFIG_WL_USE_STA is not set
++export CONFIG_WL_USE_APSTA=m
++# CONFIG_WL_USE_AP_ONCHIP_G is not set
++# CONFIG_WL_USE_STA_ONCHIP_G is not set
++# CONFIG_WL_USE_APSTA_ONCHIP_G is not set
++# CONFIG_WL_USBAP is not set
++export CONFIG_WL_AP="wlconfig_lx_router_ap"
++export CONFIG_WL_AP_SDSTD="wlconfig_lx_router_ap_sdstd"
++export CONFIG_WL_STA="wlconfig_lx_router_sta"
++export CONFIG_WL_APSTA="wlconfig_lx_router_apsta"
++export CONFIG_WL_AP_ONCHIP_G="wlconfig_lx_router_ap_1chipG"
++export CONFIG_WL_STA_ONCHIP_G="wlconfig_lx_router_sta_1chipG"
++export CONFIG_WL_HIGH="wlconfig_lx_router_high"
++# CONFIG_WL_ALL_PASSIVE_ON is not set
++export CONFIG_WL_ALL_PASSIVE_RUNTIME=y
++# export CONFIG_DPSTA=m
++#export CONFIG_EMF=m
++export CONFIG_WLENT_VLAN=y
++export CONFIG_WLENT_QOS=y
+-- 
+1.7.10
+

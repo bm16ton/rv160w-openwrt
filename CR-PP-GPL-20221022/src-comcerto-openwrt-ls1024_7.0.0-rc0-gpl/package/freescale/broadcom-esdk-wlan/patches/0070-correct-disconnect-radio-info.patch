@@ -1,0 +1,11 @@
+--- a/main/src/wl/sys/wlc_ap.c	2017-05-04 15:12:02.983191893 +0800
++++ b/main/src/wl/sys/wlc_ap.c	2017-05-04 15:13:05.955191826 +0800
+@@ -5345,7 +5345,7 @@
+ 			wlc->pub->unit, ea));
+ 		if (bsscfg->SSID_len > 0) {
+ 			printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
+-				   wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, ea);
++                    CHSPEC_IS2G(bsscfg->target_bss->chanspec) ? "2.4G" : "5G", bsscfg->SSID, ea);
+ #ifdef CONFIG_C2K_RV160_260
+ 			if (sta_connection > 0)
+ 				sta_connection--;

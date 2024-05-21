@@ -1,0 +1,43 @@
+# 2018-02-14: Subramanyam <reddi.m@nxp.com>
+# Changes are for Switch LED reset to overcome abnormal LED behavior.
+diff -rauN a/arch/arm/boards/comcerto-rv16x-26x/c2k_rv16x-26x.c b/arch/arm/boards/comcerto-rv16x-26x/c2k_rv16x-26x.c
+--- a/arch/arm/boards/comcerto-rv16x-26x/c2k_rv16x-26x.c	2018-02-14 14:46:45.830828351 +0530
++++ b/arch/arm/boards/comcerto-rv16x-26x/c2k_rv16x-26x.c	2018-02-14 14:41:48.397105128 +0530
+@@ -23,6 +23,9 @@
+  * @file
+  * @brief Comcerto 2000 Specific Board Initialization routines
+  *
++ * Changes are added by reddi.m@nxp.com on 14/2/2018 for switch GPIO_45 pin reset.
++ * Holding GPIO_45 pin till switch initialization to overcome abnormal LED behavior 
++ * while booting the device.
+  */
+ 
+ 
+@@ -446,6 +449,8 @@
+ 
+ 	//GPIO_reset_external_device(COMPONENT_SLIC, 0);
+ #endif
++	__raw_writel(__raw_readl(COMCERTO_GPIO_EXT_PIN_SELECT_REG) | (GPIO_45), COMCERTO_GPIO_EXT_PIN_SELECT_REG);
++	__raw_writel(__raw_readl(COMCERTO_GPIO_EXT_OUTPUT_REG) & ~(GPIO_45), COMCERTO_GPIO_EXT_OUTPUT_REG);
+ 	return 0;
+ }
+ 
+diff -rauN a/commands/version_rv16x_26x.c b/commands/version_rv16x_26x.c
+--- a/commands/version_rv16x_26x.c	2018-02-14 14:46:04.308821402 +0530
++++ b/commands/version_rv16x_26x.c	2018-02-14 14:45:48.113598770 +0530
+@@ -21,12 +21,14 @@
+  * MA 02111-1307 USA
+  *
+  * Version increased by reddi.m@nxp.com on 1/4/2018 for image fall-back mechanism
++ *
++ * Version increased by reddi.m@nxp.com on 2/14/2018 for switch GPIO_45 pin reset
+  */
+ 
+ #include <common.h>
+ #include <command.h>
+ 
+-const char version_string_rv16x_26x[] = "1.0.00.01";
++const char version_string_rv16x_26x[] = "1.0.00.02";
+ 
+ static int do_version_rv16x_26x(struct command *cmdtp, int argc, char *argv[])
+ {

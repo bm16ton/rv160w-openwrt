@@ -1,0 +1,50 @@
+From b56f0270e66659e739c310b7a001027583c68988 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:51:21 +0800
+Subject: [PATCH 29/63] wps-pin-lifetime-format
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/apps/wps_ui.c |   12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ui.c b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+index aa09998..883e25c 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ui.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+@@ -547,6 +547,10 @@ void wps_ui_update_dev_pin_timeout()
+ 	unsigned long rest;
+ 	char prest[32] = {0};
+ 
++	if (strcmp(nvram_safe_get("wps_ap_pin_cnt"), "86401") == 0) {
++		return;
++	}
++
+ 	if ((nvram_get("wps_device_pin_g") != NULL) &&
+ 		(strcmp(nvram_safe_get("wps_ap_pin_to"), "1") != 0)) {
+ 		(void) time((time_t*)&now);
+@@ -573,6 +577,9 @@ void wps_ui_dev_pin_timeout()
+ 	char *value = NULL;
+ 	unsigned long now;
+ 
++	if (strcmp(nvram_safe_get("wps_ap_pin_cnt"), "86401") == 0)
++		return;
++
+ 	if ((nvram_get("wps_device_pin_g") != NULL) &&
+ 		(strcmp(nvram_safe_get("wps_ap_pin_to"), "1") != 0)) {
+ 		(void) time((time_t*)&now);
+@@ -1290,6 +1297,11 @@ void wps_set_ap_pin_expire(void)
+ 	char prest[32] = {0};
+ 
+ 	if (nvram_get("wps_device_pin_g") != NULL) {
++		if (strcmp(nvram_safe_get("wps_ap_pin_cnt"), "86401") == 0) {
++			wps_set_conf("wps_ap_pin_expire", "86401");
++			return;
++		}
++
+ 		(void) time((time_t*)&now);
+ 
+ 		value = nvram_safe_get("wps_ap_pin_cnt");
+-- 
+1.7.10
+

@@ -1,0 +1,32 @@
+From 835099afdca90ab885f570c59ef0f5a6eb3637ad Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:13:36 +0800
+Subject: [PATCH 13/63] Disabled-VLAN-and-QOS-by-default
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wl_linux.c |    4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index d621c97..70a472f 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -518,12 +518,12 @@ int wl_txq_thresh = WL_TXQ_THRESH;
+ module_param(wl_txq_thresh, int, 0);
+ 
+ #ifdef WLENT_VLAN
+-static int wlent_vlan_enabled = 1;
++static int wlent_vlan_enabled = 0;
+ module_param(wlent_vlan_enabled, int, 0);
+ #endif
+ 
+ #ifdef WLENT_QOS
+-static int wlent_qos_enabled = 1;
++static int wlent_qos_enabled = 0;
+ module_param(wlent_qos_enabled, int, 0);
+ #endif
+ 
+-- 
+1.7.10
+

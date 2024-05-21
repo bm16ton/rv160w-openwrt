@@ -1,0 +1,28 @@
+From 20a5ee89a445d531c7b671ea480913105665d7d4 Mon Sep 17 00:00:00 2001
+From: Rajeshkumar k <rajeshkumar.k@nxp.com>
+Date: Tue, 10 Apr 2018 11:08:36 +0530
+Subject: [PATCH 2/2] Console disabled in the barebox env
+
+Signed-off-by: Rajeshkumar k <rajeshkumar.k@nxp.com>
+---
+ arch/arm/boards/comcerto-rv16x-26x/env/config | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/boards/comcerto-rv16x-26x/env/config b/arch/arm/boards/comcerto-rv16x-26x/env/config
+index 2ab5553..6f38789 100644
+--- a/arch/arm/boards/comcerto-rv16x-26x/env/config
++++ b/arch/arm/boards/comcerto-rv16x-26x/env/config
+@@ -69,8 +69,8 @@ autoboot_timeout=3
+ 
+ usb3_internal_clk="yes"
+ 
+-loglevel=8
++loglevel=4
+ 
+ pci_data="pcie0_gen1_only=yes pcie1_gen1_only=no  pcie_external_clk=yes"
+ 
+-bootargs="console=ttyS0,115200n8, loglevel=$loglevel, init=/etc/preinit"
++bootargs="loglevel=$loglevel, init=/etc/preinit"
+-- 
+2.7.4
+

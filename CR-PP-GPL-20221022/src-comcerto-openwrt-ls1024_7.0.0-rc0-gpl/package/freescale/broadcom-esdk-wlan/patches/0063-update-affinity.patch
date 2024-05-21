@@ -1,0 +1,87 @@
+From 5a471a74e396acaceeac10930bc08f4cc53dfed6 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:40:51 +0800
+Subject: [PATCH 63/63] update-affinity
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wl_linux.c |    5 +++++
+ main/src/wl/sys/wlc_ap.c   |    7 +++++++
+ main/src/wl/sys/wlc_psta.c |    4 ++++
+ main/src/wl/sys/wlc_pub.h  |    4 ++++
+ 4 files changed, 20 insertions(+)
+
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index a020014..6536264 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -466,6 +466,11 @@ MODULE_DEVICE_TABLE(pci, wl_id_table);
+ 
+ static unsigned int online_cpus = 1;
+ 
++#ifdef CONFIG_C2K_RV160_260
++int sta_connection = 0;
++module_param(sta_connection, int, 0400);
++#endif
++
+ #ifdef BCMDBG
+ static int msglevel = 0xdeadbeef;
+ module_param(msglevel, int, 0);
+diff --git a/main/src/wl/sys/wlc_ap.c b/main/src/wl/sys/wlc_ap.c
+index d8580ae..d7fadcc 100755
+--- a/main/src/wl/sys/wlc_ap.c
++++ b/main/src/wl/sys/wlc_ap.c
+@@ -2666,6 +2666,9 @@ static void wlc_ap_process_assocreq_done(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg
+ 	printk(KERN_NOTICE "RADIO %s SSID %s %s %sconnected\n",
+ 		wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, sa,
+ 		reassoc ? "re" : "");
++#ifdef CONFIG_C2K_RV160_260
++	sta_connection++;
++#endif
+ 
+ #ifdef WLENT_STATS
+     /* If this is reassociation, save off the prev BSSID in the SCB */
+@@ -5343,6 +5346,10 @@ wlc_ap_scb_free_notify(void *context, struct scb *scb)
+ 		if (bsscfg->SSID_len > 0) {
+ 			printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
+ 				   wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, ea);
++#ifdef CONFIG_C2K_RV160_260
++			if (sta_connection > 0)
++				sta_connection--;
++#endif
+ 		}
+ 		wlc_bss_mac_event(wlc, scb->bsscfg, WLC_E_DISASSOC_IND, &scb->ea,
+ 			WLC_E_STATUS_SUCCESS, DOT11_RC_DISASSOC_LEAVING, 0, 0, 0);
+diff --git a/main/src/wl/sys/wlc_psta.c b/main/src/wl/sys/wlc_psta.c
+index a160732..3751d98 100644
+--- a/main/src/wl/sys/wlc_psta.c
++++ b/main/src/wl/sys/wlc_psta.c
+@@ -469,6 +469,10 @@ wlc_psta_deauth_client(wlc_psta_info_t *psta, struct ether_addr *addr)
+ 			printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
+ 				   psta->pub->unit == 0 ? "2.4G" : "5G", scb->bsscfg->SSID,
+ 				   bcm_ether_ntoa(&psta_ha, eabuf));
++#ifdef CONFIG_C2K_RV160_260
++			if (sta_connection > 0)
++				sta_connection--;
++#endif
+ 		return;
+ 	}
+ 
+diff --git a/main/src/wl/sys/wlc_pub.h b/main/src/wl/sys/wlc_pub.h
+index c7986cc..5eb1c56 100644
+--- a/main/src/wl/sys/wlc_pub.h
++++ b/main/src/wl/sys/wlc_pub.h
+@@ -2721,6 +2721,10 @@ wlc_pkttag_bsscfg_get(void *p)
+ #define WLFC_PKTAG_INFO_MOVE(pkt_from, pkt_to)	do {} while (0)
+ #endif
+ 
++#ifdef CONFIG_C2K_RV160_260
++extern int sta_connection;
++#endif
++
+ extern void wlc_pkttag_info_move(wlc_info_t *wlc, void *pkt_from, void *pkt_to);
+ 
+ #define	WLC_PREC_COUNT		16 /* Max precedence level implemented */
+-- 
+1.7.10
+

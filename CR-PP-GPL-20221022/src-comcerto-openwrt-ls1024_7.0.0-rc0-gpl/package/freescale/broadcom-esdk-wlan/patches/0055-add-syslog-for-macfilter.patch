@@ -1,0 +1,52 @@
+From 359d6110359bce917ceabc3ad0b31fcb000fec13 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:33:23 +0800
+Subject: [PATCH 55/63] add-syslog-for-macfilter
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_ap.c |   14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/main/src/wl/sys/wlc_ap.c b/main/src/wl/sys/wlc_ap.c
+index 9f896e1..7765dd9 100755
+--- a/main/src/wl/sys/wlc_ap.c
++++ b/main/src/wl/sys/wlc_ap.c
+@@ -1314,6 +1314,11 @@ wlc_ap_stas_associated(wlc_ap_info_t *ap)
+ 	return count;
+ }
+ 
++struct _last_logmac {
++	char ssid[36];
++	char mac[16];
++};
++
+ static void
+ wlc_auth_nhdlr_cb(void *ctx, wlc_iem_nhdlr_data_t *data)
+ {
+@@ -1350,6 +1355,7 @@ wlc_ap_authresp(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg,
+ 	wlc_iem_ft_pparm_t ftpparm;
+ 	wlc_iem_pparm_t pparm;
+ 	wlc_key_t *key;
++	static struct _last_logmac last_logmac[2] = {0};
+ 
+ #if defined(BCMDBG) || defined(BCMDBG_ERR) || defined(WLMSG_ASSOC) || \
+ 	defined(WLMSG_BTA)
+@@ -1531,6 +1537,14 @@ wlc_ap_authresp(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg,
+ 		if (!(scb = wlc_scblookup(wlc, bsscfg, (struct ether_addr *) &hdr->sa))) {
+ 			WL_ERROR(("wl%d: %s: out of scbs for %s\n",
+ 			          wlc->pub->unit, __FUNCTION__, sa));
++			if ((wlc->pub->unit >= 0 && wlc->pub->unit < 2) &&
++				(bsscfg->SSID && strcmp(bsscfg->SSID, last_logmac[wlc->pub->unit].ssid) != 0) &&
++				strcmp(sa, last_logmac[wlc->pub->unit].mac) != 0) {
++				printk(KERN_NOTICE "RADIO %s SSID %s prevent %s\n",
++					   wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, sa);
++				strcpy(last_logmac[wlc->pub->unit].ssid, bsscfg->SSID);
++				strcpy(last_logmac[wlc->pub->unit].mac, sa);
++			}
+ 			status = DOT11_SC_FAILURE;
+ 			break;
+ 		}
+-- 
+1.7.10
+

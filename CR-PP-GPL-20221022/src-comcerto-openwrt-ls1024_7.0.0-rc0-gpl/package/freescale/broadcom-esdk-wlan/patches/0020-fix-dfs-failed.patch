@@ -1,0 +1,29 @@
+From 333b7596a61af45972495816218edc5c966e88af Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:20:21 +0800
+Subject: [PATCH 20/63] fix-dfs-failed
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/phymods/ac/tssical/phy_ac_tssical.c |    5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/main/src/wl/phymods/ac/tssical/phy_ac_tssical.c b/main/src/wl/phymods/ac/tssical/phy_ac_tssical.c
+index d429cbc..f91d305 100644
+--- a/main/src/wl/phymods/ac/tssical/phy_ac_tssical.c
++++ b/main/src/wl/phymods/ac/tssical/phy_ac_tssical.c
+@@ -179,7 +179,10 @@ wlc_phy_txpwrctrl_idle_tssi_meas_acphy(phy_info_t *pi)
+ 		/* skip idle tssi cal */
+ 		return;
+ #else
+-	if ((SCAN_RM_IN_PROGRESS(pi) || PLT_INPROG_PHY(pi) || PHY_MUTED(pi)) && !TINY_RADIO(pi))
++	if (PHY_MUTED(pi))
++		return;
++
++	if ((SCAN_RM_IN_PROGRESS(pi) || PLT_INPROG_PHY(pi)) && !TINY_RADIO(pi))
+ 		/* skip idle tssi cal */
+ 		return;
+ #endif /* WLENT_FIXUPS */
+-- 
+1.7.10
+

@@ -1,0 +1,187 @@
+#!/bin/sh
+
+proto_nat_setup() {
+	local interface="$1"
+	json_get_vars device device
+
+	logger -t mobile -p local0.debug "$interface: Starting NAT connection"
+
+	[ -n "$device" ] || {
+		logger -t mobile -p local0.error "No control device specified"
+		proto_notify_error "$interface" NO_DEVICE
+		proto_set_available "$interface" 0
+		return 1
+	}
+	[ -c "$device" ] || {
+		logger -t mobile -p local0.error "$interface: The specified control device does not exist"
+		proto_notify_error "$interface" NO_DEVICE
+		proto_set_available "$interface" 0
+		return 1
+	}
+
+	modem=$device
+	device="$(readlink -f "$device")"
+	devname="$(basename "$device")"
+	devpath="/sys/class/usbmisc/$devname/device/"
+	ifname="$( ls "$devpath"/net )"
+
+	[ -n "$ifname" ] || {
+		logger -t mobile -p local0.error "$interface: The interface could not be found."
+		proto_notify_error "$interface" NO_IFACE
+		proto_set_available "$interface" 0
+		return 1
+	}
+
+	logger -t mobile -p local0.debug "$interface: Starting DHCP"
+	proto_init_update "$ifname" 1
+	proto_send_update "$interface"
+	
+	json_init
+	json_add_string name "${interface}_4"
+	json_add_string ifname "@$interface"
+	json_add_string proto "dhcp"
+	json_close_object
+	ubus call network add_dynamic "$(json_dump)"
+
+	json_init
+	json_add_string name "${interface}_6"
+	json_add_string ifname "@$interface"
+	json_add_string proto "dhcpv6"
+	json_close_object
+	ubus call network add_dynamic "$(json_dump)"
+
+	sleep 5
+	
+	# Get all the required statistics
+
+	if [ "$temp" = "12d1:14dc" ] || [ "$temp" = "12d1:14db" ];then
+		update_nat_device_info_a
+	else
+		update_nat_device_info_b
+	fi
+	return 0
+}
+
+update_nat_device_info_a() {
+	service_name=4G                           
+	manufacture="huawei"
+	if [ "$temp" = "12d1:14dc" ];then
+		IP="192.168.8.1"
+		`curl http://$IP/html/index.html -c /tmp/huawei_cookie` > /dev/null
+	elif [ "$temp" = "12d1:14db" ];then
+		IP="192.168.1.1"
+		sleep 3
+
+		token=`curl http://$IP/html/index.html -c /tmp/huawei_cookie |grep token | sed -n '2p' | cut -d "\"" -f 4`
+		[ -n "$username" ] || {
+			username="admin"
+		}
+		[ -n "$password" ] || {
+			password="admin"
+		}
+		password_enc=`/usr/bin/encode -u $username -p $password -t $token`
+		    
+		`curl http://$IP/api/user/login -b /tmp/huawei_cookie -H "Content-Type: application/x-www-form-urlencoded; charset=UTF-8" -H "__RequestVerificationToken: $token" -H "X-Requested-With: XMLHttpRequest" -X POST --data "<?xml version='1.0' encoding='UTF-8'?><request><Username>${username}</Username><Password>${password_enc}</Password><password_type>4</password_type></request>" -c /tmp/huawei_cookie` > /dev/null	
+	fi
+
+	card_info=`curl http://$IP/api/device/basic_information -b /tmp/huawei_cookie | grep "devicename" | awk -F"[<>]" '{printf $3}'`
+	firmware=`curl http://$IP/api/device/information -b /tmp/huawei_cookie | grep "SoftwareVersion" | awk -F"[<>]" '{printf $3}'`
+	sim_code=`curl http://$IP/api/net/current-plmn -b /tmp/huawei_cookie | grep "<State>0</State>"`
+	if [ -n "$sim_code" ];then
+		sim_status="SIM ready"
+		imsi=`curl http://$IP/api/device/information -b /tmp/huawei_cookie | grep "Imsi" | awk -F"[<>]" '{printf $3}'`   
+		carrier=`curl http://$IP/api/net/current-plmn -b /tmp/huawei_cookie | grep "FullName" | awk -F"[<>]" '{printf $3}'` 
+		sig_strength=`curl http://$IP/api/device/signal -b /tmp/huawei_cookie | grep "rssi" | awk -F"[<>]" '{printf $3}' | sed "s/[a-z,A-Z,\>,\ ]//g"`  
+	else
+		sim_status="***SIM ERROR***"
+	fi
+	
+	logger -t mobile -p local0.info "$interface: manufacture=$manufacture"                                                      
+        logger -t mobile -p local0.info "$interface: card_info=$card_info"                                                          
+        logger -t mobile -p local0.info "$interface: firmware=$firmware"                                                            
+        logger -t mobile -p local0.info "$interface: imsi=$imsi"                                                                    
+        logger -t mobile -p local0.info "$interface: sim_status=$sim_status"                                                        
+        logger -t mobile -p local0.info "$interface: carrier=$carrier"                                                              
+        logger -t mobile -p local0.info "$interface: service_name=$service_name"                                                    
+        logger -t mobile -p local0.info "$interface: sig_strength=$sig_strength"
+
+	# Update the confd                                                 	
+	`sh /usr/bin/update_mobile.sh "add" "$modem" "$manufacture" "$firmware" "$sim_status" "$imsi" "$carrier" "$service_name" "$sig_strength" "$card_info"` >/dev/null 2>&1   
+	
+	rm /tmp/huawei_cookie                                    
+}
+update_nat_device_info_b() {
+	while read line                                                                                           
+        do                                                                                                        
+                # Check which tty device can be used for data communication                                               
+                logger -t mobile -p local0.info "$interface: check for $line"                                                
+                                                                                                                            
+                dirpath=`find /sys/devices/platform/ -name $line | head -n 1`                                                
+                dirpath=`dirname $dirpath`                                                                                   
+                ttydevice=`find $dirpath | xargs grep "Interrupt"`                                                     
+                [ -n "$ttydevice" ] && {                                                                               
+                        ttydevice=$line                                                                     
+                        logger -t mobile -p local0.info "$interface: selecting $InterruptDevice for communication"
+                        break                                                                                             
+                }                                                                                                            
+        done < /tmp/TTY_USB1
+	ttydevice=/dev/$ttydevice
+	sleep 3 
+	# Manufacture & Firmware
+	`gcom info -d $ttydevice > /tmp/stats/4g/MANUFACTURE_modem1` >/dev/null 2>&1
+	# SIM STATUS                                                                 
+       `gcom PIN -d $ttydevice > /tmp/stats/4g/PIN_modem1` >/dev/null 2>&1                   
+                                                                            
+        # Signal Strength                                                                                                    
+        `gcom sig -d $ttydevice > /tmp/stats/4g/STRENGTH_modem1` >/dev/null 2>&1      
+                                                                                          
+        # IMSI                                                                       
+        `gcom -d $ttydevice -s /etc/gcom/getimsi.gcom > /tmp/stats/4g/IMSI_modem1` >/dev/null 2>&1
+                                                                                     
+        # Carrier                                                                    
+        `gcom -d $ttydevice -s /etc/gcom/getcarrier.gcom > /tmp/stats/4g/CARRIER_modem1` >/dev/null 2>&1
+                                                                                          
+        # Service Type                                                                        
+        `gcom -d $ttydevice -s /etc/gcom/getservicetype.gcom > /tmp/stats/4g/SERVICE_modem1` >/dev/null 2>&1
+
+	manufacture=`cat /tmp/stats/4g/MANUFACTURE_modem1 | grep Manufacturer: | head -n 1 | cut -d : -f 2 |  sed "s/[\r\n]*//g" | sed -e "s/^ *//g"` >/dev/null 2>&1
+	card_info=`cat /tmp/stats/4g/MANUFACTURE_modem1 | grep Model: | head -n 1 | cut -d : -f 2 |  sed "s/[\r\n]*//g" | sed -e "s/^ *//g"` >/dev/null 2>&1
+	firmware=`cat /tmp/stats/4g/MANUFACTURE_modem1 | grep Revision: | head -n 1 | cut -d : -f 2- | sed "s/[\r\n]*//g" | sed -e "s/^ *//g"` >/dev/null 2>&1
+	sim_status=`cat /tmp/stats/4g/PIN_modem1` >/dev/null 2>&1
+	carrier=`cat /tmp/stats/4g/CARRIER_modem1 | grep COPS: | cut -d , -f 3 | sed -e 's/"//g'` >/dev/null 2>&1
+	imsi=`cat /tmp/stats/4g/IMSI_modem1` >/dev/null 2>&1
+	service_name="4G"
+	signal=`cat /tmp/stats/4g/STRENGTH_modem1 | grep "Signal Quality:" | cut -d : -f 2 | cut -d , -f 1 | sed -e "s/^ *//g"` >/dev/null 2>&1
+	if [ -n "$signal" ];then                                                                        
+                case $signal in                                                                                                     
+                        [0-1])                                                                                    
+                                sig_strength="-109 dBm"                                                 
+                        ;;                                                                             
+                        [3-9][1-9])                                                                                       
+                                sig_strength="> -51 dBm"                                                                            
+                        ;;                                                                                                          
+                        *)                                                                                                          
+                                sig_strength=`cat /etc/gcom/3g_signallist | grep "^$signal:" | cut -d : -f 2` >/dev/null 2>&1
+                        ;;                                                                                      
+                esac                                                                                                                
+        else                                                                                                                        
+                sig_strength=""                                                                                                     
+        fi                                                                                                                          
+                                                                                                                                    
+        sig_strength=`echo $sig_strength | sed "s/[a-z,A-Z,\>,\ ]//g"`                                                              
+                                                                                                                                    
+        driver_version=`cat /etc/usb-modem.ver`         
+                                                  
+	logger -t mobile -p local0.info "$interface: manufacture=$manufacture"
+	logger -t mobile -p local0.info "$interface: card_info=$card_info"
+	logger -t mobile -p local0.info "$interface: firmware=$firmware"
+	logger -t mobile -p local0.info "$interface: imsi=$imsi"
+	logger -t mobile -p local0.info "$interface: sim_status=$sim_status"
+	logger -t mobile -p local0.info "$interface: carrier=$carrier"
+	logger -t mobile -p local0.info "$interface: service_name=$service_name"
+	logger -t mobile -p local0.info "$interface: sig_strength=$sig_strength"
+	logger -t mobile -p local0.info "$interface: driver_version=$driver_version"
+
+	# Update the confd          
+ 	`sh /usr/bin/update_mobile.sh "add" "$modem" "$manufacture" "$firmware" "$sim_status" "$imsi" "$carrier" "$service_name" "$sig_strength" "$card_info"` >/dev/null 2>&1                                                   
+}

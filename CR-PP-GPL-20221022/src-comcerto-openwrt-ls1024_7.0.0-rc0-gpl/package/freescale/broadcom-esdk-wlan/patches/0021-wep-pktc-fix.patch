@@ -1,0 +1,40 @@
+From f8cb2dfb92ccf475b2bca9bc13f7347fe63158bd Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:20:48 +0800
+Subject: [PATCH 21/63] wep-pktc-fix
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_rx.c |    9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/main/src/wl/sys/wlc_rx.c b/main/src/wl/sys/wlc_rx.c
+index d615d83..4de552d 100644
+--- a/main/src/wl/sys/wlc_rx.c
++++ b/main/src/wl/sys/wlc_rx.c
+@@ -1038,6 +1038,9 @@ wlc_recvdata(wlc_info_t *wlc, osl_t *osh, wlc_d11rxhdr_t *wrxh, void *p)
+ #if defined(WLCNT) && defined(WL_MU_RX)
+ 	uint8 gid;
+ #endif
++#ifdef NCNB_CSKB
++	bool wep_enabled = FALSE;
++#endif
+ #ifdef WLENT_STATS
+ 	uint8 mcs;
+ 	uint8 nss;
+@@ -1107,6 +1110,12 @@ wlc_recvdata(wlc_info_t *wlc, osl_t *osh, wlc_d11rxhdr_t *wrxh, void *p)
+ 
+ 	f.fc = ltoh16(f.h->fc);
+ 
++#ifdef NCNB_CSKB
++    wep_enabled = (f.fc & 0x4000) ? TRUE : FALSE;
++    if(wep_enabled) {
++        PKTMSPDOFSTREF(p) +=  4;
++    }
++#endif
+ 	f.type = FC_TYPE(f.fc);
+ 	f.subtype = (f.fc & FC_SUBTYPE_MASK) >> FC_SUBTYPE_SHIFT;
+ 	ASSERT(f.type == FC_TYPE_DATA);
+-- 
+1.7.10
+

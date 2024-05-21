@@ -1,0 +1,39 @@
+#!/bin/sh /etc/rc.common
+extra_help() {
+	cat <<EOF
+	wan_work_around To check and perform work-around
+EOF
+}
+
+EXTRA_COMMANDS="wan_work_around"
+EXTRA_HELP="$(extra_help)"
+
+wan_work_around() {
+	wan1_reg="2"
+
+	[ "$(ethtool eth0 | grep "Link detected: yes")" ] && {
+		wan1_reg=$(ethtool -d eth0 | awk -F ' ' '{print $2}' | awk 'NR==4{print}' | awk '{print substr($0, 0, 1)}')
+	}
+
+	if [[ "$wan1_reg" != "2" ]];then
+	#{
+		logger -t system -p local0.notice "#Issue occured reg values are wan1:$wan1_reg"
+		ifdown wan1
+		sleep 1
+		ifup wan1
+		sleep 5
+		logger -t system -p local0.notice "#Done work around!!"
+
+		[ "$(ethtool -S eth0 | grep "tx- packets: 0")" ] || {
+			logger -t system -p local0.notice "#Packets are now transmitted from WAN1 Port"
+		}
+
+		# Dump the register values after the work-around
+		[ "$(ethtool eth0 | grep "Link detected: yes")" ] && {
+			wan1_reg=$(ethtool -d eth0 | awk -F ' ' '{print $2}' | awk 'NR==4{print}' | awk '{print substr ($0, 0, 1)}')
+		}
+
+		logger -t system -p local0.notice "#Now, reg values are wan1:$wan1_reg"
+	#}
+	fi
+}

@@ -1,0 +1,209 @@
+diff --git a/main/src/wl/phy/wlc_phy_cmn.c b/main/src/wl/phy/wlc_phy_cmn.c
+index d7ef8f1..2140cf4 100755
+--- a/main/src/wl/phy/wlc_phy_cmn.c
++++ b/main/src/wl/phy/wlc_phy_cmn.c
+@@ -2022,6 +2022,10 @@ wlc_phy_txpower_recalc_target(phy_info_t *pi, ppr_t *txpwr_reg, ppr_t *txpwr_tar
+ 			if (pi->txpwr_percent < 100)
+ 				ppr_multiply_percentage(tx_pwr_target, pi->txpwr_percent);
+ 
++			/* Apply power output degrade */
++			if (pi->pwr_degrade != 0)
++				ppr_pwr_degrade(tx_pwr_target, pi->pwr_degrade);
++
+ #ifdef WL_SARLIMIT
+ 			if (ISHTPHY(pi)) {
+ 				ppr_apply_max(tx_pwr_target, pi->sarlimit[core]);
+@@ -2942,6 +2946,14 @@ wlc_phy_txpwr_percent_set(wlc_phy_t *ppi, uint8 txpwr_percent)
+ }
+ 
+ void
++wlc_phy_txpwr_degrade(wlc_phy_t *ppi, uint8 pwr_degrade)
++{
++	phy_info_t *pi = (phy_info_t*)ppi;
++
++	pi->pwr_degrade = pwr_degrade;
++}
++
++void
+ BCMATTACHFN(wlc_phy_machwcap_set)(wlc_phy_t *ppi, uint32 machwcap)
+ {
+ 	phy_info_t *pi = (phy_info_t*)ppi;
+diff --git a/main/src/wl/phy/wlc_phy_hal.h b/main/src/wl/phy/wlc_phy_hal.h
+index 9d6771e..72b2da2 100644
+--- a/main/src/wl/phy/wlc_phy_hal.h
++++ b/main/src/wl/phy/wlc_phy_hal.h
+@@ -1116,6 +1116,7 @@ extern void wlc_phy_get_txpwr_min(wlc_phy_t *ppi, uint8 *min_pwr);
+ extern uint8 wlc_phy_get_bfe_ndp_recvstreams(wlc_phy_t *ppi);
+ extern uint32 wlc_phy_get_cal_dur(wlc_phy_t *pih);
+ extern void wlc_phy_upd_bfr_exp_ntx(wlc_phy_t *pih, uint8 enable);
++extern void wlc_phy_txpwr_degrade(wlc_phy_t *ppi, uint8 pwr_degrade);
+ 
+ #if defined(WLC_TXPWRCAP)
+ extern int wlc_phyhal_txpwrcap_get_cellstatus(wlc_phy_t *pih, int32* cellstatus);
+diff --git a/main/src/wl/phy/wlc_phy_int.h b/main/src/wl/phy/wlc_phy_int.h
+index 201662d..0ee1be3 100644
+--- a/main/src/wl/phy/wlc_phy_int.h
++++ b/main/src/wl/phy/wlc_phy_int.h
+@@ -3336,6 +3336,7 @@ struct phy_info
+ 	phy_mu_info_t*mui;		/* MU-MIMO module */
+ 	aci_reg_list_entry *hwaci_phyreg_list;
+ 	aci_tbl_list_entry *hwaci_phytbl_list;
++	uint8 pwr_degrade;
+ };
+ 
+ #define PHYSWDIV_ENAB(pi)   ((pi)->_swdiv)
+diff --git a/main/src/wl/phymods/cmn/core/phy.c b/main/src/wl/phymods/cmn/core/phy.c
+index 5dcb162..07a9233 100644
+--- a/main/src/wl/phymods/cmn/core/phy.c
++++ b/main/src/wl/phymods/cmn/core/phy.c
+@@ -891,6 +891,7 @@ BCMATTACHFN(wlc_phy_std_params_attach)(phy_info_t *pi)
+ 	/* this will get the value from the SROM */
+ 	pi->papdcal_indexdelta = 4;
+ 	pi->papdcal_indexdelta_default = 4;
++	pi->pwr_degrade = 0;
+ }
+ 
+ void
+diff --git a/main/src/wl/ppr/include/wlc_ppr.h b/main/src/wl/ppr/include/wlc_ppr.h
+index 44e6e2c..35ccd90 100644
+--- a/main/src/wl/ppr/include/wlc_ppr.h
++++ b/main/src/wl/ppr/include/wlc_ppr.h
+@@ -321,6 +321,9 @@ void ppr_multiply_percentage(ppr_t* pprptr, uint8 val);
+ /* Get transmit channel bandwidths from chanspec */
+ wl_tx_bw_t ppr_chanspec_bw(chanspec_t chspec);
+ 
++/* tx power degrade */
++void ppr_pwr_degrade(ppr_t* pprptr, uint8 val);
++
+ #if defined(WL_EXPORT_CURPOWER) || !defined(BCMDRIVER)
+ /* Convert ppr structure to TLV data */
+ void ppr_convert_to_tlv(ppr_t* pprptr, wl_tx_bw_t bw, uint8 *to_tlv_buf, uint32 tlv_buf_len,
+diff --git a/main/src/wl/ppr/src/wlc_ppr.c b/main/src/wl/ppr/src/wlc_ppr.c
+index 27d7f0f..1c4f019 100644
+--- a/main/src/wl/ppr/src/wlc_ppr.c
++++ b/main/src/wl/ppr/src/wlc_ppr.c
+@@ -2452,6 +2452,18 @@ ppr_multiply_percentage(ppr_t* pprptr, uint8 val)
+ 
+ }
+ 
++void
++ppr_pwr_degrade(ppr_t* pprptr, uint8 val)
++{
++	uint i;
++	int8* rptr = (int8*)&pprptr->ppr_bw;
++
++
++	for (i = 0; i < ppr_pwrs_size(pprptr->ch_bw); i++, rptr++) {
++		if (*rptr != (int8)WL_RATE_DISABLED)
++			*rptr = (*rptr - val);
++	}
++}
+ 
+ /**
+  * Compare two ppr variables p1 and p2, save the min value of each
+diff --git a/main/src/wl/sys/wlc.c b/main/src/wl/sys/wlc.c
+index 5ea99da..f488ebb 100755
+--- a/main/src/wl/sys/wlc.c
++++ b/main/src/wl/sys/wlc.c
+@@ -1046,6 +1046,7 @@ enum {
+ #ifdef WLENT_TXPWR1_SIGNED
+ 	IOV_NEG_TXPWR_ENABLE,
+ #endif /* WLENT_TXPWR1_SIGNED */
++	IOV_PWR_DEGRADE,
+ 	IOV_LAST		/* In case of a need to check max ID number */
+ };
+ 
+@@ -2156,7 +2157,9 @@ static const bcm_iovar_t wlc_iovars[] = {
+ 	(0), IOVT_BOOL, 0
+ 	},
+ #endif /* WLENT_TXPWR1_SIGNED */
+-
++	{"pwr_degrade", IOV_PWR_DEGRADE,
++	(IOVF_OPEN_ALLOW), IOVT_UINT8, 0
++	},
+ 	{NULL, 0, 0, 0, 0}
+ };
+ 
+@@ -8583,6 +8586,8 @@ BCMATTACHFN(wlc_info_init)(wlc_info_t *wlc, int unit)
+ 
+ 	/* remains invalid till set through iovar; defaults are used till then */
+ 	wlc->pub->_dyn160_active = WL_DEFAULT_DYN160_INVALID;
++
++	wlc->pwr_degrade = 0;
+ }
+ 
+ #if defined(WLC_LOW) && defined(DMATXRC)
+@@ -24746,6 +24751,33 @@ wlc_doiovar(void *hdl, const bcm_iovar_t *vi, uint32 actionid, const char *name,
+ 		break;
+ #endif /* WLENT_TXPWR1_SIGNED */
+ 
++	case IOV_GVAL(IOV_PWR_DEGRADE):
++		*ret_int_ptr = wlc->pwr_degrade;
++		break;
++	case IOV_SVAL(IOV_PWR_DEGRADE):
++		wlc->pwr_degrade = (uint8)int_val;
++		wlc_bmac_set_txpwr_degrade(wlc->hw, (uint8)int_val);
++		if (wlc->pub->up) {
++			uint8 constraint;
++
++			if (SCAN_IN_PROGRESS(wlc->scan)) {
++				WL_INFORM(("wl%d: Scan in progress, skipping txpower control\n",
++					wlc->pub->unit));
++				break;
++			}
++
++			wlc_suspend_mac_and_wait(wlc);
++
++			/* Set the power limits for this locale after computing
++			 * any 11h local tx power constraints.
++			 */
++			constraint = wlc_tpc_get_local_constraint_qdbm(wlc->tpc);
++			wlc_channel_set_txpower_limit(wlc->cmi, constraint);
++
++			wlc_enable_mac(wlc);
++		}
++		break;
++
+ 	default:
+ 		err = BCME_UNSUPPORTED;
+ 		break;
+diff --git a/main/src/wl/sys/wlc.h b/main/src/wl/sys/wlc.h
+index 542884c..89cd899 100755
+--- a/main/src/wl/sys/wlc.h
++++ b/main/src/wl/sys/wlc.h
+@@ -2824,6 +2824,7 @@ struct wlc_info {
+ #endif 
+ 	wlc_mutx_policy_t *mutx_policy; /* MU TX policy - AC and BW - different from mu_policy_t */
+ 	void *fifoflush_scb;	/* the scb pointer for flushing fifos */
++	uint8 pwr_degrade;
+ };
+ 
+ #define DMA_CT_PRECONFIGURED		(1 << 0)
+diff --git a/main/src/wl/sys/wlc_bmac.c b/main/src/wl/sys/wlc_bmac.c
+index 13e205e..ffdd0a6 100644
+--- a/main/src/wl/sys/wlc_bmac.c
++++ b/main/src/wl/sys/wlc_bmac.c
+@@ -18101,6 +18101,11 @@ wlc_bmac_set_txpwr_percent(wlc_hw_info_t *wlc_hw, uint8 val)
+ 	wlc_phy_txpwr_percent_set(wlc_hw->band->pi, val);
+ }
+ 
++void
++wlc_bmac_set_txpwr_degrade(wlc_hw_info_t *wlc_hw, uint8 val)
++{
++	wlc_phy_txpwr_degrade(wlc_hw->band->pi, val);
++}
+ 
+ uint32
+ wlc_bmac_read_counter(wlc_hw_info_t* wlc_hw, uint baseaddr, int lo_off, int hi_off)
+diff --git a/main/src/wl/sys/wlc_bmac.h b/main/src/wl/sys/wlc_bmac.h
+index 21c32bc..3f84574 100644
+--- a/main/src/wl/sys/wlc_bmac.h
++++ b/main/src/wl/sys/wlc_bmac.h
+@@ -515,6 +515,7 @@ extern void wlc_bmac_extlog_cfg_set(wlc_hw_info_t *wlc_hw, wlc_extlog_cfg_t *cfg
+ 
+ extern void wlc_bmac_assert_type_set(wlc_hw_info_t *wlc_hw, uint32 type);
+ extern void wlc_bmac_set_txpwr_percent(wlc_hw_info_t *wlc_hw, uint8 val);
++extern void wlc_bmac_set_txpwr_degrade(wlc_hw_info_t *wlc_hw, uint8 val);
+ extern void wlc_bmac_ifsctl_edcrs_set(wlc_hw_info_t *wlc_hw, bool isht);
+ 
+ 

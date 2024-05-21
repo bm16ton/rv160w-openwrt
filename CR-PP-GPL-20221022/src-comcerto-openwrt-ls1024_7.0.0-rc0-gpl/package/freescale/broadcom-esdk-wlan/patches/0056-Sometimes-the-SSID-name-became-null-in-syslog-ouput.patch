@@ -1,0 +1,48 @@
+From bf054fa9fe8835d67d6274b1f03d1b5f4a594f1f Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:33:50 +0800
+Subject: [PATCH 56/63] Sometimes-the-SSID-name-became-null-in-syslog-ouput
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_ap.c   |    6 ++++--
+ main/src/wl/sys/wlc_psta.c |    6 +++---
+ 2 files changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/main/src/wl/sys/wlc_ap.c b/main/src/wl/sys/wlc_ap.c
+index 7765dd9..d8580ae 100755
+--- a/main/src/wl/sys/wlc_ap.c
++++ b/main/src/wl/sys/wlc_ap.c
+@@ -5340,8 +5340,10 @@ wlc_ap_scb_free_notify(void *context, struct scb *scb)
+ 	if (bsscfg && BSSCFG_AP(bsscfg) && SCB_ASSOCIATED(scb) && wlc->eventq) {
+ 		WL_ASSOC(("wl%d: AP: scb free: indicate disassoc for the STA-%s\n",
+ 			wlc->pub->unit, ea));
+-		printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
+-			wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, ea);
++		if (bsscfg->SSID_len > 0) {
++			printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
++				   wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, ea);
++		}
+ 		wlc_bss_mac_event(wlc, scb->bsscfg, WLC_E_DISASSOC_IND, &scb->ea,
+ 			WLC_E_STATUS_SUCCESS, DOT11_RC_DISASSOC_LEAVING, 0, 0, 0);
+ 	}
+diff --git a/main/src/wl/sys/wlc_psta.c b/main/src/wl/sys/wlc_psta.c
+index 7a26b44..a160732 100644
+--- a/main/src/wl/sys/wlc_psta.c
++++ b/main/src/wl/sys/wlc_psta.c
+@@ -466,9 +466,9 @@ wlc_psta_deauth_client(wlc_psta_info_t *psta, struct ether_addr *addr)
+ 	if (cfg == NULL) {
+ 		WL_ERROR(("wl%d: Proxy STA %s link is already gone !!??\n",
+ 		          psta->pub->unit, bcm_ether_ntoa(&psta_ha, eabuf)));
+-		printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
+-			   psta->pub->unit == 0 ? "2.4G" : "5G", cfg->SSID,
+-			   bcm_ether_ntoa(&psta_ha, eabuf));
++			printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
++				   psta->pub->unit == 0 ? "2.4G" : "5G", scb->bsscfg->SSID,
++				   bcm_ether_ntoa(&psta_ha, eabuf));
+ 		return;
+ 	}
+ 
+-- 
+1.7.10
+

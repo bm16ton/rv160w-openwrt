@@ -1,0 +1,5 @@
+# 2017-01-09: <name> <mailid@deltaww.com
+# Hotplug script to call usbmode init script
+
+
+/etc/init.d/usbmode start

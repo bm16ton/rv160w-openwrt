@@ -1,0 +1,382 @@
+--- linux-4.1.8-old/drivers/net/phy/broadcom.c	2018-05-09 15:36:59.615852539 +0800
++++ linux-4.1.8/drivers/net/phy/broadcom.c	2018-05-09 15:25:14.007961951 +0800
+@@ -18,7 +18,7 @@
+ #include <linux/phy.h>
+ #include <linux/brcmphy.h>
+ #include <linux/delay.h>
+-
++#include <linux/netdevice.h>
+ 
+ #define BRCM_PHY_MODEL(phydev) \
+ 	((phydev)->drv->phy_id & (phydev)->drv->phy_id_mask)
+@@ -253,7 +253,7 @@
+ 		phy_write(phydev, 0x1e, 0x810);
+ 		phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) | (1 << 0));
+ 		phy_write(phydev, 0x1e, 0x23e);
+-		phy_write(phydev, 0x1f, (phy_read(phydev, 0x1f) | (1 << 1)));
++		phy_write(phydev, 0x1f, (phy_read(phydev, 0x1f) | (3 << 1)));
+ 		phy_write(phydev, 0x1e, 0x12);
+ 		phy_write(phydev, 0x1f, (phy_read(phydev, 0x1f) | (6 << 0)));
+ 		phy_write(phydev, 0x1e, 0x1a);
+@@ -265,34 +265,6 @@
+ 	return 0;
+ }
+ 
+-static int bcm54210s_config_aneg(struct phy_device *phydev)
+-{
+-	int reg;
+-	int ret;
+-
+-	phy_write(phydev, 0x1e, 0x21);
+-	reg = phy_read(phydev, 0x1f);
+-	/* Fiber */
+-	if ((reg & (1 << 6)) == (1 << 6)) {
+-		phydev->autoneg = AUTONEG_DISABLE;
+-		phydev->duplex = DUPLEX_FULL;
+-
+-		phy_write(phydev, 0x1e, 0x233);
+-		reg = phy_read(phydev, 0x1f);
+-		if ((reg & (1 << 0)) == 0) {
+-			phydev->speed = SPEED_1000;
+-		}
+-		else {
+-			phydev->speed = SPEED_100;
+-		}
+-	}
+-
+-	ret = genphy_config_aneg(phydev);
+-	bcm54210s_config_init(phydev);
+-
+-	return ret;
+-}
+-
+ static int bcm54210s_read_status(struct phy_device *phydev)
+ {
+ 	static int phy_mode = 0;
+@@ -302,25 +274,32 @@
+ 	if (phydev->drv->phy_id == PHY_ID_BCM54210S) {
+ 		phy_write(phydev, 0x1e, 0x21);
+ 		reg = phy_read(phydev, 0x1f);
++        /* No fiber signal detected */
+ 		if (((reg & (1 << 4)) != (1 << 4))) {
+ 			phy_write(phydev, 0x1e, 0x202);
+ 			reg = phy_read(phydev, 0x1f);
++            //printk("%s %u register 0x202 bit4:0=0x%x\n",__FUNCTION__,__LINE__, (reg & 0x1F));
+ 			if (((reg & 0x1F) != 0xD) && ((reg & 0x1F) != 0xE) && ((reg & 0x1F) != 0xF)) {
+ 				phy_write(phydev, 0x1e, 0x233);
+ 				reg = phy_read(phydev, 0x1f);
++                /*Enables 1000BASE-X mode*/
+ 				if ((reg & (1 << 0)) == 0) {
++                    //printk("%s %u Enables 100BASE-X mode\n",__FUNCTION__,__LINE__);
+ 					phy_write(phydev, 0x1e, 0x233);
+ 					phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) | (1 << 0));
+ 					msleep(500);
+ 					phy_write(phydev, 0x1e, 0x21);
+ 					reg = phy_read(phydev, 0x1f);
++                    /*No fiber signal detected*/
+ 					if ((reg & (1 << 4)) != (1 << 4)) {
++                        //printk("%s %u Enables 1000BASE-FX mode\n",__FUNCTION__,__LINE__);
+ 						phy_write(phydev, 0x1e, 0x233);
+ 						phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) & ~(1 << 0));
+ 						msleep(500);
+ 					}
+ 				}
+ 				else {
++                    printk("%s %u Enables 1000BASE-FX mode\n",__FUNCTION__,__LINE__);
+ 					phy_write(phydev, 0x1e, 0x233);
+ 					phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) & ~(1 << 0));
+ 					msleep(500);
+@@ -331,12 +310,16 @@
+ 		phy_write(phydev, 0x1e, 0x21);
+ 		reg = phy_read(phydev, 0x1f);
+ 		if (((reg & (1 << 4)) == (1 << 4)) && ((reg & (1 << 6)) != (1 << 6))) {
++            printk("%s %u Fiber signal detect,and try fiber link\n",__FUNCTION__,__LINE__);
++            /* Disable autodect medium */
+ 			phy_write(phydev, 0x1e, 0x23e);
+ 			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) & ~(1 << 0));
+ 
++            /* Set mode RGMII to fiber, access fiber register */
+ 			phy_write(phydev, 0x1e, 0x21);
+-			phy_write(phydev, 0x1f, (phy_read(phydev, 0x1f) & ~(2 << 1)) | (1 << 0));
++			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) & ~(1 << 2) | (3 << 0));
+ 
++            /* Enable autodect medium */
+ 			phy_write(phydev, 0x1e, 0x23e);
+ 			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) | (1 << 0));
+ 		}
+@@ -344,6 +327,7 @@
+ 		phy_write(phydev, 0x1e, 0x21);
+ 		reg = phy_read(phydev, 0x1f);
+ 		if (((reg & (1 << 4)) == (1 << 4)) && ((reg & (1 << 6)) != (1 << 6))) {
++            printk("%s %u Fiber signal detect,and try LCP-1250R-J3SR-S\n",__FUNCTION__,__LINE__);
+ 			/* Only for such as LCP-1250R-J3SR-S */
+ 			phy_write(phydev, 0x1e, 0x235);
+ 			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) | (1 << 0));
+@@ -367,24 +351,49 @@
+ 
+ 		phy_write(phydev, 0x1e, 0x21);
+ 		reg = phy_read(phydev, 0x1f);
+-		/* Fiber */
+-		if ((reg & (1 << 6)) == (1 << 6)) {
+-			if (phy_mode == 1)
+-				goto out_err;
+-
+-			phy_mode = 1;
+-
+-			phy_write(phydev, 0x1e, 0x23e);
+-			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) | (1 << 6));
+-
++		if ((reg & (1 << 5)) == (1 << 5) && ((reg & (1 << 6)) != (1 << 6))
++			&& ((reg & (1 << 7)) != (1 << 7))) {
++			printk("%s %u Status: Try copper link...\n",__FUNCTION__,__LINE__);
++			
++			/* Disable medium autodetect */
+ 			phy_write(phydev, 0x1e, 0x23e);
+ 			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) & ~(1 << 0));
+ 
++			/* Set mode RGMII to copper, access copper register */
+ 			phy_write(phydev, 0x1e, 0x21);
+-			phy_write(phydev, 0x1f, (phy_read(phydev, 0x1f) & ~(2 << 1)) | (1 << 0));
++			phy_write(phydev, 0x1f, (phy_read(phydev, 0x1f) & 0xFFF8));
++			
++			dni_restore_wan_config(phydev);
++			genphy_config_aneg(phydev);
+ 
++			/* enable medium autodetect */
+ 			phy_write(phydev, 0x1e, 0x23e);
+ 			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) | (1 << 0));
++		}
++        
++		phy_write(phydev, 0x1e, 0x21);
++		reg = phy_read(phydev, 0x1f);
++		/* Fiber */
++		if ((reg & (1 << 6)) == (1 << 6)) {
++			if ((phy_mode == 1) && (AUTONEG_DISABLE == phydev->autoneg))
++				goto out_err;
++            if (phy_mode == 2)
++            {
++                printk("%s %u Copper link down ---->Fiber is going to link up, send wan down event\n",__FUNCTION__,__LINE__);
++    			netif_carrier_off(phydev->attached_dev);
++                phy_mode = 0;
++                msleep(500);
++				goto out_err;
++
++            }
++			printk("%s %u  Status: Fiber link up\n",__FUNCTION__,__LINE__);		
++			/* Disable medium autodetect, enable fiber led */
++			phy_write(phydev, 0x1e, 0x23e);
++			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) | (1 << 6) & ~(1 << 0));	
++			
++			/* Set mode RGMII to fiber, access fiber register */
++			phy_write(phydev, 0x1e, 0x21);
++			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) & ~(1 << 2) | (3 << 0));
+ 
+ 			phydev->autoneg = AUTONEG_DISABLE;
+ 			phydev->duplex = DUPLEX_FULL;
+@@ -413,31 +422,51 @@
+ 				else {
+ 					/* speed 1000 duplex full */
+ 					phydev->speed = SPEED_1000;
+-					genphy_config_aneg(phydev);
++					genphy_config_aneg(phydev);					
+ 				}
+ 			}
++
++			phy_mode = 1;
+ 		}
+-		/* Copper */
++		/* Copper link up */
+ 		else if ((reg & (1 << 7)) == (1 << 7)) {
+ 			if (phy_mode == 2)
++            {    
++                if (1 == dni_get_wan_config_change_flag(phydev))
++                {
++                    printk("%s %u wan configure change\n",__FUNCTION__,__LINE__);
++                    dni_init_wan_config_change_flag(phydev);
++                    genphy_config_aneg(phydev);
++                }
++				goto out_err;
++            }
++            if (phy_mode == 1)
++            {
++                printk("%s %u Fiber link down ---->Copper is going to link up, make wan down event\n",__FUNCTION__,__LINE__);
++    			netif_carrier_off(phydev->attached_dev);
++                phy_mode = 0;
++                msleep(500);
+ 				goto out_err;
+ 
+-			phy_mode = 2;
+-
++            }
++			printk("%s %u Status: Copper link up\n",__FUNCTION__,__LINE__);
++			/* Disable medium autodetect, enable copper led */
+ 			phy_write(phydev, 0x1e, 0x23e);
+-			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) & ~((1 << 0) | (1 << 6)));
++			phy_write(phydev, 0x1f, (phy_read(phydev, 0x1f) & 0xFFBE));
+ 
++			/* Set mode RGMII to Copper, access copper register */
+ 			phy_write(phydev, 0x1e, 0x21);
+-			phy_write(phydev, 0x1f, (phy_read(phydev, 0x1f) & ~(3 << 1)) & ~(1 << 0));
++			phy_write(phydev, 0x1f, (phy_read(phydev, 0x1f) & 0xFFF8));
+ 
+-			phydev->autoneg = AUTONEG_ENABLE;
++			dni_restore_wan_config(phydev);
+ 			genphy_config_aneg(phydev);
++		
++			phy_mode = 2;
+ 		}
++		/* Link down */
+ 		else {
+-			phy_mode = 0;
+-
+-			phy_write(phydev, 0x1e, 0x23e);
+-			phy_write(phydev, 0x1f, phy_read(phydev, 0x1f) & ~(1 << 0));
++			//printk("%s %u Status: Link down\n",__FUNCTION__,__LINE__);
++			phy_mode = 0;	
+ 		}
+ 	}
+ 
+@@ -446,6 +475,16 @@
+ 	return err;
+ }
+ 
++static int bcm54210s_config_aneg(struct phy_device *phydev)
++{
++	int ret;
++
++	ret = bcm54210s_read_status(phydev);
++	bcm54210s_config_init(phydev);
++
++	return ret;
++}
++
+ static int bcm5482_config_init(struct phy_device *phydev)
+ {
+ 	int err, reg;
+--- linux-4.1.8-old/drivers/net/phy/phy.c	2018-05-09 15:36:59.655852538 +0800
++++ linux-4.1.8/drivers/net/phy/phy.c	2018-05-09 14:35:53.023901662 +0800
+@@ -325,6 +325,9 @@
+ 	if (cmd->phy_address != phydev->addr)
+ 		return -EINVAL;
+ 
++	printk("phy_ethtool_sset: speed 0x%x, autong 0x%x, duplex 0x%x, advertising 0x%x\n", 
++		speed, cmd->autoneg, cmd->duplex, cmd->advertising);
++
+ 	/* We make sure that we don't pass unsupported values in to the PHY */
+ 	cmd->advertising &= phydev->supported;
+ 
+@@ -356,6 +359,7 @@
+ 
+ 	phydev->duplex = cmd->duplex;
+ 
++	dni_save_wan_config(phydev);
+ 	/* Restart the PHY */
+ 	phy_start_aneg(phydev);
+ 
+--- linux-4.1.8-old/drivers/net/phy/phy_device.c	2018-05-09 15:36:59.591852539 +0800
++++ linux-4.1.8/drivers/net/phy/phy_device.c	2018-05-09 15:25:48.911115159 +0800
+@@ -39,6 +39,7 @@
+ #ifdef CONFIG_ARCH_M86XXX
+ #include <mach/comcerto-2000/pm.h>
+ #endif
++#include <linux/brcmphy.h>
+ 
+ MODULE_DESCRIPTION("PHY library");
+ MODULE_AUTHOR("Andy Fleming");
+@@ -67,6 +68,82 @@
+ static LIST_HEAD(phy_fixup_list);
+ static DEFINE_MUTEX(phy_fixup_lock);
+ 
++static int sg_manual_speed = 0;
++static int sg_manual_autong = 0;
++static int sg_manual_duplex = 0;
++static int sg_manual_advertising = 0;
++static int sg_wan_config_change = 0;
++
++int dni_get_wan_config_change_flag(struct phy_device *phydev)
++{
++	if (phydev->drv->phy_id != PHY_ID_BCM54210S) {
++		return -1;
++	}
++    
++	return sg_wan_config_change;
++}
++EXPORT_SYMBOL(dni_get_wan_config_change_flag);
++
++int dni_init_wan_config_change_flag(struct phy_device *phydev)
++{
++	if (phydev->drv->phy_id != PHY_ID_BCM54210S) {
++		return -1;
++	}
++    
++    sg_wan_config_change = 0;
++	return 0;
++}
++EXPORT_SYMBOL(dni_init_wan_config_change_flag);
++
++int dni_save_wan_config(struct phy_device *phydev)
++{
++	if (phydev->drv->phy_id != PHY_ID_BCM54210S) {
++		return -1;
++	}
++    
++	sg_manual_speed = phydev->speed;
++	sg_manual_autong = phydev->autoneg;
++	sg_manual_duplex = phydev->duplex;
++	sg_manual_advertising = phydev->advertising;
++    sg_wan_config_change = 1;
++
++	printk("Saving WAN: speed 0x%x, autong 0x%x, duplex 0x%x, advertising 0x%x\n", 
++		sg_manual_speed, sg_manual_autong, sg_manual_duplex, sg_manual_advertising);
++	return 0;
++}
++EXPORT_SYMBOL(dni_save_wan_config);
++
++int dni_restore_wan_config(struct phy_device *phydev)
++{
++	if (phydev->drv->phy_id != PHY_ID_BCM54210S) {
++		return -1;
++	}
++	
++	printk("Restoring WAN: speed 0x%x->0x%x, autong 0x%x->0x%x, "
++	       "duplex 0x%x->0x%x, advertising 0x%x->0x%x\n", 
++		phydev->speed, sg_manual_speed, 
++		phydev->autoneg, sg_manual_autong,
++		phydev->duplex, sg_manual_duplex,
++		phydev->advertising, sg_manual_advertising);	
++	if (phydev->speed != sg_manual_speed) {
++		phydev->speed = sg_manual_speed;
++	}
++	if (phydev->autoneg != sg_manual_autong) {
++		phydev->autoneg = sg_manual_autong;
++	}
++	if (phydev->duplex != sg_manual_duplex) {
++		phydev->duplex = sg_manual_duplex;
++	}	
++	if (phydev->advertising != sg_manual_advertising) {
++		phydev->advertising = sg_manual_advertising;
++	}		
++
++    sg_wan_config_change = 0;
++    
++	return 0;
++}
++EXPORT_SYMBOL(dni_restore_wan_config);
++
+ /**
+  * phy_register_fixup - creates a new phy_fixup and adds it to the list
+  * @bus_id: A string which matches phydev->dev.bus_id (or PHY_ANY_ID)
+--- linux-4.1.8-old/include/linux/phy.h	2015-09-22 01:06:02.000000000 +0800
++++ linux-4.1.8/include/linux/phy.h	2018-05-09 14:35:53.023901662 +0800
+@@ -740,7 +740,10 @@
+ {
+ 	return phydev->drv->read_status(phydev);
+ }
+-
++int dni_get_wan_config_change_flag(struct phy_device *phydev);
++int dni_init_wan_config_change_flag(struct phy_device *phydev);
++int dni_save_wan_config(struct phy_device *phydev);
++int dni_restore_wan_config(struct phy_device *phydev);
+ int genphy_config_init(struct phy_device *phydev);
+ int genphy_setup_forced(struct phy_device *phydev);
+ int genphy_restart_aneg(struct phy_device *phydev);

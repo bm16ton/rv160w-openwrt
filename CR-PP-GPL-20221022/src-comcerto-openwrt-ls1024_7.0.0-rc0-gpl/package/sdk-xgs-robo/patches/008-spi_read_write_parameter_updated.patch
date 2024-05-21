@@ -1,0 +1,69 @@
+# 2017-03-20: Manish Tiwari <manish.tiwari@nxp.com>
+# Spi read and write parameter updated.
+diff -ruaN a/systems/bde/linux/kernel/linux-kernel-bde.c b/systems/bde/linux/kernel/linux-kernel-bde.c
+--- a/systems/bde/linux/kernel/linux-kernel-bde.c	2016-12-08 16:11:39.149659735 +0530
++++ b/systems/bde/linux/kernel/linux-kernel-bde.c	2016-12-08 16:24:02.729645598 +0530
+@@ -3354,11 +3354,11 @@
+             return -ENODEV;
+         ROBO_SWITCH_BUS(robo, max_bustype);
+         buf[0] = buf[1] = 0;
+-        ROBO_RREG(robo, 0, 0x10, 0x04, buf, (uint)2);
++        ROBO_RREG(robo, 0, 0x10, 0x04, (uint64_t *)buf, (uint)2);
+         phyidh = buf[0] | (buf[1] << 8);
+         /* re-try */
+         if ((phyidh == 0x0) || (phyidh == 0xffff)) {
+-            ROBO_RREG(robo, 0, 0x10, 0x04, buf, (uint)2);
++            ROBO_RREG(robo, 0, 0x10, 0x04, (uint64_t *)buf, (uint)2);
+             phyidh = buf[0] | (buf[1] << 8);
+         }
+     }
+@@ -3382,11 +3382,11 @@
+             break;
+         }
+         buf[0] = buf[1] = 0;
+-        ROBO_RREG(robo, dev, 0x10, 0x04, buf, (uint)2);
++        ROBO_RREG(robo, dev, 0x10, 0x04, (uint64_t *)buf, (uint)2);
+         phyidh = buf[0] | (buf[1] << 8);
+ 
+         buf[0] = buf[1] = 0;
+-        ROBO_RREG(robo, dev, 0x10, 0x06, buf, (uint)2);
++        ROBO_RREG(robo, dev, 0x10, 0x06, (uint64_t *)buf, (uint)2);
+         phyidl = buf[0] | (buf[1] << 8);
+ 
+         /* Strip revision */
+@@ -3402,7 +3402,7 @@
+ //#if defined(KEYSTONE) || defined(IPROC_CMICD)
+             addr = _spi_id_table[match_idx].model_info & 0xffff;
+             len = (_spi_id_table[match_idx].model_info >> 16) & 0xf;
+-            ROBO_RREG(robo, dev, (addr >> 8), (addr & 0xff), buf, (uint)len);
++            ROBO_RREG(robo, dev, (addr >> 8), (addr & 0xff), (uint64_t *)buf, (uint)len);
+ //#endif
+             mlen = (_spi_id_table[match_idx].model_info >> 20) & 0xf;
+             model_id = 0;
+@@ -3452,7 +3452,7 @@
+ //#if defined(KEYSTONE) || defined(IPROC_CMICD)
+             addr = _spi_id_table[match_idx].rev_info & 0xffff;
+             len = (_spi_id_table[match_idx].rev_info >> 16) & 0xf;
+-            ROBO_RREG(robo, dev, (addr >> 8), (addr & 0xff), buf, (uint)len);
++            ROBO_RREG(robo, dev, (addr >> 8), (addr & 0xff), (uint64_t *)buf, (uint)len);
+ //#endif
+             mlen = (_spi_id_table[match_idx].rev_info >> 20) & 0xf;
+             rev_id = 0;
+@@ -4866,7 +4866,7 @@
+ #endif
+     {
+         ROBO_RREG(ctrl->spi_device->robo, ctrl->spi_device->cid,
+-                  page, offset, buf, (uint)len);
++                  page, offset, (uint64_t *)buf, (uint)len);
+     }
+ 
+     return 0;
+@@ -4918,7 +4918,7 @@
+ #endif
+     {
+         ROBO_WREG(ctrl->spi_device->robo, ctrl->spi_device->cid,
+-                  page, offset, buf, (uint)len);
++                  page, offset, (uint64_t *)buf, (uint)len);
+     }
+ 
+     return 0;

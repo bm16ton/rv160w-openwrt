@@ -1,0 +1,12 @@
+diff --git a/main/components/router/nas/nas.c b/main/components/router/nas/nas.c
+index dd1e987..8c43dc1 100644
+--- a/main/components/router/nas/nas.c
++++ b/main/components/router/nas/nas.c
+@@ -340,6 +340,7 @@ pae_state(nas_t *nas, nas_sta_t *sta, int state)
+ 		sta->pae.state = CONNECTING;
+ 		sta->rxauths = 0;
+ 		/* Fall through */
++        break;
+ 
+ 	case CONNECTING:
+ 		dbg(nas, "Connecting %s", ether_etoa((uchar *)&sta->ea, eabuf));

@@ -1,0 +1,46 @@
+diff -aurN a/src/lldp.c b/src/lldp.c
+--- a/src/lldp.c	2020-12-10 14:52:23.614964825 +0530
++++ b/src/lldp.c	2020-12-10 15:24:43.814927937 +0530
+@@ -1143,6 +1143,12 @@
+ 		case LLDP_TLV_MGMT_ADDR:
+ 			CHECK_TLV_SIZE(1, "Management address");
+ 			addr_str_length = PEEK_UINT8;
++			/*20201207, lldp: fix a buffer overflow when handling management address TLV, This bug exists since version 0.5.6.*/
++			if (addr_str_length > sizeof(addr_str_buffer)) {
++				log_warnx("lldp", "too large management address on %s",
++				    hardware->h_ifname);
++				goto malformed;
++			}
+ 			CHECK_TLV_SIZE(addr_str_length, "Management address");
+ 			PEEK_BYTES(addr_str_buffer, addr_str_length);
+ 			addr_length = addr_str_length - 1;
+@@ -1161,9 +1167,14 @@
+ 				iface = 0;
+ 			mgmt = lldpd_alloc_mgmt(af, addr_ptr, addr_length, iface);
+ 			if (mgmt == NULL) {
+-				assert(errno == ENOMEM);
+-				LLOG_WARN("unable to allocate memory "
++			/*20201207, assert failed when addr_str_length out of range*/
++				//assert(errno == ENOMEM);
++				if(errno == ENOMEM)
++					LLOG_WARN("unable to allocate memory "
+ 							"for management address");
++				else
++					LLOG_WARN("lldp", "too large management address "
++					    "received on %s", hardware->h_ifname);
+ 						goto malformed;
+ 			}
+ 			TAILQ_INSERT_TAIL(&chassis->c_mgmt, mgmt, m_entries);
+diff -aurN a/src/lldpd.c b/src/lldpd.c
+--- a/src/lldpd.c	2020-12-10 14:52:55.998964209 +0530
++++ b/src/lldpd.c	2020-12-10 14:55:18.358961502 +0530
+@@ -353,7 +353,8 @@
+ 		return NULL;
+ 	}
+ 	mgmt->m_family = family;
+-	assert(addrsize <= LLDPD_MGMT_MAXADDRSIZE);
++	/*20201207, assert is unreachable */
++	//assert(addrsize <= LLDPD_MGMT_MAXADDRSIZE);
+ 	memcpy(&mgmt->m_addr, addrptr, addrsize);
+ 	mgmt->m_addrsize = addrsize;
+ 	mgmt->m_iface = iface;

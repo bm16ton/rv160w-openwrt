@@ -1,0 +1,42 @@
+From a3133552739545f7305d7ebfa6e7bf3ed523435c Mon Sep 17 00:00:00 2001
+From: Subramanyam <“reddi.m@nxp.com”>
+Date: Sun, 18 Apr 2021 08:51:53 +0530
+Subject: [PATCH] Fixed memory leak issue in LLDP if multiple TLVs are there in
+ LLDP response issue was reported by external researcher
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Subramanyam <“reddi.m@nxp.com”>
+---
+ src/lldp.c | 3 +++
+ 1 files changed, 4 insertions(+)
+
+diff --git a/src/lldp.c b/src/lldp.c
+index ceceb39..80676f7 100644
+--- a/src/lldp.c
++++ b/src/lldp.c
+@@ -811,10 +811,12 @@ lldp_decode(struct lldpd *cfg, char *frame, int s,
+ 			PEEK_BYTES(b, tlv_size - 1);
+ 			if (tlv_type == LLDP_TLV_PORT_ID) {
+ 				port->p_id_subtype = tlv_subtype;
++				free(port->p_id);
+ 				port->p_id = b;
+ 				port->p_id_len = tlv_size - 1;
+ 			} else {
+ 				chassis->c_id_subtype = tlv_subtype;
++				free(chassis->c_id);
+ 				chassis->c_id = b;
+ 				chassis->c_id_len = tlv_size - 1;
+ 			}
+@@ -838,6 +840,7 @@ lldp_decode(struct lldpd *cfg, char *frame, int s,
+             PEEK_BYTES(b, tlv_size);
+ 	    snprintf (PORT_DETAILS, sizeof (PORT_DETAILS)," port=%d",portno);	    
+ 	    strncat (b, PORT_DETAILS, strlen(PORT_DETAILS));
++			free(port->p_descr);
+             port->p_descr = b;
+             break;
+ 		case LLDP_TLV_SYSTEM_NAME:
+-- 
+2.7.4
+

@@ -1,0 +1,8 @@
+# 2017-01-09: <name> <mailid@deltaww.com
+# Data related to usbmode package
+
+
+# Sierra devices (specific driver)
+Configuration=1
+SierraMode=1
+NoDriverLoading=1

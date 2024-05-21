@@ -1,0 +1,63 @@
+From 06bd7e296d6b763b781043124696875d27c80822 Mon Sep 17 00:00:00 2001
+From: Manish Tiwari <manish.tiwari@nxp.com>
+Date: Mon, 26 Mar 2018 12:29:10 +0530
+Subject: [PATCH] PPSBR-1998 and PPSBR-2007
+
+- Added handler to catch SIGPIPE error in 8021x socket
+Signed-off-by: Manish Tiwari <manish.tiwari@nxp.com>
+---
+ src/source/rtdot1x.c |   20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/src/source/rtdot1x.c b/src/source/rtdot1x.c
+index efe57d9..0882f69 100644
+--- a/src/source/rtdot1x.c
++++ b/src/source/rtdot1x.c
+@@ -1,3 +1,8 @@
++/* 26/03/2018   Manish <manish.tiwari@nxp.com>
++   EPIPE signale handler support added  
++*/
++
++
+ /* 05/12/2017   Manish <manish.tiwari@nxp.com>
+ 	Jumbo frames enable/disable fixes checkins
+ 	Note: Interface will go down when we enable/disable jumbo frame due to PFE limitations.This case handled here.
+@@ -252,6 +257,13 @@ static void Handle_read(int sock, void *eloop_ctx, void *sock_ctx)
+                         DBGPRINT(RT_DEBUG_TRACE, "ERROR in recv So just return\n");
+                         return;
+                  }
++
++		if(errno == EPIPE)
++		{
++			DBGPRINT(RT_DEBUG_TRACE, "Received EPIPE So just return");
++			return;
++		}
++
+         	Handle_term(15,eloop_ctx,sock_ctx);
+         	return;
+ 	}
+@@ -521,6 +533,13 @@ static void Handle_Link_Monitor_Events(int sock, void *eloop_ctx, void *sock_ctx
+ 	return;
+ }
+ 
++/* This handler will be called when 8021x socket receive SIGPIPE ERROR */
++void handler(int s) 
++{
++	DBGPRINT(RT_DEBUG_TRACE,"####  signal SIGPIPE detected ####");
++	return;
++}
++
+ int Apd_init_sockets(rtapd *rtapd)
+ {
+ 	struct ifreq ifr;
+@@ -569,6 +588,7 @@ int Apd_init_sockets(rtapd *rtapd)
+ 			return -1;
+ 		}
+ 	
++		signal(SIGPIPE, handler);	
+ 		memset(&ifr, 0, sizeof(ifr));
+ 		strcpy(ifr.ifr_name, rtapd->conf->preauth_if_name[i]);
+ 		DBGPRINT(RT_DEBUG_TRACE,"Register pre-auth interface as (%s)\n", ifr.ifr_name);
+-- 
+1.7.9.5
+

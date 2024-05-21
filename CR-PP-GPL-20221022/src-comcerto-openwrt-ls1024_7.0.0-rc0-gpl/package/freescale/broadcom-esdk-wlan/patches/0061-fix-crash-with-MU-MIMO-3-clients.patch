@@ -1,0 +1,144 @@
+From 7016fe5a7bcab638659a606668345b6976f3f8e2 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:39:40 +0800
+Subject: [PATCH 61/63] fix-crash-with-MU-MIMO-3-clients
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/include/linux_osl.h |   28 +++++++++++++---------------
+ main/src/shared/hnddma.c     |   19 ++++++++++++++-----
+ main/src/wl/sys/wl_linux.c   |    2 ++
+ main/src/wl/sys/wlc_bmac.c   |    5 +++--
+ 4 files changed, 32 insertions(+), 22 deletions(-)
+ mode change 100644 => 100755 main/src/shared/bcmstdlib.c
+
+diff --git a/main/src/include/linux_osl.h b/main/src/include/linux_osl.h
+index 9cf3afe..5cc9387 100644
+--- a/main/src/include/linux_osl.h
++++ b/main/src/include/linux_osl.h
+@@ -617,24 +617,22 @@ extern void osl_writel(osl_t *osh, volatile uint32 *r, uint32 v);
+ #define	PKTFREE_STATIC	PKTFREE
+ #endif /* CONFIG_DHD_USE_STATIC_BUF */
+ #define	PKTDATA(osh, skb)		({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->data);})
+-
+-#ifdef NCNB_CSKB
+-#define	       MIN_OFST  (66) /* (6 + 24 + 8 + 28) D11_PHY_HDR_LEN + DOT11_A3_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN + 28 */
+-#define	       TKIP_BODY_OFST 32  /* IS TKIP ENABLED BODY OFFSET */
+-#define	       ETHER_TYPE_OFST 38 /* ETHERTYPE BODY OFFSET */
+-#define        PKTMSPDDATA(osh, skb)           ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_data);})
+-#define        PKTMSPDDATAREF(skb)             (((struct sk_buff*)(skb))->mspd_data)
+-#define        PKTMSPDDATAREFCHAR(skb)         ((void *)(((struct sk_buff*)(skb))->mspd_data))
+-#define TKIP_BODY_WEP_SEED_OKAY(_body) ((_body)[1] == (((_body)[0] | 0x20) & 0x7f))
+-#endif
+-
+ #define	PKTLEN(osh, skb)		({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->len);})
+ 
+ #ifdef NCNB_CSKB
+-#define        PKTMSPDLEN(osh, skb)            ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_len);})
+-#define        PKTMSPDLENREF(skb)              (((struct sk_buff*)(skb))->mspd_len)
+-#define        PKTMSPDOFST(osh, skb)           ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_ofst);})
+-#define        PKTMSPDOFSTREF(skb)             (((struct sk_buff*)(skb))->mspd_ofst)
++#define	EXTRA_COPY	28		// We can adjust this value to get high efficency
++#define	MIN_OFST  (66) /* (6 + 24 + 8 + 28) D11_PHY_HDR_LEN + DOT11_A3_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN + EXTRA_COPY*/
++#define	TKIP_BODY_OFST 32  /* IS TKIP ENABLED BODY OFFSET */
++#define	ETHER_TYPE_OFST 38 /* ETHERTYPE BODY OFFSET */
++#define	PKTMSPDDATA(osh, skb)           ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_data);})
++#define	PKTMSPDDATAREF(skb)             (((struct sk_buff*)(skb))->mspd_data)
++#define	PKTMSPDDATAREFCHAR(skb)         ((void *)(((struct sk_buff*)(skb))->mspd_data))
++#define	TKIP_BODY_WEP_SEED_OKAY(_body) ((_body)[1] == (((_body)[0] | 0x20) & 0x7f))
++
++#define	PKTMSPDLEN(osh, skb)            ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_len);})
++#define	PKTMSPDLENREF(skb)              (((struct sk_buff*)(skb))->mspd_len)
++#define	PKTMSPDOFST(osh, skb)           ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_ofst);})
++#define	PKTMSPDOFSTREF(skb)             (((struct sk_buff*)(skb))->mspd_ofst)
+ #endif
+ 
+ #define PKTHEADROOM(osh, skb)		(PKTDATA(osh, skb)-(((struct sk_buff*)(skb))->head))
+diff --git a/main/src/shared/bcmstdlib.c b/main/src/shared/bcmstdlib.c
+old mode 100644
+new mode 100755
+diff --git a/main/src/shared/hnddma.c b/main/src/shared/hnddma.c
+index f65152e..eecf2e2 100644
+--- a/main/src/shared/hnddma.c
++++ b/main/src/shared/hnddma.c
+@@ -110,6 +110,8 @@ static inline void __memcpy(void *dst, void *src, unsigned int len)
+ {
+ 	void *end = src + len;
+ 
++	BUG_ON(!virt_addr_valid(dst));
++
+ 	dst = (void *)((unsigned long)dst & ~0x3);
+ 	src = (void *)((unsigned long)src & ~0x3);
+ 
+@@ -1840,9 +1842,9 @@ next_frame:
+ 		PKTMSPDOFSTREF(head) = di->rxoffset + MIN_OFST;
+ 		/* MSPDOFST + A3/A4 HDR */
+ #ifdef CMEMCPY
+-		__memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + 28);
++		__memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + EXTRA_COPY);
+ #else
+-		memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + 28);
++		memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + EXTRA_COPY);
+ #endif
+ 		PKTMSPDLENREF(head) = pkt_len - PKTMSPDOFSTREF(head);
+ 	}
+@@ -4394,10 +4396,17 @@ dma64_txfast(dma_info_t *di, void *p0, bool commit)
+ 		if(likely(PKTMSPDDATA(di->osh, p))) {
+ 			int ofstlen = len - PKTMSPDLEN(di->osh, p);
+ 			int mspd_ofst = PKTMSPDOFST((di->osh),p) - ofstlen;
++			void *pDst = (void*)((uchar*)PKTMSPDDATAREF(p) + mspd_ofst);
+ 
+-			memcpy(PKTMSPDDATAREFCHAR(p) + mspd_ofst, data, ofstlen);
+-			pa = DMA_MAP(di->osh, PKTMSPDDATAREFCHAR(p) + mspd_ofst, len , DMA_TX, p, &di->txp_dmah[txout]);
+-		} else {
++			if (!virt_addr_valid(pDst)) {
++				memmove(PKTMSPDDATAREF(p) - mspd_ofst, PKTMSPDDATAREF(p), PKTMSPDLENREF(p));
++				pDst = PKTMSPDDATAREFCHAR(p);
++				printk("%s: illegal address 0x%p, mspd_ofst = %d\n", __func__, pDst, mspd_ofst);
++			}
++			memcpy(pDst, data, ofstlen);
++			pa = DMA_MAP(di->osh, pDst, len, DMA_TX, p, &di->txp_dmah[txout]);
++		}
++		else {
+ 			pa = DMA_MAP(di->osh, data, len, DMA_TX, p, &di->txp_dmah[txout]);
+ 		}
+ #else
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index d7eb8ac..a020014 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -563,6 +563,8 @@ static struct ether_addr local_ea;
+ static char *macaddr = NULL;
+ module_param(macaddr, charp, S_IRUGO);
+ #endif
++int g_dbgPrint = 0;
++module_param(g_dbgPrint, int, 0600);
+ 
+ #if defined(BCMJTAG) || defined(BCMSLTGT)
+ static int nompc = 1;
+diff --git a/main/src/wl/sys/wlc_bmac.c b/main/src/wl/sys/wlc_bmac.c
+index 53c91c3..641edcc 100755
+--- a/main/src/wl/sys/wlc_bmac.c
++++ b/main/src/wl/sys/wlc_bmac.c
+@@ -3882,6 +3882,7 @@ BCMINITFN(wlc_bmac_dma_param_set)(wlc_hw_info_t *wlc_hw, uint bustype, hnddma_t
+ #ifdef DMA_MRENAB
+ 				dma_mr = wlc_bmac_dma_max_outstread(wlc_hw);
+ #endif
++				// mda_mr = 4, txblen = 6;
+ 				dma_param_set(di, HNDDMA_PID_TX_MULTI_OUTSTD_RD, dma_mr);
+ 				dma_param_set(di, HNDDMA_PID_TX_MULTI_OUTSTD_RD, 2 /*dma_mr*/);
+ 				dma_param_set(di, HNDDMA_PID_TX_PREFETCH_CTL, dmactl->txpfc);
+@@ -21492,8 +21493,8 @@ wlc_bmac_dma_txfast(wlc_info_t *wlc, uint fifo, void *p, bool commit)
+ 		tx_di = WLC_HW_DI(wlc, fifo);
+ 		aqm_di = WLC_HW_AQM_DI(wlc, fifo);
+ 
+-		if (tx_di == NULL || aqm_di == NULL) {
+-			printk("aqm_di is NULL.\n");
++		if (unlikely(tx_di == NULL || aqm_di == NULL)) {
++			printk("%s: aqm_di = %p. tx_di = %p\n", __func__, aqm_di, tx_di);
+ 			return BCME_NORESOURCE;
+ 		}
+ //		ASSERT(aqm_di);
+-- 
+1.7.10
+

@@ -1,0 +1,56 @@
+From cc35a90f4f6e79031cb260f41531bf2f9afc4d97 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:32:49 +0800
+Subject: [PATCH 54/63] make-wps-connect-to-specific-interface
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/router/eapd/eapd.c |   25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/main/components/router/eapd/eapd.c b/main/components/router/eapd/eapd.c
+index ae703ae..0afcadd 100644
+--- a/main/components/router/eapd/eapd.c
++++ b/main/components/router/eapd/eapd.c
+@@ -2362,6 +2362,10 @@ eapd_brcm_recv_handler(eapd_wksp_t *nwksp, eapd_brcm_socket_t *from, uint8 *pDat
+ 	bcm_event_t *dpkt = (bcm_event_t *)pData;
+ 	unsigned int len;
+ 	char *ifname, ifname_tmp[BCM_MSG_IFNAME_MAX];
++	char _ifname[16];
++	char _wps_ifnames[48];
++	char *next = NULL;
++	FILE *fp = NULL;
+ 
+ 	if (nwksp == NULL || from == NULL || dpkt == NULL) {
+ 		EAPD_ERROR("Wrong argument...\n");
+@@ -2372,6 +2376,27 @@ eapd_brcm_recv_handler(eapd_wksp_t *nwksp, eapd_brcm_socket_t *from, uint8 *pDat
+ 	case BCMILCP_BCM_SUBTYPE_EVENT:
+ 		switch (ntohl(dpkt->event.event_type)) {
+ 		case WLC_E_EAPOL_MSG:
++			fp = popen("nvram get wps_ifnames", "r");
++			if (NULL != fp) {
++				if (fgets(_wps_ifnames, sizeof(_wps_ifnames) - 1, fp) != NULL) {
++					if (_wps_ifnames[strlen(_wps_ifnames) - 1] == '\n')
++						_wps_ifnames[strlen(_wps_ifnames) - 1] = '\0';
++
++					foreach(_ifname, _wps_ifnames, next) {
++						if (strcmp(dpkt->event.ifname, _ifname) == 0) {
++							break;
++						}
++					}
++
++					if (_ifname[0] == '\0') {
++						pclose(fp);
++						return;
++					}
++				}
++
++				pclose(fp);
++			}
++
+ 			EAPD_INFO("%s: recved wl eapol packet in brcmevent bytes: %d\n",
+ 			       dpkt->event.ifname, *pLen);
+ 
+-- 
+1.7.10
+

@@ -1,0 +1,26 @@
+From a2212b468b9e01708b29402d5e589020f5b8733e Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 11 Oct 2017 21:28:40 +0800
+Subject: [PATCH] fix-ppsbr-1131-allmulti
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wl_linux.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index 39f6e11..98d8bbb 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -4672,7 +4672,7 @@ _wl_set_multicast_list(struct net_device *dev)
+ 		WL_LOCK(wl);
+ 
+ 		/* update ALL_MULTICAST common code flag */
+-		wlc_iovar_op(wl->wlc, "allmulti", NULL, 0, &allmulti, sizeof(allmulti), IOV_SET,
++		wlc_iovar_op(wl->wlc, "allmulti", NULL, 0, &allmulti, sizeof(int32), IOV_SET,
+ 			(WL_DEV_IF(dev))->wlcif);
+ 		wlc_set(wl->wlc, WLC_SET_PROMISC, (dev->flags & IFF_PROMISC));
+ 
+-- 
+2.7.4
+

@@ -1,0 +1,21 @@
+t a/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+index 3f4898f..ec3cf6b 100755
+--- a/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -3630,6 +3630,16 @@
+ 
+ 		sflen = ntoh16(eh->ether_type) + ETHER_HDR_LEN;
+ 
++#ifdef WLENT_FIXUPS
++                if (D11REV_LT(ami->wlc->pub->corerev, 40)) {
++                        if (((uintptr)eh  % 4)  != 0) {
++                                WL_ERROR(("%s: Rev LT 40 sf body is not 4 bytes aligned!\n", __FUNCTION__));
++                                WLCNTINCR(ami->cnt->deagg_badsfalign);
++                                goto toss;
++                        }
++                }
++                else
++#endif
+ 		if ((((uintptr)eh + (uint)ETHER_HDR_LEN) % 4)  != 0) {
+ 			WL_ERROR(("%s: sf body is not 4 bytes aligned!\n", __FUNCTION__));
+ 			WLCNTINCR(ami->cnt->deagg_badsfalign);

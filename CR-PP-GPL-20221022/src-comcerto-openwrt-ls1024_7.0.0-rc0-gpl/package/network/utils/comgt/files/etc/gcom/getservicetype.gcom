@@ -1,0 +1,16 @@
+# 2017-03-13: li.zhang <li.zhang@deltaww.com>
+# Add the initial 3g connection need files
+opengt
+ set com 115200n81
+ set comecho off
+ set senddelay 0.02
+ waitquiet 0.2 0.2
+ flash 0.1
+
+:start
+ send "AT+WS46?^m"
+ get 1 "" $s
+ print $s
+
+:continue
+ exit 0

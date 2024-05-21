@@ -1,0 +1,180 @@
+From 9c625a5c0f6081ce6c447972e43a93d6b2aa57e9 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:18:03 +0800
+Subject: [PATCH 35/63] optimize-wps-conf-setting
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/apps/wps_ui.c   |    7 ++++++
+ .../components/apps/wps/brcm_apps/include/wps_ui.h |    1 +
+ .../apps/wps/brcm_apps/linux/wps_linux_cmd.c       |   25 ++++++++++++++++++++
+ .../apps/wps/brcm_apps/linux/wps_linux_main.c      |   19 ++++++---------
+ 4 files changed, 40 insertions(+), 12 deletions(-)
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ui.c b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+index 38843ea..ac4c574 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ui.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ui.c
+@@ -60,6 +60,7 @@ static wps_ui_str_t _wps_ui_cmd_str[] = {
+ 	{WPS_UI_CMD_AP_PIN,	"WPS ap pin"},
+ 	{WPS_UI_CMD_AP_PIN_TIMEOUT,	"WPS ap pin timeout"},
+ 	{WPS_UI_CMD_AP_PIN_EXPIRE,	"WPS ap pin expire"},
++	{WPS_UI_CMD_BOTH_SSID,	"WPS both ssid"},
+ 	{0,		NULL}
+ };
+ 
+@@ -126,6 +127,7 @@ typedef struct {
+ 	unsigned int wps_msglevel;
+ 	char wps_ap_pin[16];
+ 	char wps_ap_pin_cnt[16];
++	char wps_both_ssid[16];
+ } wps_ui_t;
+ 
+ static wps_hndl_t ui_hndl;
+@@ -1250,6 +1252,8 @@ all_found:
+ 				wps_strncpy(ui->wps_ifname, value, sizeof(ui->wps_ifname));
+ 			else if (!strcmp(name, "wps_ap_pin"))
+ 				wps_strncpy(ui->wps_ap_pin, value, sizeof(ui->wps_ap_pin));
++			else if (!strcmp(name, "wps_both_ssid"))
++				wps_strncpy(ui->wps_both_ssid, value, sizeof(ui->wps_both_ssid));
+ 			else if (!strcmp(name, "wps_ap_pin_cnt"))
+ 				wps_strncpy(ui->wps_ap_pin_cnt, value, sizeof(ui->wps_ap_pin_cnt));
+ 			else if (!strcmp(name, "wps_sta_pin"))
+@@ -1416,6 +1420,9 @@ wps_ui_do_set(char *buf)
+ 		wps_set_conf("wps_device_pin_g", ui->wps_ap_pin);
+ 		syslog(LOG_NOTICE, "WPS set ap device pin %s", ui->wps_ap_pin);
+ 	}
++	else if (ui->wps_config_command == WPS_UI_CMD_BOTH_SSID) {
++		wps_set_conf("wps_both_ssid", ui->wps_both_ssid);
++	}
+ 	else if (ui->wps_config_command == WPS_UI_CMD_AP_PIN_TIMEOUT) {
+ 		wps_set_conf("wps_ap_pin_cnt", ui->wps_ap_pin_cnt);
+ 		syslog(LOG_NOTICE, "WPS set ap device pin timeout %s", ui->wps_ap_pin_cnt);
+diff --git a/main/components/apps/wps/brcm_apps/include/wps_ui.h b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+index 211caa3..73f8e74 100644
+--- a/main/components/apps/wps/brcm_apps/include/wps_ui.h
++++ b/main/components/apps/wps/brcm_apps/include/wps_ui.h
+@@ -49,6 +49,7 @@
+ #define WPS_UI_CMD_AP_PIN		98
+ #define WPS_UI_CMD_AP_PIN_TIMEOUT		97
+ #define WPS_UI_CMD_AP_PIN_EXPIRE		96
++#define WPS_UI_CMD_BOTH_SSID		95
+ 
+ #define IS_WPS_UI_CMD_NFC(cmd)	((cmd) == WPS_UI_CMD_NFC_WR_CFG || \
+ 				 (cmd) == WPS_UI_CMD_NFC_RD_CFG || \
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
+index d31d353..b498067 100644
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_cmd.c
+@@ -51,6 +51,7 @@ typedef struct {
+ 	unsigned int wps_msglevel;
+ 	char wps_ap_pin[16];
+ 	char wps_ap_pin_timeout[16];
++	char wps_both_ssid[16];
+ } wps_env_t;
+ 
+ typedef struct {
+@@ -74,6 +75,7 @@ static wps_str_t _cmd_str[] = {
+ 	{WPS_UI_CMD_AP_PIN,	"WPS ap pin"},
+ 	{WPS_UI_CMD_AP_PIN_TIMEOUT,	"WPS ap pin timeout"},
+ 	{WPS_UI_CMD_AP_PIN_EXPIRE,	"WPS ap pin expire"},
++	{WPS_UI_CMD_BOTH_SSID,	"WPS both ssid"},
+ 	{0,		NULL}
+ };
+ 
+@@ -237,6 +239,8 @@ all_found:
+ 				wps_env->wps_config_command = atoi(value);
+ 			if (!strcmp(name, "wps_ap_pin"))
+ 				strncpy(wps_env->wps_ap_pin, value, sizeof(wps_env->wps_ap_pin));
++			if (!strcmp(name, "wps_both_ssid"))
++				strncpy(wps_env->wps_both_ssid, value, sizeof(wps_env->wps_both_ssid));
+ 			if (!strcmp(name, "wps_ap_pin_timeout"))
+ 				strncpy(wps_env->wps_ap_pin_timeout, value, sizeof(wps_env->wps_ap_pin_timeout));
+ 			else if (!strcmp(name, "wps_action"))
+@@ -617,6 +621,21 @@ wps_ap_pin(char *ap_pin)
+ }
+ 
+ static void
++wps_both_ssid(char *both_ssid)
++{
++	char uibuf[512];
++	struct strbuf b;
++
++	str_binit(&b, uibuf, sizeof(uibuf));
++
++	str_bprintf(&b, "SET ");
++	str_bprintf(&b, "wps_config_command=%d ", WPS_UI_CMD_BOTH_SSID);
++	str_bprintf(&b, "wps_both_ssid=%s ", both_ssid);
++
++	set_wps_env(uibuf);
++}
++
++static void
+ wps_ap_pin_timeout(char *ap_pin_timeout)
+ {
+ 	char uibuf[512];
+@@ -961,6 +980,7 @@ main(int argc, char *argv[])
+ 		(strcmp(command, "stop") != 0 &&
+ 		strcmp(command, "configap") != 0 &&
+ 		strcmp(command, "wps_ap_pin") != 0 &&
++		strcmp(command, "wps_both_ssid") != 0 &&
+ 		strcmp(command, "wps_ap_pin_to") != 0 &&
+ 		strcmp(command, "wps_ap_pin_expire") != 0 &&
+ 		strcmp(command, "addenrollee") != 0 &&
+@@ -999,6 +1019,11 @@ main(int argc, char *argv[])
+ 		return 0;
+ 	}
+ 
++	if (!strcmp(command, "wps_both_ssid")) {
++		wps_both_ssid(*argv);
++		return 0;
++	}
++
+ 	if (!strcmp(command, "wps_ap_pin_to")) {
+ 		wps_ap_pin_timeout(*argv);
+ 		return 0;
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index 75f1acc..3944db1 100644
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -318,12 +318,12 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	int new_wsec = 0;
+ 	int new_eap_restric = 0;
+ 	char update_ssid_profile[256] = {0};
+-	char get_ssid_profile[256] = {0};
+ 	char temp_key[65] = {0};
+ 	char both_ifname[IFNAMSIZ];
+ 	int both_mark = 0;
+ 	FILE *fp = NULL;
+ 	char radio_result[8] = {0};
++	char *both_ssid_result = NULL;
+ 
+ 	value = nvram_get("wps_version2");
+ 	if (value && !strcmp(value, "enabled"))
+@@ -344,17 +344,12 @@ set_wsec(char *ifname, void *credential, int mode)
+ 	wl_ioctl(ifname, WLC_GET_SSID, &cur_ssid, sizeof(cur_ssid));
+ 
+ 	/* If ssid is in Both mode, set another band to same settings */
+-	sprintf(get_ssid_profile, "/usr/bin/wps_get_profile.sh %s %s\n", ifname, cur_ssid.SSID);
+-	system(get_ssid_profile);
+-	if ((fp = popen("nvram get wps_both_ssid", "r")) != NULL) {
+-		if (fgets(radio_result, sizeof(radio_result), fp) != NULL) {
+-			both_mark = 1;
+-			memset(both_ifname, 0, sizeof(both_ifname));
+-			strncpy(both_ifname, radio_result, strlen(radio_result)-1);
+-			wps_osl_set_conf(strcat_r(both_prefix, "wps_oob", tmp), "disabled");
+-		}
+-
+-		pclose(fp);
++	both_ssid_result = nvram_get("wps_both_ssid");
++	if (both_ssid_result != NULL) {
++		both_mark = 1;
++		memset(both_ifname, 0, sizeof(both_ifname));
++		strcpy(both_ifname, both_ssid_result);
++		wps_osl_set_conf(strcat_r(both_prefix, "wps_oob", tmp), "disabled");
+ 	}
+ 
+ 	/* convert os name to wl name */
+-- 
+1.7.10
+

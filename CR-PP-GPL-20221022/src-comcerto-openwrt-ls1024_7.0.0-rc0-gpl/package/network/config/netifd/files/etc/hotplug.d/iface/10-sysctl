@@ -1,0 +1,33 @@
+. /lib/functions/network.sh
+# Skip fake devices (e.g. relayd)
+#grep -qs "^ *$DEVICE:" /proc/net/dev || exit 0
+[ "$ACTION" == "ifupdate" ] && exit 0
+
+case "$INTERFACE" in *vlan*) exit 0 ;; esac
+
+case "$ACTION" in
+	ifup)
+		if [ "$(echo $DEVICE | grep ppoe-wan.6p.*)" ]; then
+			echo 2 >/proc/sys/net/ipv6/conf/$DEVICE/accept_ra
+		fi
+		if [ "$(echo $INTERFACE | grep "wan16\|wan26\|wan1_tun1\|wan1_tun2\|wan2_tun1\|wan2_tun2")" ]; then
+			if [ ! -f "/tmp/active_wan_v6" ]; then
+				echo 0 > /tmp/active_wan_v6
+			fi
+			if [ "$(cat /tmp/active_wan_v6 | grep 0)" ]; then
+				echo 1 > /tmp/active_wan_v6
+				/etc/init.d/radvd reload
+			fi
+		fi
+	;;
+	ifdown)
+		if [ "$(echo $INTERFACE | grep "wan16\|wan26\|wan1_tun1\|wan1_tun2\|wan2_tun1\|wan2_tun2")" ]; then
+			network_active_wan_v6_interfaces active_v6
+			[ -n "$active_v6" ] || {
+				echo 0 > /tmp/active_wan_v6
+				/etc/init.d/radvd reload
+			}
+		fi
+	;;
+esac
+

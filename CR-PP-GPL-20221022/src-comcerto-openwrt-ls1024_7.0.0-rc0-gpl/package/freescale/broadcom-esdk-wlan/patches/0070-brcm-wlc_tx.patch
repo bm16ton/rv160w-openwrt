@@ -1,0 +1,86 @@
+diff --git a/main/src/wl/sys/wlc_tx.c b/main/src/wl/sys/wlc_tx.c
+index bae4c56..a9098f5 100644
+--- a/main/src/wl/sys/wlc_tx.c
++++ b/main/src/wl/sys/wlc_tx.c
+@@ -1281,14 +1281,20 @@ wlc_low_txq_scb_flush(wlc_info_t *wlc, wlc_txq_info_t *qi, struct scb *remove)
+ 
+ 	for (swq = 0; swq < low_txq->nswq; swq++) {
+ #if defined(WLAMPDU_MAC)
+-		flipEpoch = 0;
+-		lastEpoch = HEAD_PKT_FLUSHED;
+-		pkt = wlc_peek_lastpkt(wlc, swq);
+-		if (pkt) {
+-			wlc_get_txh_info(wlc, pkt, &txh_info);
+-			tsoHdrPtr = txh_info.tsoHdrPtr;
+-			lastEpoch = (tsoHdrPtr[2] & TOE_F2_EPOCH);
+-		}
++#if WLENT_FIXUPS
++        if (D11REV_GE(wlc->pub->corerev, 40)) {
++#endif
++    		flipEpoch = 0;
++    		lastEpoch = HEAD_PKT_FLUSHED;
++    		pkt = wlc_peek_lastpkt(wlc, swq);
++    		if (pkt) {
++    			wlc_get_txh_info(wlc, pkt, &txh_info);
++    			tsoHdrPtr = txh_info.tsoHdrPtr;
++    			lastEpoch = (tsoHdrPtr[2] & TOE_F2_EPOCH);
++    		}
++#if WLENT_FIXUPS
++        }
++#endif
+ #endif /* WLAMPDU_MAC */
+ 		head_pkt = NULL;
+ 		while (pktq_ppeek(free_swq, swq) != head_pkt) {
+@@ -1297,9 +1303,15 @@ wlc_low_txq_scb_flush(wlc_info_t *wlc, wlc_txq_info_t *qi, struct scb *remove)
+ 				if (!head_pkt)
+ 					head_pkt = pkt;
+ #ifdef WLAMPDU_MAC
+-				wlc_epoch_upd(wlc, pkt, &flipEpoch, &lastEpoch);
+-				/* clear pkt delete condition */
+-				flipEpoch &= ~TXQ_PKT_DEL;
++#if WLENT_FIXUPS
++                if (D11REV_GE(wlc->pub->corerev, 40)) {
++#endif
++    				wlc_epoch_upd(wlc, pkt, &flipEpoch, &lastEpoch);
++    				/* clear pkt delete condition */
++    				flipEpoch &= ~TXQ_PKT_DEL;
++#if WLENT_FIXUPS
++                }
++#endif
+ #endif /* WLAMPDU_MAC */
+ 				pktq_swenq(free_swq, swq, pkt);
+ 			} else {
+@@ -1318,7 +1330,13 @@ wlc_low_txq_scb_flush(wlc_info_t *wlc, wlc_txq_info_t *qi, struct scb *remove)
+ 				wlc_low_txq_buffered_dec(low_txq, fifo_idx, 1);
+ 				PKTFREE(wlc->osh, pkt, TRUE);
+ #if defined(WLAMPDU_MAC)
+-				flipEpoch |= TXQ_PKT_DEL;
++#if WLENT_FIXUPS
++                if (D11REV_GE(wlc->pub->corerev, 40)) {
++#endif
++                    flipEpoch |= TXQ_PKT_DEL;
++#if WLENT_FIXUPS
++                }
++#endif
+ #endif /* defined(WLAMPDU_MAC) */
+ 
+ 				buffered = low_txq->fifo_state[fifo_idx].buffered;
+@@ -1328,9 +1346,15 @@ wlc_low_txq_scb_flush(wlc_info_t *wlc, wlc_txq_info_t *qi, struct scb *remove)
+ 			}
+ 		}
+ #ifdef WLAMPDU_MAC
+-		if (AMPDU_AQM_ENAB(wlc->pub)) {
+-			wlc_tx_fifo_epoch_save(wlc, qi, swq);
+-		}
++#if WLENT_FIXUPS
++        if (D11REV_GE(wlc->pub->corerev, 40)) {
++#endif
++    		if (AMPDU_AQM_ENAB(wlc->pub)) {
++    			wlc_tx_fifo_epoch_save(wlc, qi, swq);
++    		}
++#if WLENT_FIXUPS
++        }
++#endif
+ #endif /* WLAMPDU_MAC */
+ 	}
+ }

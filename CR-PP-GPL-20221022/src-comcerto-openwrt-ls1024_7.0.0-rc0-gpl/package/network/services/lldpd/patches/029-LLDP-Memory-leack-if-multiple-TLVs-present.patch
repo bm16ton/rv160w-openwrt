@@ -1,0 +1,76 @@
+From 777b8aa319a0e709ff54a504304da647cd75eae9 Mon Sep 17 00:00:00 2001
+From: Subramanyam <“reddi.m@nxp.com”>
+Date: Mon, 10 May 2021 12:26:07 +0530
+Subject: [PATCH] LLDP Memory leack if multiple TLVs present
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Subramanyam <“reddi.m@nxp.com”>
+---
+ src/lldp.c | 18 ++++++++++++++----
+ 1 file changed, 14 insertions(+), 4 deletions(-)
+
+diff --git a/src/lldp.c b/src/lldp.c
+index 80676f7..ef08f8e 100644
+--- a/src/lldp.c
++++ b/src/lldp.c
+@@ -1124,16 +1124,19 @@ lldp_decode(struct lldpd *cfg, char *frame, int s,
+ 						    hardware->h_ifname);
+ 						break;
+ 					}
+-					if ((port->p_med_location[loctype - 1].data =
+-						(char*)malloc(tlv_size - 5)) == NULL) {
++					if ((b =
++						(char*)malloc(tlv_size - 5)) == NULL) {
+ 						LLOG_WARN("unable to allocate memory "
+ 						    "for LLDP-MED location for "
+ 						    "frame received on %s",
+ 						    hardware->h_ifname);
+ 						goto malformed;
+ 					}
+-					PEEK_BYTES(port->p_med_location[loctype - 1].data,
+-					    tlv_size - 5);
++
++					PEEK_BYTES(b, tlv_size - 5);
++					if (port->p_med_location[loctype - 1].data)
++						free(port->p_med_location[loctype - 1].data);
++					port->p_med_location[loctype - 1].data = b;
+ 					port->p_med_location[loctype - 1].data_len =
+ 					    tlv_size - 5;
+ 					port->p_med_location[loctype - 1].format = loctype;
+@@ -1225,24 +1228,31 @@ lldp_decode(struct lldpd *cfg, char *frame, int s,
+ 					}
+ 					switch (tlv_subtype) {
+ 					case LLDP_TLV_MED_IV_HW:
++						free (chassis->c_med_hw);
+ 						chassis->c_med_hw = b;
+ 						break;
+ 					case LLDP_TLV_MED_IV_FW:
++						free(chassis->c_med_fw);
+ 						chassis->c_med_fw = b;
+ 						break;
+ 					case LLDP_TLV_MED_IV_SW:
++						free(chassis->c_med_sw);
+ 						chassis->c_med_sw = b;
+ 						break;
+ 					case LLDP_TLV_MED_IV_SN:
++						free(chassis->c_med_sn);
+ 						chassis->c_med_sn = b;
+ 						break;
+ 					case LLDP_TLV_MED_IV_MANUF:
++						free(chassis->c_med_manuf);
+ 						chassis->c_med_manuf = b;
+ 						break;
+ 					case LLDP_TLV_MED_IV_MODEL:
++						free(chassis->c_med_model);
+ 						chassis->c_med_model = b;
+ 						break;
+ 					case LLDP_TLV_MED_IV_ASSET:
++						free(chassis->c_med_asset);
+ 						chassis->c_med_asset = b;
+ 						break;
+ 					default:
+-- 
+2.7.4
+

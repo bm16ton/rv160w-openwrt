@@ -1,0 +1,26 @@
+From 98f55a63112c23c93871ed82b3a82d6dcabdf3d2 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 20:01:15 +0800
+Subject: [PATCH 46/63] wep-frag-fix
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_rx.c |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/main/src/wl/sys/wlc_rx.c b/main/src/wl/sys/wlc_rx.c
+index c21af04..6bfa799 100644
+--- a/main/src/wl/sys/wlc_rx.c
++++ b/main/src/wl/sys/wlc_rx.c
+@@ -977,7 +977,7 @@ wlc_recv(wlc_info_t *wlc, void *p)
+ #ifdef NCNB_CSKB
+ 		if(likely(PKTMSPDDATA(osh,p))) {
+ 			uint16 ether_type = ntoh16(*((uint16 *)(PKTDATA(osh,p) + (ETHER_TYPE_OFST + ((fc & FC_WEP) ? (bsscfg && bsscfg->WPA_auth ? 8 : 4) : 0 )))));
+-			if(((fc & FC_WEP) && (TKIP_BODY_WEP_SEED_OKAY(PKTDATA(osh,p)+TKIP_BODY_OFST))) ||	!(((FC_SUBTYPE(fc) == FC_SUBTYPE_DATA) || (FC_SUBTYPE(fc) == FC_SUBTYPE_QOS_DATA)) && 						(ether_type == ETHER_TYPE_IP || ether_type == ETHER_TYPE_IPV6) )) {
++            if (!((!(fc & FC_WEP)) && (((FC_SUBTYPE(fc) == FC_SUBTYPE_DATA) || (FC_SUBTYPE(fc) == FC_SUBTYPE_QOS_DATA)) && (ether_type == ETHER_TYPE_IP || ether_type == ETHER_TYPE_IPV6)))) {   
+ 				memcpy(PKTDATA(osh,p) + MIN_OFST - (pad_present ? 2 : 0) , PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p),PKTMSPDLEN(osh,p));
+ 				kfree(PKTMSPDDATA(osh,p));
+ 				PKTMSPDDATAREF(p) = NULL;
+-- 
+1.7.10
+

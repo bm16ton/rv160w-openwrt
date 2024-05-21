@@ -1,0 +1,23 @@
+diff -aurpN xl2tpd-1.3.6-orig/xl2tpd.c xl2tpd-1.3.6/xl2tpd.c
+--- xl2tpd-1.3.6-orig/xl2tpd.c	2017-02-13 03:18:31.282681565 -0600
++++ xl2tpd-1.3.6/xl2tpd.c	2017-02-13 03:23:09.310694426 -0600
+@@ -12,6 +12,9 @@
+  *
+  * Main Daemon source.
+  *
++ * Changes:
++ *	13/02/2017	NXP	Null pointer check before printing/accessing the data.
++ *
+  */
+ 
+ #define _ISOC99_SOURCE
+@@ -770,7 +773,8 @@ void magic_lac_dial (void *data)
+     }
+     if (!lac->active)
+     {
+-        l2tp_log (LOG_DEBUG, "%s: LAC %s not active", __FUNCTION__, lac->entname);
++        if(lac->entname)
++            l2tp_log (LOG_DEBUG, "%s: LAC %s not active", __FUNCTION__, lac->entname);
+         return;
+     }
+     lac->rsched = NULL;

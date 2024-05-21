@@ -1,0 +1,126 @@
+From ee606344a23f15967b55b2f7166bb53893ff26ae Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:39:14 +0800
+Subject: [PATCH 60/63] wpa-connect-failed-after-wps
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/router/eapd/eapd.c |   73 +++++++++++++++++++++++-------------
+ 1 file changed, 46 insertions(+), 27 deletions(-)
+
+diff --git a/main/components/router/eapd/eapd.c b/main/components/router/eapd/eapd.c
+index 0afcadd..373fd46 100644
+--- a/main/components/router/eapd/eapd.c
++++ b/main/components/router/eapd/eapd.c
+@@ -2141,6 +2141,10 @@ eapd_eapol_dispatch(eapd_wksp_t *nwksp, eapd_brcm_socket_t *from, uint8 *pData,
+ 	eapol_header_t *eapol;
+ 	eap_header_t *eap;
+ 	char *ifname;
++	char _ifname[16];
++	char _wps_ifnames[48];
++	char *next = NULL;
++	FILE *fp = NULL;
+ 
+ 	if (!nwksp || !from || !pData) {
+ 		EAPD_ERROR("Wrong argument...\n");
+@@ -2200,6 +2204,26 @@ eapd_eapol_dispatch(eapd_wksp_t *nwksp, eapd_brcm_socket_t *from, uint8 *pData,
+ #ifdef BCMDBG
+ 				HEXDUMP_ASCII("Receive, EAP Request", pData, *pLen);
+ #endif
++				fp = popen("nvram get wps_ifnames", "r");
++				if (NULL != fp) {
++					if (fgets(_wps_ifnames, sizeof(_wps_ifnames) - 1, fp) != NULL) {
++						if (_wps_ifnames[strlen(_wps_ifnames) - 1] == '\n')
++							_wps_ifnames[strlen(_wps_ifnames) - 1] = '\0';
++
++						foreach(_ifname, _wps_ifnames, next) {
++							if (strcmp(ifname, _ifname) == 0) {
++								break;
++							}
++						}
++
++						if (_ifname[0] == '\0') {
++							pclose(fp);
++							return;
++						}
++					}
++
++					pclose(fp);
++				}
+ 				wps_app_monitor_sendup(nwksp, pData, *pLen, from->ifname);
+ 			}
+ 			else
+@@ -2210,9 +2234,29 @@ eapd_eapol_dispatch(eapd_wksp_t *nwksp, eapd_brcm_socket_t *from, uint8 *pData,
+ 			EAPD_INFO("EAP Response Packet received...\n");
+ 
+ 			/* Send to wps-monitor */
+-			if (sta->mode == EAPD_STA_MODE_WPS)
++			if (sta->mode == EAPD_STA_MODE_WPS) {
++				fp = popen("nvram get wps_ifnames", "r");
++				if (NULL != fp) {
++					if (fgets(_wps_ifnames, sizeof(_wps_ifnames) - 1, fp) != NULL) {
++						if (_wps_ifnames[strlen(_wps_ifnames) - 1] == '\n')
++							_wps_ifnames[strlen(_wps_ifnames) - 1] = '\0';
++
++						foreach(_ifname, _wps_ifnames, next) {
++							if (strcmp(ifname, _ifname) == 0) {
++								break;
++							}
++						}
++
++						if (_ifname[0] == '\0') {
++							pclose(fp);
++							return;
++						}
++					}
++
++					pclose(fp);
++				}
+ 				wps_app_monitor_sendup(nwksp, pData, *pLen, from->ifname);
+-			else
++			} else
+ 				return;
+ 			break;
+ 
+@@ -2362,10 +2406,6 @@ eapd_brcm_recv_handler(eapd_wksp_t *nwksp, eapd_brcm_socket_t *from, uint8 *pDat
+ 	bcm_event_t *dpkt = (bcm_event_t *)pData;
+ 	unsigned int len;
+ 	char *ifname, ifname_tmp[BCM_MSG_IFNAME_MAX];
+-	char _ifname[16];
+-	char _wps_ifnames[48];
+-	char *next = NULL;
+-	FILE *fp = NULL;
+ 
+ 	if (nwksp == NULL || from == NULL || dpkt == NULL) {
+ 		EAPD_ERROR("Wrong argument...\n");
+@@ -2376,27 +2416,6 @@ eapd_brcm_recv_handler(eapd_wksp_t *nwksp, eapd_brcm_socket_t *from, uint8 *pDat
+ 	case BCMILCP_BCM_SUBTYPE_EVENT:
+ 		switch (ntohl(dpkt->event.event_type)) {
+ 		case WLC_E_EAPOL_MSG:
+-			fp = popen("nvram get wps_ifnames", "r");
+-			if (NULL != fp) {
+-				if (fgets(_wps_ifnames, sizeof(_wps_ifnames) - 1, fp) != NULL) {
+-					if (_wps_ifnames[strlen(_wps_ifnames) - 1] == '\n')
+-						_wps_ifnames[strlen(_wps_ifnames) - 1] = '\0';
+-
+-					foreach(_ifname, _wps_ifnames, next) {
+-						if (strcmp(dpkt->event.ifname, _ifname) == 0) {
+-							break;
+-						}
+-					}
+-
+-					if (_ifname[0] == '\0') {
+-						pclose(fp);
+-						return;
+-					}
+-				}
+-
+-				pclose(fp);
+-			}
+-
+ 			EAPD_INFO("%s: recved wl eapol packet in brcmevent bytes: %d\n",
+ 			       dpkt->event.ifname, *pLen);
+ 
+-- 
+1.7.10
+

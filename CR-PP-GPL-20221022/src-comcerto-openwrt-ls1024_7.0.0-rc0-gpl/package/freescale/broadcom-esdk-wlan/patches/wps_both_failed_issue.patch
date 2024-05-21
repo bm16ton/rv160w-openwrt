@@ -1,0 +1,29 @@
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ie.c	2017-08-23 17:05:34.086090252 +0800
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ie.c	2017-08-23 17:05:38.508089688 +0800
+@@ -707,6 +707,7 @@
+ wps_ie_set(char *wps_ifname, CTlvSsrIE *ssrmsg)
+ {
+ 	char ifname[IFNAMSIZ];
++	char *wps_both_ifname;
+ 	char *next = NULL;
+ 
+ 	int i, imax;
+@@ -731,6 +732,8 @@
+ 					sprintf(tmp, "%s_band", ifname);
+ 					matched_band = atoi(wps_safe_get_conf(tmp));
+ 					matched = i;
++                    sprintf(tmp, "%s_wps_both_ssid", ifname);
++                    wps_both_ifname = nvram_safe_get(tmp);
+ 					goto found;
+ 				}
+ 			}
+@@ -759,7 +762,8 @@
+ 			  * 3. For each band, at most one wl interface is able to set the ssrmsg.
+ 			  */
+ 			if (wps_ifname == NULL || strcmp(wps_ifname, ifname) == 0 ||
+-			    ((i == matched) && (band != matched_band) && !(band_flag & band))) {
++			    ((i == matched) && (band != matched_band) && !(band_flag & band)
++                 && strcmp(wps_both_ifname, ifname) == 0)) {
+ 				/* Set ssrmsg to expected wl interface */
+ 				add_ie(i, ifname, ssrmsg);
+ 				band_flag |= band;

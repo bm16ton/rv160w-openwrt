@@ -1,0 +1,457 @@
+From eaec042fa3c386c388047c1cb5fb3ece6f5f660e Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:38:08 +0800
+Subject: [PATCH 27/63] wpa-tkip-isolation-fix
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/include/linux_osl.h          |    4 +++
+ main/src/shared/hnddma.c              |   10 +++----
+ main/src/shared/linux_osl.c           |    9 ++++++
+ main/src/wl/keymgmt/src/km_key.c      |   46 +++++++++++++++++++++++++++++
+ main/src/wl/keymgmt/src/km_key_pvt.h  |   11 +++++++
+ main/src/wl/keymgmt/src/km_key_tkip.c |   38 ++++++++++++++++++++++--
+ main/src/wl/sys/wl_linux.c            |    7 +----
+ main/src/wl/sys/wlc.c                 |   16 ++++++++---
+ main/src/wl/sys/wlc_amsdu.c           |    6 +++-
+ main/src/wl/sys/wlc_rx.c              |   51 ++++++++++++++++++++++-----------
+ main/src/wl/sys/wlc_tx.c              |    8 ++++++
+ 11 files changed, 170 insertions(+), 36 deletions(-)
+
+diff --git a/main/src/include/linux_osl.h b/main/src/include/linux_osl.h
+index 66171c8..9cf3afe 100644
+--- a/main/src/include/linux_osl.h
++++ b/main/src/include/linux_osl.h
+@@ -619,9 +619,13 @@ extern void osl_writel(osl_t *osh, volatile uint32 *r, uint32 v);
+ #define	PKTDATA(osh, skb)		({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->data);})
+ 
+ #ifdef NCNB_CSKB
++#define	       MIN_OFST  (66) /* (6 + 24 + 8 + 28) D11_PHY_HDR_LEN + DOT11_A3_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN + 28 */
++#define	       TKIP_BODY_OFST 32  /* IS TKIP ENABLED BODY OFFSET */
++#define	       ETHER_TYPE_OFST 38 /* ETHERTYPE BODY OFFSET */
+ #define        PKTMSPDDATA(osh, skb)           ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_data);})
+ #define        PKTMSPDDATAREF(skb)             (((struct sk_buff*)(skb))->mspd_data)
+ #define        PKTMSPDDATAREFCHAR(skb)         ((void *)(((struct sk_buff*)(skb))->mspd_data))
++#define TKIP_BODY_WEP_SEED_OKAY(_body) ((_body)[1] == (((_body)[0] | 0x20) & 0x7f))
+ #endif
+ 
+ #define	PKTLEN(osh, skb)		({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->len);})
+diff --git a/main/src/shared/hnddma.c b/main/src/shared/hnddma.c
+index ff74273..09429f4 100644
+--- a/main/src/shared/hnddma.c
++++ b/main/src/shared/hnddma.c
+@@ -1836,15 +1836,15 @@ next_frame:
+ 
+ #ifdef NCNB_CSKB
+ 	if(likely(PKTMSPDDATA(di->osh,head))) {
+-		/* 40 Byte hdr + D11_PHY_HDR_LEN + DOT11_MAC_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN */
+-		PKTMSPDOFSTREF(head) = di->rxoffset + 6 + 24 + 8;
++		/* 40 Byte hdr + D11_PHY_HDR_LEN + DOT11_MAC_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN + 28 */
++		PKTMSPDOFSTREF(head) = di->rxoffset + MIN_OFST;
+ 		/* MSPDOFST + A3/A4 HDR */
+ #ifdef CMEMCPY
+-		__memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + 30);
++		__memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head));
+ #else
+-		memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + 30);
++		memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head));
+ #endif
+-		PKTMSPDLENREF(head) = pkt_len;
++		PKTMSPDLENREF(head) = pkt_len - PKTMSPDOFSTREF(head);
+ 	}
+ #endif
+ 
+diff --git a/main/src/shared/linux_osl.c b/main/src/shared/linux_osl.c
+index 48c5dd1..dc5b61b 100644
+--- a/main/src/shared/linux_osl.c
++++ b/main/src/shared/linux_osl.c
+@@ -1969,6 +1969,15 @@ osl_pktdup(osl_t *osh, void *skb)
+ 	void * p;
+ 
+ 	ASSERT(!PKTISCHAINED(skb));
++#ifdef NCNB_CSKB
++	if(likely(PKTMSPDDATA(osh,skb))) {
++		int ofstlen = PKTLEN(osh,skb) - PKTMSPDLEN(osh, skb);
++		memcpy(PKTDATA(osh,skb) + ofstlen, PKTMSPDDATA(osh,skb) + PKTMSPDOFST((osh),skb) , PKTMSPDLEN(osh,skb));
++		PKTMSPDLENREF(skb) = 0;
++		kfree(PKTMSPDDATAREF(skb));
++		PKTMSPDDATAREF(skb)=NULL;
++	}
++#endif
+ 
+ 	/* clear the CTFBUF flag if set and map the rest of the buffer
+ 	 * before cloning.
+diff --git a/main/src/wl/keymgmt/src/km_key.c b/main/src/wl/keymgmt/src/km_key.c
+index a50a45c..1529df3 100644
+--- a/main/src/wl/keymgmt/src/km_key.c
++++ b/main/src/wl/keymgmt/src/km_key.c
+@@ -310,7 +310,16 @@ wlc_key_prep_tx_mpdu(wlc_key_t *key, void *pkt, wlc_txd_t *txd)
+ 	 */
+ 	PKTCTFMAP(KEY_OSH(key), pkt);
+ 
++#ifdef NCNB_CSKB
++        if(key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), pkt)) {
++                hdr = PKTMSPDDATA(KEY_OSH(key), pkt) + NCNB_TKIP_RX_HDR_OFST;
++        } else {
++        hdr = KEY_MPDU_HDR(key, pkt);
++        }
++#else
+ 	hdr = KEY_MPDU_HDR(key, pkt);
++#endif
++
+ 
+ 	/* debug: dump pkt */
+ 	KEY_LOG_DUMP_PKT(__FUNCTION__, key, pkt);
+@@ -319,7 +328,15 @@ wlc_key_prep_tx_mpdu(wlc_key_t *key, void *pkt, wlc_txd_t *txd)
+ 	fk = fc & FC_KIND_MASK;
+ 	KM_ASSERT((FC_TYPE(fc) == FC_TYPE_MNG) || (fk == FC_DATA) || (fk == FC_QOS_DATA));
+ 
++#ifdef NCNB_CSKB
++	if (key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), pkt)) {
++                KM_KEY_PKT_DOT11_TX_GET_BODY(fc, fk, hdr, NCNB_MPDU_HDR_LEN, body, body_len);
++	} else {
++	        KM_KEY_PKT_DOT11_TX_GET_BODY(fc, fk, hdr, KEY_PKT_LEN(key, pkt), body, body_len);
++	}
++#else
+ 	KM_KEY_PKT_DOT11_TX_GET_BODY(fc, fk, hdr, KEY_PKT_LEN(key, pkt), body, body_len);
++#endif
+ 
+ 	/* set protected frame bit for data frames, robust uc mgmt
+ 	 * frames and mgmt auth frames. 802.11/2012 8.2.4.1.9, but
+@@ -431,6 +448,20 @@ wlc_key_prep_tx_msdu(wlc_key_t *key, void *pkt, size_t frag_length, uint8 prio)
+ 
+ 	if (key->algo_impl.cb->tx_msdu != NULL) {
+ 		hdr = KEY_MSDU_HDR(key, pkt);
++/* need to test and comfirm , it is changed*/
++#ifdef NCNB_CSKB
++	if (PKTMSPDDATA(KEY_OSH(key), pkt)) {
++		body = ((uint8 *)hdr) + NCNB_MSDU_HDR_LEN;
++		body_len = KEY_PKT_LEN(key, pkt) - ETHER_HDR_LEN;
++	} else {
++		body = ((uint8 *)hdr) + ETHER_HDR_LEN;
++		body_len = KEY_PKT_LEN(key, pkt) - ETHER_HDR_LEN;
++	}
++#else
++		body = ((uint8 *)hdr) + ETHER_HDR_LEN;
++		body_len = KEY_PKT_LEN(key, pkt) - ETHER_HDR_LEN;
++#endif
++
+ 		body = ((uint8 *)hdr) + ETHER_HDR_LEN;
+ 		body_len = KEY_PKT_LEN(key, pkt) - ETHER_HDR_LEN;
+ 	}
+@@ -465,7 +496,16 @@ wlc_key_rx_mpdu(wlc_key_t *key, void *pkt, d11rxhdr_t *rxh)
+ 		((rxh->RxStatus1 & RXS_DECATMPT) ? 1 : 0),
+ 		((rxh->RxStatus1 & RXS_DECERR) ? 1 : 0)));
+ 
++#ifdef NCNB_CSKB
++        if(key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), pkt)) {
++                hdr = PKTMSPDDATA(KEY_OSH(key), pkt) + NCNB_TKIP_RX_HDR_OFST;
++        } else {
++        hdr = KEY_MPDU_HDR(key, pkt);
++        }
++#else
+ 	hdr = KEY_MPDU_HDR(key, pkt);
++#endif
++
+ 	fc  = ltoh16(hdr->fc);
+ 	fk = fc & FC_KIND_MASK;
+ 	KM_ASSERT((FC_TYPE(fc) == FC_TYPE_MNG) ||
+@@ -684,6 +724,12 @@ wlc_key_rx_msdu(wlc_key_t *key, void *pkt, d11rxhdr_t *rxh)
+ 	body = ((uint8 *)hdr) + ETHER_HDR_LEN;
+ 	body_len = KEY_PKT_LEN(key, pkt) - ETHER_HDR_LEN;
+ 
++#ifdef NCNB_CSKB
++        if(key->info.algo == CRYPTO_ALGO_TKIP && PKTMSPDDATA(KEY_OSH(key), pkt)) {
++                body = PKTMSPDDATA(KEY_OSH(key), pkt) + NCNB_TKIP_RX_BODY_OFST;
++        }
++#endif
++
+ 	/* algorithm specific processing */
+ 	hwdec = WLC_KEY_MIC_IN_HW(&key->info) && key->info.algo == CRYPTO_ALGO_TKIP &&
+ 		(rxh->RxStatus2 & RXS_TKMICATMPT);
+diff --git a/main/src/wl/keymgmt/src/km_key_pvt.h b/main/src/wl/keymgmt/src/km_key_pvt.h
+index 6f1d575..2297030 100644
+--- a/main/src/wl/keymgmt/src/km_key_pvt.h
++++ b/main/src/wl/keymgmt/src/km_key_pvt.h
+@@ -119,6 +119,17 @@ typedef int (*key_tx_msdu_cb_t)(wlc_key_t *key, void *pkt, struct ether_header *
+ /* dump */
+ typedef int (*key_dump_cb_t)(const wlc_key_t *key, struct bcmstrbuf *b);
+ 
++#ifdef NCNB_CSKB
++#define NCNB_MSDU_BODY_LEN             8
++#define NCNB_MPDU_BODY_LEN             16
++#define NCNB_MSDU_HDR_LEN              22      /* Dest MAC + Src MAC + Seq Ctl + SNAP HDR */
++#define NCNB_MPDU_HDR_LEN              42      /* DOT11 HDR + Frame Ctl + SNAP HDR */
++#define NCNB_MSDU_OFST                 26      /* NCNB_MPDU_HDR_LEN - NCNB_MPDU_BODY_LEN */
++#define NCNB_TKIP_RX_HDR_OFST	       46
++#define NCNB_TKIP_RX_BODY_OFST         80
++#endif
++
++
+ struct key_algo_callbacks {
+ 	key_algo_destroy_cb_t		destroy;
+ 	key_algo_get_cb_t			get_data;
+diff --git a/main/src/wl/keymgmt/src/km_key_tkip.c b/main/src/wl/keymgmt/src/km_key_tkip.c
+index c14919c..362a80a 100644
+--- a/main/src/wl/keymgmt/src/km_key_tkip.c
++++ b/main/src/wl/keymgmt/src/km_key_tkip.c
+@@ -740,14 +740,35 @@ tkip_tx_mpdu(wlc_key_t *key, void *pkt, struct dot11_header *hdr,
+ 			mic_pkt = pktlast(KEY_OSH(key), pkt);
+ 			KM_DBG_ASSERT(mic_pkt != NULL);
+ 			KM_ASSERT(PKTTAILROOM(KEY_OSH(key), mic_pkt) >= mic_len);
+-
++#ifdef NCNB_CSKB
++			if (mic_pkt == pkt) {
++				if (PKTMSPDDATA(KEY_OSH(key), pkt)) {
++					tx_micp = (uint8 *) PKTMSPDDATA(KEY_OSH(key), pkt) + PKTMSPDOFST(KEY_OSH(key), pkt) + PKTMSPDLEN(KEY_OSH(key), pkt);
++				} else {
++					tx_micp = body + body_len;
++				}	
++			} else if (PKTMSPDDATA(KEY_OSH(key), mic_pkt)) {
++				tx_micp = (uint8 *) PKTMSPDDATA(KEY_OSH(key), mic_pkt) + PKTMSPDOFST(KEY_OSH(key), mic_pkt) + PKTMSPDLEN(KEY_OSH(key), mic_pkt);
++			} else {
++				tx_micp = (uint8 *) PKTDATA(KEY_OSH(key), mic_pkt) + PKTLEN(KEY_OSH(key), mic_pkt);
++			}
++#else
+ 			tx_micp = (mic_pkt == pkt) ? (body + body_len) :
+ 				(uint8 *)PKTDATA(KEY_OSH(key), mic_pkt) +
+ 				PKTLEN(KEY_OSH(key), mic_pkt);
+-
++#endif
+ 			memcpy(tx_micp, &tkip_key->tx_state.mic[mic_off], mic_len);
+ 			tkip_key->tx_state.mic_off += (uint8)mic_len;
++#ifdef NCNB_CSKB
++			PKTSETLEN(KEY_OSH(key), mic_pkt, PKTLEN(KEY_OSH(key), mic_pkt) + mic_len);
++			if (PKTMSPDDATA(KEY_OSH(key), mic_pkt)) {
++				PKTMSPDLENREF(mic_pkt) += mic_len;
++			}
++			
++#else
+ 			PKTSETLEN(KEY_OSH(key), mic_pkt, PKTLEN(KEY_OSH(key), mic_pkt) + mic_len);
++#endif
++
+ 		}
+ 	}
+ 
+@@ -950,6 +971,9 @@ tkip_tx_msdu(wlc_key_t *key, void *pkt, struct ether_header *hdr,
+ 	tkip_mic_ctx_t mic_ctx;
+ 	uint32 micl, micr;
+ 	uint32 qos;
++#ifdef NCNB_CSKB
++	void *head = pkt;
++#endif
+ 	STATIC_ASSERT(TKIP_MIC_SIZE == (sizeof(uint32) << 1));
+ 
+ 	KM_ASSERT(TKIP_KEY_VALID(key));
+@@ -984,8 +1008,16 @@ tkip_tx_msdu(wlc_key_t *key, void *pkt, struct ether_header *hdr,
+ 		uint8 *data = PKTDATA(KEY_OSH(key), pkt);
+ 		int data_len = PKTLEN(KEY_OSH(key), pkt);
+ 		tkip_mic_update(&mic_ctx, data, data_len);
++       	}
++#ifdef NCNB_CSKB
++	if (PKTMSPDDATA(KEY_OSH(key), head)) {
++		uint8 *data = NULL;
++		int data_len = 0;
++		data = PKTMSPDDATA(KEY_OSH(key), head) + PKTMSPDOFST(KEY_OSH(key), head) - NCNB_MSDU_OFST;
++		data_len = PKTMSPDLEN(KEY_OSH(key), head) + NCNB_MSDU_OFST;
++		tkip_mic_update(&mic_ctx, data, data_len);
+ 	}
+-
++#endif
+ 	tkip_mic_final(&mic_ctx, &micl, &micr);
+ 	KEY_LOG(("wl%d: %s: computed mic l 0x%08x r 0x%08x\n",
+ 		KEY_WLUNIT(key), __FUNCTION__, micl, micr));
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index 59d7cab..d7eb8ac 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -5078,10 +5078,6 @@ wl_sendup(wl_info_t *wl, wl_if_t *wlif, void *p, int numpkt)
+ #endif /* ! BCM_GMAC3 */
+ 
+ #ifdef PPFE_FASTPATH 
+-#ifdef NCNB_CSKB
+-       /* MSPD data length = entire packet length - (ethernet header length - ethernet type length)) */
+-       PKTMSPDLENREF(skb)  = PKTLEN(wl->osh,skb) - (ETHER_HDR_LEN - ETHER_TYPE_LEN);
+-#endif
+     /* If packet could be fast forwarded, then offload the packet to ethernet vwd driver */
+     if (likely(!comcerto_wifi_rx_fastpath(skb))) {
+         return;
+@@ -5101,8 +5097,7 @@ sendup_next:
+ 
+ #ifdef NCNB_CSKB
+        if(likely(PKTMSPDDATA(wl->osh,skb))) {
+-               int datalen = PKTLEN(wl->osh,skb) - (ETHER_HDR_LEN - ETHER_TYPE_LEN);
+-               memcpy(PKTDATA(wl->osh,skb) + (ETHER_HDR_LEN - ETHER_TYPE_LEN), PKTMSPDDATA(wl->osh,skb) + PKTMSPDOFST((wl->osh),skb) , datalen);
++               memcpy(PKTDATA(wl->osh,skb) + (skb->len - PKTMSPDLEN(wl->osh, skb)), PKTMSPDDATA(wl->osh,skb) + PKTMSPDOFST((wl->osh),skb), PKTMSPDLEN(wl->osh, skb));
+                PKTMSPDLENREF(skb) = 0;
+ 	       kfree(skb->mspd_data);
+ 	       skb->mspd_data=NULL;
+diff --git a/main/src/wl/sys/wlc.c b/main/src/wl/sys/wlc.c
+index a41edae..62c58b3 100755
+--- a/main/src/wl/sys/wlc.c
++++ b/main/src/wl/sys/wlc.c
+@@ -32731,6 +32731,11 @@ wlc_sendup_chain(wlc_info_t *wlc, void *head)
+ 			/* For split RX case, FCS bytes are in host */
+ 			/* drop length of host fragment */
+ 			PKTFRAG_TRIM_TAILBYTES(wlc->osh, p, DOT11_FCS_LEN, TAIL_BYTES_TYPE_FCS);
++#if defined(NCNB_CSKB) && defined(CPKTC)
++			if(likely(PKTMSPDDATA(wlc->osh,p))) {
++                        	PKTMSPDLENREF(p) -= 4;
++                	}
++#endif
+ 		} else {
+ 			ASSERT(WLPKTTAG(p)->flags & WLF_HWAMSDU);
+ 		}
+@@ -32743,10 +32748,16 @@ wlc_sendup_chain(wlc_info_t *wlc, void *head)
+ 		bsscfg = SCB_BSSCFG(scb);
+ 
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+-		if(h->fc & htol16(FC_WEP)) {
++		if(likely(PKTMSPDDATA(wlc->osh,p)) && (h->fc & htol16(FC_WEP))) {
+ 			PKTMSPDOFSTREF(p) += 4 ;
++			PKTMSPDLENREF(p) -= 8 ;
+ 			if (bsscfg->WPA_auth) {
+ 				PKTMSPDOFSTREF(p) += 4 ;
++				PKTMSPDLENREF(p) -= 8 ;
++				if(TKIP_BODY_WEP_SEED_OKAY(PKTDATA(wlc->osh,p) + TKIP_BODY_OFST - D11_PHY_HDR_LEN)) {
++					PKTMSPDLENREF(p) -= 4 ;
++				}
++	
+ 			}
+ 		}
+ #endif
+@@ -33264,9 +33275,6 @@ skip_conv:
+ 			} else
+ #endif /* PKTC_INTRABSS */
+ 			{
+-#if defined(CPKTC) && defined(NCNB_CSKB)
+-				PKTMSPDLENREF(head) = 0;
+-#endif
+ 				wlc_recvdata_sendup(wlc, WLPKTTAGSCBGET(head), FALSE,
+ 					(struct ether_addr *)PKTDATA(wlc->osh, head), head);
+ 			}
+diff --git a/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+index 8e7feed..34202be 100755
+--- a/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -3864,7 +3864,11 @@ wlc_amsdu_pktc_deagg_hw(amsdu_info_t *ami, void **pp, wlc_rfc_t *rfc, uint16 *in
+ 		/* strip off FCS in last MSDU */
+ 		if (PKTNEXT(osh, newpkt) == NULL)
+ 			PKTFRAG_TRIM_TAILBYTES(osh, newpkt, DOT11_FCS_LEN, TAIL_BYTES_TYPE_FCS);
+-
++#ifdef NCNB_CSKB
++			if(likely(PKTMSPDDATA(osh,newpkt))) {
++                        	PKTMSPDLENREF(newpkt) -= 4;
++                	}
++#endif
+ 		/* there must be a limit to stop in order to prevent memory/stack overflow */
+ 		if (num_sf >= MAX_RX_SUBFRAMES) {
+ 			WL_ERROR(("%s: more than %d MSDUs !\n", __FUNCTION__, num_sf));
+diff --git a/main/src/wl/sys/wlc_rx.c b/main/src/wl/sys/wlc_rx.c
+index 3569506..1052f51 100644
+--- a/main/src/wl/sys/wlc_rx.c
++++ b/main/src/wl/sys/wlc_rx.c
+@@ -975,14 +975,16 @@ wlc_recv(wlc_info_t *wlc, void *p)
+ 		 * The latter drops the perimeter lock and anything can happen!
+ 		 */
+ #ifdef NCNB_CSKB
+-		if ((fc & FC_WEP) || ntoh16(*((uint16 *)(PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p)))) == ETHER_TYPE_802_1X) {
+-			if(likely(PKTMSPDDATA(osh,p))) {
+-				int datalen = PKTMSPDLEN(osh,p) - PKTMSPDOFST(osh,p);
+-				int ofstlen = D11_PHY_HDR_LEN + DOT11_A3_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN - (pad_present ? 2 : 0);
+-				memcpy(PKTDATA(osh,p) + ofstlen , PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p),datalen);
+-			}
+-		} 
+-		PKTMSPDLENREF(p) = 0;
++		if(likely(PKTMSPDDATA(osh,p))) {
++			uint16 ether_type = ntoh16(*((uint16 *)(PKTDATA(osh,p) + (ETHER_TYPE_OFST + ((fc & FC_WEP) ? (bsscfg && bsscfg->WPA_auth ? 8 : 4) : 0 )))));
++			if(((fc & FC_WEP) && !(wlc->ucode_extended_caps & (1 << C_UCODE_FEAT_DESC_KEY)) && (TKIP_BODY_WEP_SEED_OKAY(PKTDATA(osh,p)+TKIP_BODY_OFST))) ||	!(((FC_SUBTYPE(fc) == FC_SUBTYPE_DATA) || (FC_SUBTYPE(fc) == FC_SUBTYPE_QOS_DATA)) && 						(ether_type == ETHER_TYPE_IP || ether_type == ETHER_TYPE_IPV6) )) {
++				memcpy(PKTDATA(osh,p) + MIN_OFST - (pad_present ? 2 : 0) , PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p),PKTMSPDLEN(osh,p));
++				kfree(PKTMSPDDATA(osh,p));
++				PKTMSPDDATAREF(p) = NULL;
++				PKTMSPDLENREF(p) = 0;
++			} 
++		}
++
+ #endif
+ 		wlc_recvdata(wlc, osh, wrxh, p);
+ 	} else if ((FC_TYPE(fc) == FC_TYPE_MNG) || (FC_TYPE(fc) == FC_TYPE_CTL)) {
+@@ -994,9 +996,9 @@ wlc_recv(wlc_info_t *wlc, void *p)
+ 
+ #ifdef NCNB_CSKB
+ 		if(likely(PKTMSPDDATA(osh,p))) {
+-			int datalen = PKTMSPDLEN(osh,p) - PKTMSPDOFST(osh,p);
+-			int ofstlen = D11_PHY_HDR_LEN + DOT11_A3_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN - (pad_present ? 2 : 0);
+-			memcpy(PKTDATA(osh,p) + ofstlen , PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p),datalen);
++			memcpy(PKTDATA(osh,p) + MIN_OFST - (pad_present ? 2 : 0) , PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p),PKTMSPDLEN(osh,p));
++			kfree(PKTMSPDDATA(osh,p));
++			PKTMSPDDATAREF(p) = NULL;
+ 			PKTMSPDLENREF(p) = 0;
+ 		}
+ #endif
+@@ -1212,9 +1214,19 @@ wlc_recvdata(wlc_info_t *wlc, osl_t *osh, wlc_d11rxhdr_t *wrxh, void *p)
+ 	/* So adjust length of frag and not lcl pkt */
+ 	if (!f.isamsdu) {
+ 		PKTFRAG_TRIM_TAILBYTES(osh, f.p, DOT11_FCS_LEN, TAIL_BYTES_TYPE_FCS);
++#ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(osh,p))) {
++			PKTMSPDLENREF(p) -= 4;
++		}
++#endif
+ 	} else {
+ 		void *pt = pktlast(osh, f.p);
+ 		PKTFRAG_TRIM_TAILBYTES(osh, pt, DOT11_FCS_LEN, TAIL_BYTES_TYPE_FCS);
++#ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(osh,p))) {
++			PKTMSPDLENREF(pt) -= 4;
++		}
++#endif
+ 	}
+ 
+ 	if (MONITOR_ENAB(wlc) || PROMISC_ENAB(wlc->pub)) {
+@@ -2040,12 +2052,17 @@ wlc_recvdata(wlc_info_t *wlc, osl_t *osh, wlc_d11rxhdr_t *wrxh, void *p)
+ #endif
+ 
+ #ifdef NCNB_CSKB
+-       if(wep_enabled) {
+-               PKTMSPDOFSTREF(p) += 4 ;
+-               if (bsscfg->WPA_auth) {
+-                       PKTMSPDOFSTREF(p) += 4 ;
+-               }
+-       }
++  if(likely(PKTMSPDDATA(wlc->osh,p)) && wep_enabled) {
++	  PKTMSPDOFSTREF(p) += 4 ;
++	  PKTMSPDLENREF(p) -= 8 ;
++	  if (bsscfg->WPA_auth) {
++		  PKTMSPDOFSTREF(p) += 4 ;
++	  	  PKTMSPDLENREF(p) -= 8 ;
++		  if(TKIP_BODY_WEP_SEED_OKAY(PKTDATA(wlc->osh,p) + TKIP_BODY_OFST - D11_PHY_HDR_LEN)) {
++	  	  	  PKTMSPDLENREF(p) -= 4 ;
++		  }
++	  }
++  }
+ #endif
+ 
+ #ifdef WLAMPDU
+diff --git a/main/src/wl/sys/wlc_tx.c b/main/src/wl/sys/wlc_tx.c
+index b81c72f..7503ea1 100644
+--- a/main/src/wl/sys/wlc_tx.c
++++ b/main/src/wl/sys/wlc_tx.c
+@@ -4231,6 +4231,14 @@ wlc_prep_sdu(wlc_info_t *wlc, struct scb *scb, void **pkts, int *npkts, uint *fi
+ 		}
+ 	}
+ 
++#ifdef NCNB_CSKB
++	if(PKTMSPDDATA(osh, sdu) && is_tkip && !(wlc->ucode_extended_caps & (1 << C_UCODE_FEAT_DESC_KEY)) ) {
++		memcpy(PKTDATA(osh, sdu) + (PKTLEN(osh,sdu) - PKTMSPDLEN(osh, sdu)),PKTMSPDDATA(osh, sdu) +  PKTMSPDOFST(osh, sdu),PKTMSPDLEN(osh, sdu));
++		kfree(PKTMSPDDATA(osh, sdu));
++		PKTMSPDDATAREF(sdu) = NULL;
++		PKTMSPDLENREF(sdu) = 0;
++	}
++#endif
+ #ifdef WLENT_80211RAW_TX
+ 	} else {
+ 		/* ensure we have a valid (potentially null, with ALGO_OFF) key and key_info */
+-- 
+1.7.10
+

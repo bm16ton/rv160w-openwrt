@@ -1,0 +1,29 @@
+From 086f0c486252d3da3f6c1ba1f27ffe1cfc36a6ac Mon Sep 17 00:00:00 2001
+From: Subramanyam <“reddi.m@nxp.com”>
+Date: Thu, 14 May 2020 20:11:26 +0530
+Subject: [PATCH] Fix for BIO_write failure while testing with OpenVPN
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Signed-off-by: Subramanyam <“reddi.m@nxp.com”>
+---
+ crypto/engine/eng_cryptodev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/crypto/engine/eng_cryptodev.c b/crypto/engine/eng_cryptodev.c
+index fce151a..01e27bf 100644
+--- a/crypto/engine/eng_cryptodev.c
++++ b/crypto/engine/eng_cryptodev.c
+@@ -858,7 +858,7 @@ static int cryptodev_digest_update(EVP_MD_CTX *ctx, const void *data,
+     }
+ 
+     if (!count) {
+-        return (0);
++        return (1);
+     }
+ 
+     if (!(ctx->flags & EVP_MD_CTX_FLAG_ONESHOT)) {
+-- 
+2.7.4
+

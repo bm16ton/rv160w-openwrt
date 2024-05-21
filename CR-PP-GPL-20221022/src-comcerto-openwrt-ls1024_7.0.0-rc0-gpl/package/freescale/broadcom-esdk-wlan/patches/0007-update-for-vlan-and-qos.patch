@@ -1,0 +1,62 @@
+From 998c1ff0774f5702ee98a742f40ed8ae9eed5a0c Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 17:44:35 +0800
+Subject: [PATCH 07/63] update-for-vlan-and-qos
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wl_linux.c |    4 ++--
+ main/src/wl/sys/wlc.c      |    9 +++++++--
+ 2 files changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index 254f6e9..9a1feb5 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -518,12 +518,12 @@ int wl_txq_thresh = WL_TXQ_THRESH;
+ module_param(wl_txq_thresh, int, 0);
+ 
+ #ifdef WLENT_VLAN
+-static int wlent_vlan_enabled = 0;
++static int wlent_vlan_enabled = 1;
+ module_param(wlent_vlan_enabled, int, 0);
+ #endif
+ 
+ #ifdef WLENT_QOS
+-static int wlent_qos_enabled = 0;
++static int wlent_qos_enabled = 1;
+ module_param(wlent_qos_enabled, int, 0);
+ #endif
+ 
+diff --git a/main/src/wl/sys/wlc.c b/main/src/wl/sys/wlc.c
+index 5ea99da..4f4a4ae 100755
+--- a/main/src/wl/sys/wlc.c
++++ b/main/src/wl/sys/wlc.c
+@@ -412,6 +412,9 @@
+ #ifdef WLC_SW_DIVERSITY
+ #include <wlc_swdiv.h>
+ #endif
++
++#include <wl_linux.h>
++
+ /*
+  * buffer length needed for wlc_format_ssid
+  * 32 SSID chars, max of 4 chars for each SSID char "\xFF", plus NULL.
+@@ -9698,10 +9701,12 @@ BCMATTACHFN(wlc_attach)(void *wl, uint16 vendor, uint16 device, uint unit, uint
+ 	wlc_info_init(wlc, unit);
+ 
+ #ifdef WLENT_VLAN
+-	wlc->wlent_vlan_enabled = getintvar(NULL, "wlent_vlan_enabled");
++//	wlc->wlent_vlan_enabled = getintvar(NULL, "wlent_vlan_enabled");
++	wlc->wlent_vlan_enabled = (wl_info_t *)(wlc->wl)->wlent_vlan_enabled;
+ #endif
+ #ifdef WLENT_QOS
+-	wlc->wlent_qos_enabled = getintvar(NULL, "wlent_qos_enabled");
++//	wlc->wlent_qos_enabled = getintvar(NULL, "wlent_qos_enabled");
++	wlc->wlent_qos_enabled = (wl_info_t *)(wlc->wl)->wlent_qos_enabled;
+ #endif
+ #ifdef  WLENT_PRS_RTX_LIMIT
+     wlc->probe_rtx_limit = 4;
+-- 
+1.7.10
+

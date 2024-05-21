@@ -1,0 +1,13 @@
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index 8da6f1a..b78fcd3 100755
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -78,7 +78,7 @@ wps_osl_restart_wl()
+ 	WpsSleep(1);
+ 
+ 	/* restart all process */
+-	system("pkill -12 wps_daemon");
++	system("start-stop-daemon -K -q -s SIGUSR2 -n wps_daemon");
+ }
+ 
+ int

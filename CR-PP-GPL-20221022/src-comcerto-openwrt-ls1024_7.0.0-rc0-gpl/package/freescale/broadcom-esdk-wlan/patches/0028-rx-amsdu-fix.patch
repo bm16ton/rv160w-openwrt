@@ -1,0 +1,229 @@
+From c0b94e66b9ecccf2acb39eee5586ad9d04a3a14d Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:38:49 +0800
+Subject: [PATCH 28/63] rx-amsdu-fix
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/shared/hnddma.c    |    4 +--
+ main/src/wl/sys/wlc.c       |    4 ---
+ main/src/wl/sys/wlc_amsdu.c |   73 ++++++++++++++++++++++++++++++++++++-------
+ main/src/wl/sys/wlc_rx.c    |    2 +-
+ 4 files changed, 64 insertions(+), 19 deletions(-)
+
+diff --git a/main/src/shared/hnddma.c b/main/src/shared/hnddma.c
+index 09429f4..f65152e 100644
+--- a/main/src/shared/hnddma.c
++++ b/main/src/shared/hnddma.c
+@@ -1840,9 +1840,9 @@ next_frame:
+ 		PKTMSPDOFSTREF(head) = di->rxoffset + MIN_OFST;
+ 		/* MSPDOFST + A3/A4 HDR */
+ #ifdef CMEMCPY
+-		__memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head));
++		__memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + 28);
+ #else
+-		memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head));
++		memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + 28);
+ #endif
+ 		PKTMSPDLENREF(head) = pkt_len - PKTMSPDOFSTREF(head);
+ 	}
+diff --git a/main/src/wl/sys/wlc.c b/main/src/wl/sys/wlc.c
+index 62c58b3..3347eee 100755
+--- a/main/src/wl/sys/wlc.c
++++ b/main/src/wl/sys/wlc.c
+@@ -32754,10 +32754,6 @@ wlc_sendup_chain(wlc_info_t *wlc, void *head)
+ 			if (bsscfg->WPA_auth) {
+ 				PKTMSPDOFSTREF(p) += 4 ;
+ 				PKTMSPDLENREF(p) -= 8 ;
+-				if(TKIP_BODY_WEP_SEED_OKAY(PKTDATA(wlc->osh,p) + TKIP_BODY_OFST - D11_PHY_HDR_LEN)) {
+-					PKTMSPDLENREF(p) -= 4 ;
+-				}
+-	
+ 			}
+ 		}
+ #endif
+diff --git a/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+index 34202be..43ed118 100755
+--- a/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -2117,7 +2117,9 @@ wlc_amsdu_pktc_agg(amsdu_info_t *ami, struct scb *scb, void *p, void *n,
+ 			PKTSETLEN(wlc->osh, p, pkttotlen(wlc->osh, p) + pad);
+ 			totlen += pad;
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+-			PKTMSPDLENREF(p) += pad;
++			if(likely(PKTMSPDDATA(wlc->osh,p))){
++				PKTMSPDLENREF(p) += pad;
++			}
+ #endif
+ #ifdef WLCNT
+ 			WLCNTINCR(ami->cnt->tx_padding_in_tail);
+@@ -2151,8 +2153,10 @@ wlc_amsdu_pktc_agg(amsdu_info_t *ami, struct scb *scb, void *p, void *n,
+ 			totlen += pad;
+ 			pad_at_head = FALSE;
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+-			PKTMSPDOFSTREF(p1) -= pad;
+-			PKTMSPDLENREF(p1) += pad;
++			if(likely(PKTMSPDDATA(wlc->osh,p1))){
++				PKTMSPDOFSTREF(p1) -= pad;
++				PKTMSPDLENREF(p1) += pad;
++			}
+ #endif
+ 		}
+ 		p = p1;
+@@ -2167,8 +2171,10 @@ wlc_amsdu_pktc_agg(amsdu_info_t *ami, struct scb *scb, void *p, void *n,
+ 		totlen += pad;
+ 		pad_at_head = FALSE;
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+-		PKTMSPDOFSTREF(p1) -= pad;
+-		PKTMSPDLENREF(p1) += pad;
++		if(likely(PKTMSPDDATA(wlc->osh,p1))){
++			PKTMSPDOFSTREF(p1) -= pad;
++			PKTMSPDLENREF(p1) += pad;
++		}
+ #endif
+ 	}
+ 
+@@ -2437,7 +2443,9 @@ wlc_amsdu_agg_close(amsdu_info_t *ami, struct scb *scb, uint tid)
+ 			amsduprio->amsdu_agg_padlast);
+ 		amsduprio->amsdu_agg_bytes -= amsduprio->amsdu_agg_padlast;
+ #ifdef NCNB_CSKB
+-		PKTMSPDLENREF(amsduprio->amsdu_agg_ptail) -= amsduprio->amsdu_agg_padlast;
++		if(likely(PKTMSPDDATA(osh,amsduprio->amsdu_agg_ptail))){
++			PKTMSPDLENREF(amsduprio->amsdu_agg_ptail) -= amsduprio->amsdu_agg_padlast;
++		}
+ #endif
+ 		WL_AMSDU(("wlc_amsdu_agg_close: strip off padlast %d\n",
+ 			amsduprio->amsdu_agg_padlast));
+@@ -2802,7 +2810,9 @@ wlc_amsdu_agg_append(amsdu_info_t *ami, struct scb *scb, void *p, uint tid,
+ 				PKTLEN(osh, amsduprio->amsdu_agg_ptail) + pad);
+ 			totlen += pad;
+ #ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(osh,amsduprio->amsdu_agg_ptail))){
+ 			PKTMSPDLENREF(amsduprio->amsdu_agg_ptail) += pad;
++		}
+ #endif
+ #ifdef WLCNT
+ 			WLCNTINCR(ami->cnt->tx_padding_in_tail);
+@@ -3184,7 +3194,10 @@ wlc_recvamsdu(amsdu_info_t *ami, wlc_d11rxhdr_t *wrxh, void *p, uint16 *padp, bo
+ 		}
+ 
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+-		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) + *padp + ETHER_HDR_LEN;
++		if(likely(PKTMSPDDATA(osh,p))){
++			PKTMSPDOFSTREF(p) += (ETHER_HDR_LEN + *padp);
++			PKTMSPDLENREF(p) -= (ETHER_HDR_LEN + *padp);
++		}
+ #endif
+ 
+ 		WL_AMSDU(("wlc_recvamsdu: first A-MSDU buffer\n"));
+@@ -3221,7 +3234,10 @@ wlc_recvamsdu(amsdu_info_t *ami, wlc_d11rxhdr_t *wrxh, void *p, uint16 *padp, bo
+ 		}
+ 
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+-		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) - ( ETHER_HDR_LEN + pad);
++		if(likely(PKTMSPDDATA(osh,p))){
++			PKTMSPDOFSTREF(p) -= (*padp + ETHER_HDR_LEN);
++			PKTMSPDLENREF(p) += (*padp + ETHER_HDR_LEN);
++		}
+ #endif
+ 
+ 		ASSERT(deagg->amsdu_deagg_ptail);
+@@ -3258,7 +3274,10 @@ wlc_recvamsdu(amsdu_info_t *ami, wlc_d11rxhdr_t *wrxh, void *p, uint16 *padp, bo
+ 		}
+ 
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+-		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) - (ETHER_HDR_LEN + pad);
++		if(likely(PKTMSPDDATA(osh,p))){
++			PKTMSPDOFSTREF(p) -= (*padp + ETHER_HDR_LEN);
++			PKTMSPDLENREF(p) += (*padp + ETHER_HDR_LEN);
++		}
+ #endif
+ 		ASSERT(deagg->amsdu_deagg_ptail);
+ 		PKTSETNEXT(osh, deagg->amsdu_deagg_ptail, p);
+@@ -3286,7 +3305,10 @@ wlc_recvamsdu(amsdu_info_t *ami, wlc_d11rxhdr_t *wrxh, void *p, uint16 *padp, bo
+ 		deagg->first_pad = *padp;
+ 
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+-		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) + *padp + ETHER_HDR_LEN;
++		if(likely(PKTMSPDDATA(osh,p))){
++			PKTMSPDOFSTREF(p) += (ETHER_HDR_LEN + *padp);
++			PKTMSPDLENREF(p) -= (ETHER_HDR_LEN + *padp);
++		}
+ #endif
+ 
+ 		if (!wlc_amsdu_deagg_open(ami, fifo, p, h, pktlen_w_plcp)) {
+@@ -3674,6 +3696,18 @@ wlc_amsdu_deagg_hw(amsdu_info_t *ami, struct scb *scb, struct wlc_frminfo *f)
+ 			/* set total length to sflen */
+ 			PKTSETFRAGUSEDLEN(osh, newpkt, (sflen - PKTLEN(osh, newpkt)));
+ 		} else {
++#if defined(NCNB_CSKB) && defined(CPKTC)
++			if(likely(PKTMSPDDATA(osh,newpkt))) {
++				PKTMSPDLENREF(newpkt) -= (PKTLEN(osh,newpkt) - sflen);
++				if(scb && WSEC_ENABLED(scb->bsscfg->wsec)) {
++					if(PKTNEXT(osh, newpkt) != NULL) {
++						PKTMSPDLENREF(newpkt) += 8;
++					} else if(num_sf !=0 && PKTNEXT(osh, newpkt) == NULL) {
++						PKTMSPDLENREF(newpkt) -= 8;
++					}
++				}
++			}
++#endif
+ 			PKTSETLEN(osh, newpkt, sflen);
+ 		}
+ 
+@@ -3850,7 +3884,10 @@ wlc_amsdu_pktc_deagg_hw(amsdu_info_t *ami, void **pp, wlc_rfc_t *rfc, uint16 *in
+ #ifdef WLENT_PER_VAP_PKTC
+ 	ctf_brc_hot_t *brc_hot = NULL;
+ #endif
+-
++#if defined(NCNB_CSKB) && defined(CPKTC)
++	struct scb *scb = NULL;
++	scb = WLPKTTAGSCBGET(*pp);
++#endif
+ 	osh = ami->pub->osh;
+ 	newpkt = tail = head = *pp;
+ 	resid = pkttotlen(osh, head) - DOT11_FCS_LEN;
+@@ -3864,7 +3901,7 @@ wlc_amsdu_pktc_deagg_hw(amsdu_info_t *ami, void **pp, wlc_rfc_t *rfc, uint16 *in
+ 		/* strip off FCS in last MSDU */
+ 		if (PKTNEXT(osh, newpkt) == NULL)
+ 			PKTFRAG_TRIM_TAILBYTES(osh, newpkt, DOT11_FCS_LEN, TAIL_BYTES_TYPE_FCS);
+-#ifdef NCNB_CSKB
++#if defined(NCNB_CSKB) && defined(CPKTC)
+ 			if(likely(PKTMSPDDATA(osh,newpkt))) {
+                         	PKTMSPDLENREF(newpkt) -= 4;
+                 	}
+@@ -3919,6 +3956,18 @@ wlc_amsdu_pktc_deagg_hw(amsdu_info_t *ami, void **pp, wlc_rfc_t *rfc, uint16 *in
+ 		if (PKTFRAGUSEDLEN(osh, newpkt)) {
+ 			PKTSETFRAGUSEDLEN(osh, newpkt, (sflen - PKTLEN(osh, newpkt)));
+ 		} else {
++#if defined(NCNB_CSKB) && defined(CPKTC)
++			if(likely(PKTMSPDDATA(osh,newpkt))) {
++				PKTMSPDLENREF(newpkt) += (PKTLEN(osh,newpkt) - sflen);
++				if(scb && WSEC_ENABLED(scb->bsscfg->wsec)) {
++					if(PKTNEXT(osh, newpkt) != NULL) {
++						PKTMSPDLENREF(newpkt) += 8;
++					} else if(num_sf !=0 && PKTNEXT(osh, newpkt) == NULL) {
++						PKTMSPDLENREF(newpkt) -= 8;
++					}
++				}
++			}
++#endif
+ 			PKTSETLEN(osh, newpkt, sflen);
+ 		}
+ 
+diff --git a/main/src/wl/sys/wlc_rx.c b/main/src/wl/sys/wlc_rx.c
+index 1052f51..f42ff28 100644
+--- a/main/src/wl/sys/wlc_rx.c
++++ b/main/src/wl/sys/wlc_rx.c
+@@ -1223,7 +1223,7 @@ wlc_recvdata(wlc_info_t *wlc, osl_t *osh, wlc_d11rxhdr_t *wrxh, void *p)
+ 		void *pt = pktlast(osh, f.p);
+ 		PKTFRAG_TRIM_TAILBYTES(osh, pt, DOT11_FCS_LEN, TAIL_BYTES_TYPE_FCS);
+ #ifdef NCNB_CSKB
+-		if(likely(PKTMSPDDATA(osh,p))) {
++		if(likely(PKTMSPDDATA(osh,pt))) {
+ 			PKTMSPDLENREF(pt) -= 4;
+ 		}
+ #endif
+-- 
+1.7.10
+

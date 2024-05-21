@@ -1,0 +1,4407 @@
+From fed7df2fb51b307d29a7c20ff893d632e7a0fd7f Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 17:40:35 +0800
+Subject: [PATCH 03/63] pp-project-bringup-support
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/driver/Makefile                    |   20 ++
+ main/components/driver/bcm57xx/Makefile            |   48 +++++
+ main/components/driver/ctf/Makefile                |   58 ++++++
+ main/components/driver/ctf/ctf_ksyms.sh            |   26 +++
+ main/components/driver/dhd/Makefile                |   62 ++++++
+ main/components/driver/dpsta/Makefile              |   54 +++++
+ main/components/driver/dpsta/dpsta_ksyms.sh        |   30 +++
+ main/components/driver/emf/Makefile                |   58 ++++++
+ main/components/driver/et/Makefile                 |   98 +++++++++
+ main/components/driver/hnd/Kconfig                 |  137 ++++++++++++
+ main/components/driver/hnd/Makefile                |  192 +++++++++++++++++
+ main/components/driver/hnd/shared_ksyms.sh         |   30 +++
+ main/components/driver/igs/Makefile                |   59 ++++++
+ main/components/driver/wl/Makefile                 |   81 ++++++++
+ main/components/driver/wl/wl_ap/Makefile           |   45 ++++
+ main/components/driver/wl/wl_ap_onchip_g/Makefile  |   45 ++++
+ main/components/driver/wl/wl_ap_sdstd/Makefile     |   39 ++++
+ main/components/driver/wl/wl_apsta/Makefile        |   47 +++++
+ .../driver/wl/wl_apsta_onchip_g/Makefile           |   45 ++++
+ main/components/driver/wl/wl_dngl/Makefile         |   39 ++++
+ .../components/driver/wl/wl_dngl_onchip_g/Makefile |   39 ++++
+ main/components/driver/wl/wl_generic.mk            |  219 ++++++++++++++++++++
+ main/components/driver/wl/wl_high/Makefile         |   49 +++++
+ main/components/driver/wl/wl_hnd.mk                |  192 +++++++++++++++++
+ main/components/driver/wl/wl_sta/Makefile          |   45 ++++
+ main/components/driver/wl/wl_sta_onchip_g/Makefile |   45 ++++
+ main/components/driver/wl/wlconf.c                 |    1 +
+ main/components/driver/wl/wlconf.h                 |  106 ++++++++++
+ main/components/driver/wl_common.mk                |   79 +++++++
+ main/components/driver/wl_rsdb/Makefile            |   76 +++++++
+ main/components/driver/wl_rsdb/wl_ap/Makefile      |   45 ++++
+ .../driver/wl_rsdb/wl_ap_onchip_g/Makefile         |   45 ++++
+ .../components/driver/wl_rsdb/wl_ap_sdstd/Makefile |   39 ++++
+ main/components/driver/wl_rsdb/wl_apsta/Makefile   |   47 +++++
+ .../driver/wl_rsdb/wl_apsta_onchip_g/Makefile      |   45 ++++
+ main/components/driver/wl_rsdb/wl_dngl/Makefile    |   39 ++++
+ .../driver/wl_rsdb/wl_dngl_onchip_g/Makefile       |   39 ++++
+ main/components/driver/wl_rsdb/wl_generic.mk       |  204 ++++++++++++++++++
+ main/components/driver/wl_rsdb/wl_high/Makefile    |   49 +++++
+ main/components/driver/wl_rsdb/wl_sta/Makefile     |   45 ++++
+ .../driver/wl_rsdb/wl_sta_onchip_g/Makefile        |   45 ++++
+ main/components/driver/wl_rsdb/wlconf.c            |    1 +
+ main/components/router/.config                     |   11 +-
+ main/components/router/Makefile                    |  199 +++++++++++++++++-
+ main/components/router/shared/bcmconfig.h          |   23 +-
+ main/components/router/shared/shutils.c            |    2 +-
+ main/src/Makefile                                  |    8 +
+ main/src/build-rv160w_260w.sh                      |  112 ++++++++++
+ main/src/shared/linux_osl.c                        |   29 ++-
+ main/src/wl/config/wlconfig_lx_router_apsta        |    8 +-
+ main/src/wl/sys/wl_linux.c                         |   15 +-
+ main/src/wl/sys/wlc_hs20.c                         |    2 +-
+ main/src/wl/sys/wlc_ie_mgmt_lib.c                  |    2 +-
+ sys/src/wl/exe/GNUmakefile                         |    1 +
+ 54 files changed, 3091 insertions(+), 28 deletions(-)
+ create mode 100755 main/components/driver/Makefile
+ create mode 100755 main/components/driver/bcm57xx/Makefile
+ create mode 100644 main/components/driver/ctf/Makefile
+ create mode 100644 main/components/driver/ctf/ctf_ksyms.sh
+ create mode 100644 main/components/driver/dhd/Makefile
+ create mode 100644 main/components/driver/dpsta/Makefile
+ create mode 100755 main/components/driver/dpsta/dpsta_ksyms.sh
+ create mode 100644 main/components/driver/emf/Makefile
+ create mode 100644 main/components/driver/et/Makefile
+ create mode 100644 main/components/driver/hnd/Kconfig
+ create mode 100644 main/components/driver/hnd/Makefile
+ create mode 100755 main/components/driver/hnd/shared_ksyms.sh
+ create mode 100644 main/components/driver/igs/Makefile
+ create mode 100644 main/components/driver/wl/Makefile
+ create mode 100644 main/components/driver/wl/wl_ap/Makefile
+ create mode 100644 main/components/driver/wl/wl_ap_onchip_g/Makefile
+ create mode 100644 main/components/driver/wl/wl_ap_sdstd/Makefile
+ create mode 100644 main/components/driver/wl/wl_apsta/Makefile
+ create mode 100644 main/components/driver/wl/wl_apsta_onchip_g/Makefile
+ create mode 100644 main/components/driver/wl/wl_dngl/Makefile
+ create mode 100644 main/components/driver/wl/wl_dngl_onchip_g/Makefile
+ create mode 100644 main/components/driver/wl/wl_generic.mk
+ create mode 100644 main/components/driver/wl/wl_high/Makefile
+ create mode 100644 main/components/driver/wl/wl_hnd.mk
+ create mode 100644 main/components/driver/wl/wl_sta/Makefile
+ create mode 100644 main/components/driver/wl/wl_sta_onchip_g/Makefile
+ create mode 100644 main/components/driver/wl/wlconf.c
+ create mode 100644 main/components/driver/wl/wlconf.h
+ create mode 100644 main/components/driver/wl_common.mk
+ create mode 100644 main/components/driver/wl_rsdb/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_ap/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_ap_onchip_g/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_ap_sdstd/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_apsta/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_apsta_onchip_g/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_dngl/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_dngl_onchip_g/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_generic.mk
+ create mode 100644 main/components/driver/wl_rsdb/wl_high/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_sta/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wl_sta_onchip_g/Makefile
+ create mode 100644 main/components/driver/wl_rsdb/wlconf.c
+ create mode 100755 main/src/build-rv160w_260w.sh
+
+diff --git a/main/components/driver/Makefile b/main/components/driver/Makefile
+new file mode 100755
+index 0000000..f5ce2a3
+--- /dev/null
++++ b/main/components/driver/Makefile
+@@ -0,0 +1,20 @@
++#
++# Broadcom HND devices
++#
++
++#KBUILD_CFLAGS += -DHAVE_NET_DEVICE_OPS
++
++
++obj-$(CONFIG_BCM_CTF) += ctf/
++obj-$(CONFIG_DHDAP) += dhd/
++obj-$(CONFIG_DPSTA) += dpsta/
++obj-$(CONFIG_ET) += et/
++obj-$(CONFIG_BCM57XX) += bcm57xx/
++ifeq ($(WLENT_CONVERGED_PKG),1)
++obj-$(CONFIG_WL) += wl_rsdb/
++else
++obj-$(CONFIG_WL) += wl/
++endif
++obj-$(CONFIG_EMF) += emf/ igs/
++
++
+diff --git a/main/components/driver/bcm57xx/Makefile b/main/components/driver/bcm57xx/Makefile
+new file mode 100755
+index 0000000..d442dd8
+--- /dev/null
++++ b/main/components/driver/bcm57xx/Makefile
+@@ -0,0 +1,48 @@
++#
++# Broadcom BCM57XX Gigabit Ethernet driver make file.
++#
++# $Id: Makefile,v 1.3 2008-05-02 22:49:54 $
++#
++
++B57SRCDIR := ../../../../../bcm57xx
++SHAREDSRCDIR := ../../../../../shared
++
++obj-$(CONFIG_BCM57XX) := bcm57xx.o
++
++bcm57xx-objs := $(B57SRCDIR)/linux/b57um.o $(B57SRCDIR)/linux/b57proc.o \
++		$(B57SRCDIR)/linux/b57diag.o \
++		$(B57SRCDIR)/sys/tigon3.o $(B57SRCDIR)/sys/autoneg.o \
++                $(B57SRCDIR)/sys/5701rls.o $(B57SRCDIR)/sys/tcp_seg.o \
++		$(SHAREDSRCDIR)/hndgige.o
++
++# If source directory src/bcm57xx exists, build objects from there
++ifneq ($(wildcard $(src)/$(B57SRCDIR)/sys),)
++
++EXTRA_CFLAGS += -DDBG=0 -DT3_JUMBO_RCV_RCB_ENTRY_COUNT=256 -DNICE_SUPPORT
++EXTRA_CFLAGS += -DPCIX_TARGET_WORKAROUND=1 -DINCLUDE_TBI_SUPPORT -DINCLUDE_5701_AX_FIX=1
++EXTRA_CFLAGS += -I$(src)/$(B57SRCDIR)/linux -I$(src)/$(B57SRCDIR)/sys \
++		-I$(src)/$(B57SRCDIR)/include
++
++EXTRA_CFLAGS += -DLINUX_HYBRID_POSTPROCESSING_REMOVAL
++# Otherwise, use object module(s) in this directory
++else
++
++bcm57xx-objs := $(B57SRCDIR)/linux/bcm57xx.o
++
++endif
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++else
++# Normal makefile
++KERNELDIR := ../../../../../linux/linux-2.6
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++endif
++
++clean-files += $(B57SRCDIR)/sys/*.o $(B57SRCDIR)/sys/.*.o.cmd \
++	       $(B57SRCDIR)/linux/*.o $(B57SRCDIR)/linux/.*.o.cmd \
++	       $(SHAREDSRCDIR)/hndgige.o $(SHAREDSRCDIR)/.hndgige.o.cmd
+diff --git a/main/components/driver/ctf/Makefile b/main/components/driver/ctf/Makefile
+new file mode 100644
+index 0000000..110d7d2
+--- /dev/null
++++ b/main/components/driver/ctf/Makefile
+@@ -0,0 +1,58 @@
++#
++# Makefile for the Broadcom CTF
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.1 2009-10-27 01:27:44 $
++#
++
++obj-${CONFIG_BCM_CTF} := ctf.o
++
++CTF_BASE_DIR := $(firstword $(wildcard ../../../../components/router/ctf	\
++                                       ../../../../src/router/ctf))
++CTFSRC := ../../../$(CTF_BASE_DIR)
++CTFOBJ := $(CTFSRC)/hndctf.o $(CTFSRC)/hndctf_linux.o
++SYMOBJ := $(CTFSRC)/hndctf.o
++
++ifeq ($(CONFIG_BUZZZ_FUNC),y)
++subdir-ccflags-y += -O0 -fno-inline -finstrument-functions
++endif # CONFIG_BUZZZ_FUNC
++
++# Search for sources under src/router/ctf
++ifneq (,$(wildcard $(src)/$(CTFSRC)/*.c))
++  EXTRA_CFLAGS += -I$(src)/$(CTFSRC)/../../router/ctf -DHNDCTF
++  ctf-objs := $(CTFOBJ) ctf_ksyms.o
++else
++  ctf-objs := $(CTFSRC)/linux/ctf.o
++endif
++
++ifeq (,${KERNELRELEASE})
++  # Normal makefile
++  KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++
++  .PHONY: all clean
++  all clean :
++	  +$(MAKE) -C $(KERNELDIR) M=`pwd` $@
++endif
++
++PHONY += $(src)/ctf_ksyms.c
++
++quiet_cmd_ksyms = CALL    $<
++      cmd_ksyms = $(CONFIG_SHELL) -e $< $(src)/$(SYMOBJ) > $@
++
++$(src)/ctf_ksyms.c: $(src)/ctf_ksyms.sh $(src)/$(SYMOBJ) FORCE
++	$(call cmd,ksyms)
++
++clean-files += $(CTFSRC)/*.o $(CTFSRC)/.*.o.cmd
+diff --git a/main/components/driver/ctf/ctf_ksyms.sh b/main/components/driver/ctf/ctf_ksyms.sh
+new file mode 100644
+index 0000000..3f1f33e
+--- /dev/null
++++ b/main/components/driver/ctf/ctf_ksyms.sh
+@@ -0,0 +1,26 @@
++#!/bin/sh
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.      
++#       
++# Permission to use, copy, modify, and/or distribute this software for any      
++# purpose with or without fee is hereby granted, provided that the above      
++# copyright notice and this permission notice appear in all copies.      
++#       
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES      
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF      
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY      
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES      
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION      
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN      
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.      
++#
++# $Id: ctf_ksyms.sh,v 1.1 2009-10-27 01:27:44 $
++#
++
++cat <<EOF
++#include <ctf/hndctf.h>
++EOF
++
++for file in $* ; do
++    ${NM} $file | sed -ne 's/[0-9A-Fa-f]* [DRT] \([^ ]*\)/EXPORT_SYMBOL(\1);/p'
++done
+diff --git a/main/components/driver/dhd/Makefile b/main/components/driver/dhd/Makefile
+new file mode 100644
+index 0000000..1a218ff
+--- /dev/null
++++ b/main/components/driver/dhd/Makefile
+@@ -0,0 +1,62 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.13 2010-12-13 20:23:49 $
++#
++TARGET := dhd
++obj-$(CONFIG_DHDAP) := $(TARGET).o
++
++ifndef SRCBASE_DHD
++    SRCBASE_DHD := dhd/src
++else
++    SRCBASE_DHD := $(subst $(dir $(patsubst %/,%,$(dir $(SRCBASE_DHD)))),,$(SRCBASE_DHD))
++endif
++
++SRCBASE_OFFSET := ../../../../../../../../$(SRCBASE_DHD)
++DHDMAKEFILE    := $(SRCBASE)/../../$(SRCBASE_DHD)/dhd/config/dhd_router.mk
++
++REBUILD_DHD_MODULE=$(shell if [ -d "$(SRCBASE)/../../$(SRCBASE_DHD)/dhd/sys" ]; then echo 1; else echo 0; fi)
++
++# If source directory (dhd/src/dhd/sys) exists then build dhd, otherwise use pre-builts
++ifeq ($(REBUILD_DHD_MODULE),1)
++
++    ifeq ($(CONFIG_BUZZZ_FUNC),y)
++        subdir-ccflags-y += -O0 -fno-inline -finstrument-functions
++    endif # CONFIG_BUZZZ_FUNC
++
++    # Include master configuration from dhd makefile
++    include $(DHDMAKEFILE)
++
++    # Fix the include paths for DHD. DHD gets built from a
++    # different source tree.
++    KBUILD_CFLAGS_REMOVE := -I$(SRCBASE)/include
++    KBUILD_CFLAGS_REMOVE += -I$(SRCBASE)/common/include
++    KBUILD_CFLAGS_REMOVE += $(WLAN_ComponentIncPath)
++    KBUILD_CFLAGS_REMOVE += $(WLAN_StdIncPathA)
++
++    KBUILD_CFLAGS   := $(filter-out $(KBUILD_CFLAGS_REMOVE), $(KBUILD_CFLAGS))
++
++    # dhd-objs is for linking to dhd.o
++    $(TARGET)-objs := $(DHD_OBJS)
++
++else # Use prebuilt modules
++
++    prebuilt := dhd.o
++    $(TARGET)-objs := $(SRCBASE_OFFSET)/dhd/linux/$(prebuilt)
++    obj-$(CONFIG_DHDAP) := $(TARGET).o
++
++endif
+diff --git a/main/components/driver/dpsta/Makefile b/main/components/driver/dpsta/Makefile
+new file mode 100644
+index 0000000..d145c13
+--- /dev/null
++++ b/main/components/driver/dpsta/Makefile
+@@ -0,0 +1,54 @@
++#
++# Makefile for the Dualband Proxy STA
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile 517800 2014-11-26 19:35:30Z $
++#
++
++obj-${CONFIG_DPSTA} := dpsta.o
++
++DPSTA_BASE_DIR := $(firstword $(wildcard ../../../../components/router/dpsta	\
++                                         ../../../../src/router/dpsta))
++DPSTASRC := ../../../$(DPSTA_BASE_DIR)
++DPSTAOBJ := $(DPSTASRC)/dpsta_linux.o
++SYMOBJ := $(DPSTASRC)/dpsta_linux.o
++
++# Search for sources under src/router/dpsta
++ifneq (,$(wildcard $(src)/$(DPSTASRC)/*.c))
++  EXTRA_CFLAGS += -I$(src)/$(DPSTASRC)/../../router/dpsta
++  dpsta-objs := $(DPSTAOBJ) dpsta_ksyms.o
++else
++  dpsta-objs := $(DPSTASRC)/linux/dpsta.o
++endif
++
++ifeq (,${KERNELRELEASE})
++  # Normal makefile
++  KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++
++  .PHONY: all clean
++  all clean :
++	  +$(MAKE) -C $(KERNELDIR) M=`pwd` $@
++endif
++
++PHONY += $(src)/dpsta_ksyms.c
++
++quiet_cmd_ksyms = CALL    $<
++      cmd_ksyms = $(CONFIG_SHELL) -e $< $(src)/$(SYMOBJ) > $@
++
++$(src)/dpsta_ksyms.c: $(src)/dpsta_ksyms.sh $(src)/$(SYMOBJ) FORCE
++	$(call cmd,ksyms)
++
++clean-files += $(DPSTASRC)/*.o $(DPSTASRC)/.*.o.cmd
+diff --git a/main/components/driver/dpsta/dpsta_ksyms.sh b/main/components/driver/dpsta/dpsta_ksyms.sh
+new file mode 100755
+index 0000000..d286c1b
+--- /dev/null
++++ b/main/components/driver/dpsta/dpsta_ksyms.sh
+@@ -0,0 +1,30 @@
++#!/bin/sh
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.      
++#       
++# Permission to use, copy, modify, and/or distribute this software for any      
++# purpose with or without fee is hereby granted, provided that the above      
++# copyright notice and this permission notice appear in all copies.      
++#       
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES      
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF      
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY      
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES      
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION      
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN      
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.      
++#
++# $Id$
++#
++
++cat <<EOF
++#include <linux/version.h>
++#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
++#include <linux/config.h>
++#endif
++#include <linux/module.h>
++EOF
++
++for file in $* ; do
++    ${NM} $file | grep -v [{init}{cleanup]_module | sed -ne 's/[0-9A-Fa-f]* [BDRT] \([^ ]*\)/extern void \1; EXPORT_SYMBOL(\1);/p'
++done
+diff --git a/main/components/driver/emf/Makefile b/main/components/driver/emf/Makefile
+new file mode 100644
+index 0000000..c8e3a19
+--- /dev/null
++++ b/main/components/driver/emf/Makefile
+@@ -0,0 +1,58 @@
++#
++# Makefile for the Broadcom EMF Layer
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.3 2008-08-13 20:20:16 $
++#
++
++# Choose BASE_DIR based on where router resides - src or components
++EMF_BASE_DIR := $(firstword $(wildcard ../../../../components/router/emf	\
++                                       ../../../../src/router/emf))
++EMFDIR       := ../../../$(EMF_BASE_DIR)
++EMFSRCDIR    := $(EMFDIR)/emf
++EMFCSRCDIR   := ../../../../../../../src/emf/emf
++
++SRCBASE_ROUTER ?= $(SRCBASE)/router
++
++EMF_OBJS := $(EMFCSRCDIR)/emfc.o $(EMFSRCDIR)/emf_linux.o
++
++ifeq ($(CONFIG_BUZZZ_FUNC),y)
++subdir-ccflags-y += -O0 -fno-inline -finstrument-functions
++endif # CONFIG_BUZZZ_FUNC
++
++# Search for sources under src/router/emf/emf
++ifneq ($(wildcard $(src)/$(EMFSRCDIR)),)
++    EXTRA_CFLAGS += -I$(SRCBASE_ROUTER)/emf/emf -I$(SRCBASE_ROUTER)/emf/igs
++    EXTRA_CFLAGS += -I$(SRCBASE)/include/emf/emf -I$(SRCBASE)/include/emf/igs
++    emf-objs := $(EMF_OBJS)
++else
++    emf-objs := $(EMFDIR)/emf.o
++endif
++
++obj-$(CONFIG_EMF) := emf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++endif
++
++clean-files += $(EMFCSRCDIR)/*.o $(EMFSRCDIR)/*.o $(EMFCSRCDIR)/.*.o.cmd $(EMFSRCDIR)/.*.o.cmd
+diff --git a/main/components/driver/et/Makefile b/main/components/driver/et/Makefile
+new file mode 100644
+index 0000000..5a70173
+--- /dev/null
++++ b/main/components/driver/et/Makefile
+@@ -0,0 +1,98 @@
++#
++# Makefile for the Broadcom et driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.5 2010-12-07 04:47:36 $
++#
++
++ETSRCDIR := ../../../../../../../src/et
++
++et-objs := $(ETSRCDIR)/sys/et_linux.o $(ETSRCDIR)/sys/etc.o
++
++
++# WLENT_AP: for the wl driver, we are enabling WL_MULTIQUEUE because it's needed
++# for the BCM_AP_SCAN_TX feature. The DMA code has conditionals based on WL_MULTIQUEUE.
++# In order to ensure that the et code is in sync w/ the DMA code, make sure to enable
++# WL_MULTIQUEUE when compiling the et driver.
++EXTRA_CFLAGS	+= -DWL_MULTIQUEUE
++
++ifeq ($(CONFIG_BUZZZ_FUNC),y)
++subdir-ccflags-y += -O0 -fno-inline -finstrument-functions
++endif # CONFIG_BUZZZ_FUNC
++
++ifeq ($(CONFIG_ET_47XX),y)
++et-objs		+= $(ETSRCDIR)/sys/etc47xx.o $(ETSRCDIR)/sys/etc_adm.o
++et-objs		+= $(ETSRCDIR)/sys/etcgmac.o
++EXTRA_CFLAGS	+= -DCFG_GMAC -DBCM47XX_CHOPS -DETROBO -DETADM -DBCMDMA64 -DBCMDMA32
++endif
++
++# WLENT
++ifeq ($(CONFIG_BCM_PHY2P5G),y)
++subdir-ccflags-y += -O0 -fno-inline
++et-objs		+= $(ETSRCDIR)/sys/phy84860_firmware.o
++endif
++
++
++ifeq ($(CONFIG_BCM_FA),y)
++et-objs		+= $(ETSRCDIR)/sys/etc_fa.o
++EXTRA_CFLAGS	+= -DETFA
++endif
++
++#if MACSEC is to be built either statically or dynamically, enable its debugging in ET
++#It's not much verbose and gives an idea about MACSEC Init
++ifeq ($(CONFIG_IPROC_MACSEC),y)
++EXTRA_CFLAGS	+= -DNSP_MACSEC_DEBUG
++else
++ifeq ($(CONFIG_IPROC_MACSEC_MODULE),y)
++EXTRA_CFLAGS	+= -DNSP_MACSEC_DEBUG
++endif
++endif
++
++obj-$(CONFIG_ET) := et.o
++
++ifeq ($(WLENT_CONVERGED_PKG), 1)
++EXTRA_CFLAGS	+= -DWLENT_CONVERGED_PKG
++endif
++
++EXTRA_CFLAGS	+= -DDMA -Werror
++ifeq ($(CONFIG_ET_ALL_PASSIVE_ON),y)
++EXTRA_CFLAGS	+= -DET_ALL_PASSIVE_ON -DET_ALL_PASSIVE
++else
++ifeq ($(CONFIG_ET_ALL_PASSIVE_RUNTIME),y)
++EXTRA_CFLAGS	+= -DET_ALL_PASSIVE
++endif
++endif	# /* CONFIG_ET_ALL_PASSIVE_ON */
++
++# Search for sources under src/et/sys or objects under src/et/linux
++ifneq ($(wildcard $(src)/$(ETSRCDIR)/sys),)
++EXTRA_CFLAGS	+= -I$(src)/$(ETSRCDIR)/sys -I$(src)/$(ETSRCDIR)/include
++else
++et-objs := $(ETSRCDIR)/linux/et.o
++endif
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++endif
++
++clean-files += $(ETSRCDIR)/sys/*.o $(ETSRCDIR)/sys/.*.o.cmd
+diff --git a/main/components/driver/hnd/Kconfig b/main/components/driver/hnd/Kconfig
+new file mode 100644
+index 0000000..376d542
+--- /dev/null
++++ b/main/components/driver/hnd/Kconfig
+@@ -0,0 +1,137 @@
++#
++# Broadcom Home Networking Division (HND) driver configuration
++#
++# $Copyright Open Broadcom Corporation$
++#
++# $Id: Kconfig,v 1.6 2010-07-05 07:01:45 chihsien Exp $
++#
++
++menu "Broadcom HND network devices"
++	depends on PCI
++config HND
++	bool "Broadcom HND network device support"
++config ET
++	tristate "10/100 Ethernet support"
++	depends on HND
++config ET_47XX
++	bool "BCM47xx support"
++	depends on ET
++# WLENT
++config BCM_PHY2P5G
++	tristate "BRCM 2.5G PHY support"
++choice
++	prompt "ET ALL PASSIVE mode"
++	depends on ET
++	
++config ET_ALL_PASSIVE_ON
++	bool "ET ALL PASSIVE on"
++config ET_ALL_PASSIVE_RUNTIME
++	bool "ET ALL PASSIVE with runtime setting"
++endchoice
++config BCM_CTF
++	tristate "BCMCTF support"
++	depends on HND
++config BCM_FA
++	bool "BCM HW Flow Accelerator support"
++	depends on BCM_CTF
++config BCM_GMAC3
++	bool "BCM 3 GMAC Forwarding support"
++	depends on BCM_CTF
++config WL_EMULATOR
++	bool "WL emulation using Gigabit ethernet"
++	depends on HND
++config BCM57XX
++	tristate "BCM57xx support is ON"
++	depends on WL_EMULATOR
++config WL
++	tristate "Wireless feature variant is set to AP"
++	depends on WL_EMULATOR
++	select WL_USE_AP
++config BCM57XX
++	tristate "BCM57xx Gigabit Ethernet support"
++	depends on HND && !WL_EMULATOR
++config DHDAP
++	tristate "BCM DHD support"
++	depends on HND && !WL_EMULATOR
++config WL
++	tristate "BCM43xx 802.11 Wireless support"
++	depends on HND && !WL_EMULATOR
++config WAPI
++	bool "Wireless Authentication Privacy Infrastructure (WAPI) support"
++	depends on HND && !WL_EMULATOR && WL
++	select MTD_BCMCONF_PARTS
++choice
++	prompt "Wireless feature variant"
++	depends on HND && !WL_EMULATOR && WL
++config WL_USE_AP
++	bool "Config file for basic AP variant"
++config WL_USE_AP_SDSTD
++	bool "Config file for basic AP sdstd variant"
++config WL_USE_STA
++	bool "Config file for basic STA variant"
++config WL_USE_APSTA
++	bool "Config file for basic APSTA variant"
++config WL_USE_AP_ONCHIP_G
++	bool "Config file for AP 1chipG variant"
++config WL_USE_STA_ONCHIP_G
++	bool "Config file for STA 1chipG variant"
++config WL_USE_APSTA_ONCHIP_G
++	bool "Config file for APSTA 1chipG variant"
++endchoice
++config WL_USBAP
++	bool "USB/HSIC Wireless Access Point support"
++#if defined(WLSRC) || defined(PREBUILD)
++config WL_AP 
++	string "Config file for basic AP variant"
++	default "wlconfig_lx_router_ap"
++config WL_AP_SDSTD
++	string "Config file for basic AP sdstd variant"
++	default "wlconfig_lx_router_ap_sdstd"
++config WL_STA 
++	string "Config file for basic STA variant"
++	default "wlconfig_lx_router_sta"
++config WL_APSTA 
++	string "Config file for basic APSTA variant"
++	default "wlconfig_lx_router_apsta"
++config WL_AP_ONCHIP_G 
++	string "Config file for AP 1chipG variant"
++	default "wlconfig_lx_router_ap_1chipG"
++config WL_STA_ONCHIP_G 
++	string "Config file for STA 1chipG variant"
++	default "wlconfig_lx_router_sta_1chipG"
++config WL_HIGH 
++	string "Config file for high/bmac split variant"
++	default "wlconfig_lx_router_high"
++
++choice
++	prompt "WL ALL PASSIVE mode"
++	depends on WL
++	
++config WL_ALL_PASSIVE_ON
++	bool "WL ALL PASSIVE on"
++config WL_ALL_PASSIVE_RUNTIME
++	bool "WL ALL PASSIVE with runtime setting"
++endchoice
++#endif
++config DPSTA
++	tristate "Broadcom dualband wireless proxy repeater support"
++	depends on WL
++config EMF
++	tristate "Efficient Multicast Forwarding & IGMP Snooping Layers"
++	depends on NETFILTER
++config WLENT_VLAN
++	bool "Broadcom Enterprise VLAN support"
++	depends on ET && WL
++config WLENT_QOS
++	bool "Broadcom Enterprise QOS support"
++	depends on ET && WL
++config WLENT_AIRIQ
++	bool "Broadcom Enterprise Air-IQ support"
++	depends on WL
++	default n
++#if 1  /* CONFIG_WLENT_GCOV_PROF */
++config WLENT_GCOV_PROF
++	bool "Broadcom Enterprise WL GCOV PROFILE"
++	depends on WL
++#endif /* CONFIG_WLENT_GCOV_PROF */
++endmenu
+diff --git a/main/components/driver/hnd/Makefile b/main/components/driver/hnd/Makefile
+new file mode 100644
+index 0000000..c2921c8
+--- /dev/null
++++ b/main/components/driver/hnd/Makefile
+@@ -0,0 +1,192 @@
++#
++# Makefile for Broadcom Home Networking Division (HND) shared driver code
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.5 2008-05-02 22:49:54 $
++#
++
++SHARED   := ../../../../../../../src/shared
++ROUTER   := ../../../../../../../src/router
++SRC      := ../../../../../../../src
++WLSHARED := wlconfig_lx_shared
++
++ifeq ($(WLENT_CONVERGED_PKG), 1)
++WLCFGDIR := $(src)/../../../../../../../src/wl_rsdb/config
++WLSYSDIR := $(src)/../../../../../../../src/wl_rsdb/sys
++else
++WLCFGDIR := $(src)/../../../../../../../src/wl/config
++WLSYSDIR := $(src)/../../../../../../../src/wl/sys
++endif
++
++ifeq ($(CONFIG_BUZZZ_FUNC),y)
++subdir-ccflags-y += -O0 -fno-inline -finstrument-functions
++endif # CONFIG_BUZZZ_FUNC
++
++ifneq ($(wildcard $(WLCFGDIR)),)
++include $(WLCFGDIR)/$(WLSHARED)
++include $(WLCFGDIR)/wl.mk
++endif
++
++hnd-objs := $(addprefix $(SHARED)/, $(sort $(WLFILES:.c=.o)))
++HND_OBJS := $(addprefix $(src)/$(SHARED)/, $(sort $(WLFILES:.c=.o)))
++
++EXTRA_CFLAGS += $(WLFLAGS) -DBCM5354 -DLINUX_HYBRID_POSTPROCESSING_REMOVAL
++
++# WLENT_CONVERGED_PKG
++ifeq ($(CONFIG_WLENT_CONVERGED_PKG), y)
++	EXTRA_CFLAGS += -DWLENT_CONVERGED_PKG
++endif
++
++# For the ARM NS platform...
++ifneq ($(CONFIG_MACH_BRCM_NS),)
++EXTRA_CFLAGS    += -DROBO_SRAB -DBCMDMASGLISTOSL
++endif
++
++# WLENT_FIXUPS
++# For the ARM NS Plus platform...
++ifneq ($(CONFIG_MACH_BRCM_NSP),)
++EXTRA_CFLAGS    += -DROBO_SRAB -DBCMDMASGLISTOSL
++endif
++
++# PHY2P5G WLENT
++ifneq ($(CONFIG_BCM_PHY2P5G),)
++HND_OBJS += $(src)/$(SHARED)/bcmiproc_robo_serdes.o
++hnd-objs += $(SHARED)/bcmiproc_robo_serdes.o
++endif
++
++# WLENT_FIXUPS
++ifeq ($(CONFIG_PLAT_BCM5301X),y)
++EXTRA_CFLAGS    += -DBCM5301X
++endif
++
++# WLENT_AP
++#EXTRA_CFLAGS += -DWLENT_ASSERT
++
++ifneq ($(CONFIG_BCM947XX),y)
++HND_OBJS += $(src)/$(SHARED)/nvramstubs.o
++hnd-objs += $(SHARED)/nvramstubs.o
++endif
++
++ifeq ($(CONFIG_ET_47XX),y)
++HND_OBJS += $(src)/$(SHARED)/bcmrobo.o
++hnd-objs += $(SHARED)/bcmrobo.o
++else
++ifeq ($(CONFIG_BCM57XX),y)
++HND_OBJS += $(src)/$(SHARED)/bcmrobo.o
++hnd-objs += $(SHARED)/bcmrobo.o
++endif
++endif
++
++ifeq ($(CONFIG_BCM_GMAC3),y)
++HND_OBJS += $(src)/$(SHARED)/hndfwd.o
++hnd-objs += $(SHARED)/hndfwd.o
++endif
++
++ifdef CONFIG_USB_RNDIS
++EXTRA_CFLAGS += -DCONFIG_USBRNDIS_RETAIL
++endif                                  
++
++ifeq ($(BCMDBG_MEM),1)
++EXTRA_CFLAGS += -DBCMDBG_MEM
++endif
++
++obj-$(CONFIG_HND) := hnd.o shared_ksyms.o
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmutils.c),)
++$(src)/$(SHARED)/bcmutils.o: $(src)/$(SHARED)/linux/bcmutils.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmrobo.c),)
++$(src)/$(SHARED)/bcmrobo.o: $(src)/$(SHARED)/linux/bcmrobo.o
++	cp $< $@
++endif
++
++# WLENT_CONVERGED_PKG
++ifeq ($(WLENT_CONVERGED_PKG), 1)
++ifeq ($(wildcard $(src)/$(SHARED)/hnddma_rsdb.c),)
++$(src)/$(SHARED)/hnddma_rsdb.o: $(src)/$(SHARED)/linux/hnddma_rsdb.o
++	cp $< $@
++endif
++else
++ifeq ($(wildcard $(src)/$(SHARED)/hnddma.c),)
++$(src)/$(SHARED)/hnddma.o: $(src)/$(SHARED)/linux/hnddma.o
++	cp $< $@
++endif
++endif # WLENT_CONVERGED_PKG
++
++ifeq ($(wildcard $(src)/$(SHARED)/hndfwd.c),)
++$(src)/$(SHARED)/hndfwd.o: $(src)/$(SHARED)/linux/hndfwd.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/linux_osl.c),)
++$(src)/$(SHARED)/linux_osl.o: $(src)/$(SHARED)/linux/linux_osl.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/sbutils.c),)
++$(src)/$(SHARED)/sbutils.o: $(src)/$(SHARED)/linux/sbutils.o
++	cp $< $@
++endif
++
++# WLENT_CONVERGED_PKG
++ifeq ($(CONFIG_WLENT_CONVERGED_PKG), y)
++ifeq ($(wildcard $(src)/$(SHARED)/hndpmu_rsdb.c),)
++$(src)/$(SHARED)/hndpmu_rsdb.o: $(src)/$(SHARED)/linux/hndpmu_rsdb.o
++	cp $< $@
++endif
++else
++ifeq ($(wildcard $(src)/$(SHARED)/hndpmu.c),)
++$(src)/$(SHARED)/hndpmu.o: $(src)/$(SHARED)/linux/hndpmu.o
++	cp $< $@
++endif
++endif # CONFIG_WLENT_CONVERGED_PKG
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmsrom.c),)
++$(src)/$(SHARED)/bcmsrom.o: $(src)/$(SHARED)/linux/bcmsrom.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/nvramstubs.c),)
++$(src)/$(SHARED)/nvramstubs.o: $(src)/$(SHARED)/linux/nvramstubs.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmwpa.c),)
++$(src)/$(SHARED)/bcmwpa.o: $(src)/$(SHARED)/linux/bcmwpa.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmotp.c),)
++$(src)/$(SHARED)/bcmotp.o: $(src)/$(SHARED)/linux/bcmotp.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/nicpci.c),)
++$(src)/$(SHARED)/nicpci.o: $(src)/$(SHARED)/linux/nicpci.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/pcie_core.c),)
++$(src)/$(SHARED)/pcie_core.o: $(src)/$(SHARED)/linux/pcie_core.o
++	cp $< $@
++endif
++
++$(src)/shared_ksyms.c: $(src)/shared_ksyms.sh $(HND_OBJS)
++	sh -e $< $(HND_OBJS) > $@
++
++clean-files += $(SHARED)/*.o $(SHARED)/.*.o.cmd
+diff --git a/main/components/driver/hnd/shared_ksyms.sh b/main/components/driver/hnd/shared_ksyms.sh
+new file mode 100755
+index 0000000..e993a65
+--- /dev/null
++++ b/main/components/driver/hnd/shared_ksyms.sh
+@@ -0,0 +1,30 @@
++#!/bin/sh
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.      
++#       
++# Permission to use, copy, modify, and/or distribute this software for any      
++# purpose with or without fee is hereby granted, provided that the above      
++# copyright notice and this permission notice appear in all copies.      
++#       
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES      
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF      
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY      
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES      
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION      
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN      
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.      
++#
++# $Id: shared_ksyms.sh,v 1.2 2008-12-05 20:10:41 $
++#
++
++cat <<EOF
++#include <linux/version.h>
++#include <linux/module.h>
++#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,36)
++#include <linux/config.h>
++#endif
++EOF
++
++for file in $* ; do
++    ${NM} $file | sed -ne 's/[0-9A-Fa-f]* [BDRT] \([^ ]*\)/extern void \1; EXPORT_SYMBOL(\1);/p'
++done
+diff --git a/main/components/driver/igs/Makefile b/main/components/driver/igs/Makefile
+new file mode 100644
+index 0000000..3d8f3c7
+--- /dev/null
++++ b/main/components/driver/igs/Makefile
+@@ -0,0 +1,59 @@
++#
++# Makefile for the Broadcom IGS Layer
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.3 2008-08-13 20:20:16 $
++#
++
++# Choose BASE_DIR based on where router resides - src or components
++EMF_BASE_DIR := $(firstword $(wildcard ../../../../components/router/emf	\
++                                       ../../../../src/router/emf))
++EMFDIR       := ../../../$(EMF_BASE_DIR)
++IGSSRCDIR    := $(EMFDIR)/igs
++IGSCSRCDIR := ../../../../../../../src/emf/igs
++
++SRCBASE_ROUTER ?= $(SRCBASE)/router
++
++IGS_OBJS := $(IGSCSRCDIR)/igsc.o $(IGSCSRCDIR)/igsc_sdb.o $(IGSSRCDIR)/igs_linux.o \
++	    $(IGSCSRCDIR)/osl_linux.o
++
++# Search for sources under src/router/emf/igs
++ifneq ($(wildcard $(src)/$(IGSSRCDIR)),)
++    EXTRA_CFLAGS += -I$(SRCBASE_ROUTER)/emf/igs -I$(SRCBASE_ROUTER)/emf/emf
++    EXTRA_CFLAGS += -I$(SRCBASE)/include/emf/igs -I$(SRCBASE)/include/emf/emf
++    igs-objs := $(IGS_OBJS)
++else
++    igs-objs := $(EMFDIR)/igs.o
++endif
++
++obj-$(CONFIG_EMF) := igs.o
++
++ifeq ($(CONFIG_BUZZZ_FUNC),y)
++subdir-ccflags-y += -O0 -fno-inline -finstrument-functions
++endif # CONFIG_BUZZZ_FUNC
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++endif
++
++clean-files += $(IGSCSRCDIR)/*.o $(IGSSRCDIR)/*.o $(IGSCSRCDIR)/.*.o.cmd $(IGSSRCDIR)/.*.o.cmd
+diff --git a/main/components/driver/wl/Makefile b/main/components/driver/wl/Makefile
+new file mode 100644
+index 0000000..7d48f45
+--- /dev/null
++++ b/main/components/driver/wl/Makefile
+@@ -0,0 +1,81 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.13 2010-12-13 20:23:49 $
++#
++
++SRCBASE_OFFSET := ../../../src
++include $(src)/../wl_common.mk
++
++TARGET := wl
++WLCONF_H := wlconf.h
++WLCONF_O := wlconf.o
++
++ifeq ($(CONFIG_BUZZZ_FUNC),y)
++subdir-ccflags-y += -O0 -fno-inline -finstrument-functions
++endif # CONFIG_BUZZZ_FUNC
++
++# Generate list of supported variants
++# WLENT_AP start: only build APSTA variant
++#VLIST_BASE := AP STA APSTA
++#ifeq ($(CONFIG_WL_USE_AP_SDSTD),y)
++#  VLIST_BASE   += AP_SDSTD
++#endif
++VLIST_BASE := APSTA
++# WLENT_AP end
++VLIST          += $(VLIST_BASE)
++
++include $(src)/wl_hnd.mk
++ifeq ($(CONFIG_WL_USBAP),y)
++# Do variants because we need two drivers for dual band operation
++WL_VARIANTS	:= 1
++VLIST		+= HIGH
++# Note that we don't use CONFIG_WL_USE_HIGH because we need to leave WL_SUFFIX for
++# the other driver. HIGH driver is always called wl_high and loaded upon hotplut
++# event.
++endif
++
++ifeq ($(BUILD_WL_ONCHIP_G),true)
++  VLIST        += $(foreach base,$(VLIST_BASE),$(base)_ONCHIP_G)
++endif # BUILD_WL_ONCHIP_G
++
++# Set suffix and config based on the selected variant
++WL_SUFFIX := $(strip $(foreach v,$(VLIST),$(if $(CONFIG_WL_USE_$(v)),$(v))))
++CONFIG_WL_CONF := $(CONFIG_WL_$(WL_SUFFIX))
++
++# Module file names use lowercase of the suffix
++wl_suffix := $(shell echo "$(WL_SUFFIX)" | tr A-Z a-z)
++
++
++# For PREBUILD and postbuild w/WLSRC, compile variants in subdirs
++# Subdir names use lowercase versions of the variant suffixes
++# WLENT_AP - the wlsubdirs should be returned to the original, previously
++#  commented out version, as when the new version is used, the make process
++#  still attempts to build src files that have been removed from the
++#  WLFILES_SRC list
++wlsubdirs := $(addprefix wl_,$(foreach v,$(VLIST),$(shell echo "$(v)/" | tr A-Z a-z)))
++#wlsubdirs := $(addprefix wl_,$(foreach v,$(VLIST),$(shell echo "$(v)" | tr A-Z a-z)))
++
++
++subdir-y += $(wlsubdirs)
++subdir-m += $(wlsubdirs)
++
++ifneq ($(wlsubdirs),)
++.NOTPARALLEL:
++endif
++
++include $(src)/wl_generic.mk
+diff --git a/main/components/driver/wl/wl_ap/Makefile b/main/components/driver/wl/wl_ap/Makefile
+new file mode 100644
+index 0000000..7956ab6
+--- /dev/null
++++ b/main/components/driver/wl/wl_ap/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:35 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_AP),)
++CONFIG_WL_AP := "wlconfig_lx_router_ap"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_AP)
++
++wl_suffix := ap
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl/wl_ap_onchip_g/Makefile b/main/components/driver/wl/wl_ap_onchip_g/Makefile
+new file mode 100644
+index 0000000..401e2a5
+--- /dev/null
++++ b/main/components/driver/wl/wl_ap_onchip_g/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:37 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_AP_ONCHIP_G),)
++CONFIG_WL_AP_ONCHIP_G := "wlconfig_lx_router_ap_1chipG"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_AP_ONCHIP_G)
++
++wl_suffix := ap_onchip_g
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl/wl_ap_sdstd/Makefile b/main/components/driver/wl/wl_ap_sdstd/Makefile
+new file mode 100644
+index 0000000..4d3a379
+--- /dev/null
++++ b/main/components/driver/wl/wl_ap_sdstd/Makefile
+@@ -0,0 +1,39 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright 2007, Broadcom Corporation
++# All Rights Reserved.
++# 
++# THIS SOFTWARE IS OFFERED "AS IS", AND BROADCOM GRANTS NO WARRANTIES OF ANY
++# KIND, EXPRESS OR IMPLIED, BY STATUTE, COMMUNICATION OR OTHERWISE. BROADCOM
++# SPECIFICALLY DISCLAIMS ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS
++# FOR A SPECIFIC PURPOSE OR NONINFRINGEMENT CONCERNING THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2008-08-11 23:05:54 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_AP_SDSTD),)
++CONFIG_WL_AP_SDSTD := "wlconfig_lx_router_ap_sdstd"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_AP_SDSTD)
++
++wl_suffix := ap_sdstd
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl/wl_apsta/Makefile b/main/components/driver/wl/wl_apsta/Makefile
+new file mode 100644
+index 0000000..27dffbe
+--- /dev/null
++++ b/main/components/driver/wl/wl_apsta/Makefile
+@@ -0,0 +1,47 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:38 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_APSTA),)
++CONFIG_WL_APSTA := "wlconfig_lx_router_apsta"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_APSTA)
++
++wl_suffix := apsta
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifeq ($(CONFIG_WLENT_GCOV_PROF),)
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++#include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++#all:
++#	$(MAKE) -C $(KERNELDIR) M=`pwd`
++#clean:
++#	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++#include ../wl_generic.mk
++endif
++endif
+diff --git a/main/components/driver/wl/wl_apsta_onchip_g/Makefile b/main/components/driver/wl/wl_apsta_onchip_g/Makefile
+new file mode 100644
+index 0000000..291e859
+--- /dev/null
++++ b/main/components/driver/wl/wl_apsta_onchip_g/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:39 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_APSTA_ONCHIP_G),)
++CONFIG_WL_APSTA_ONCHIP_G := "wlconfig_lx_router_apsta_1chipG"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_APSTA_ONCHIP_G)
++
++wl_suffix := apsta_onchip_g
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl/wl_dngl/Makefile b/main/components/driver/wl/wl_dngl/Makefile
+new file mode 100644
+index 0000000..5eef40c
+--- /dev/null
++++ b/main/components/driver/wl/wl_dngl/Makefile
+@@ -0,0 +1,39 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright 2007, Broadcom Corporation
++# All Rights Reserved.
++# 
++# THIS SOFTWARE IS OFFERED "AS IS", AND BROADCOM GRANTS NO WARRANTIES OF ANY
++# KIND, EXPRESS OR IMPLIED, BY STATUTE, COMMUNICATION OR OTHERWISE. BROADCOM
++# SPECIFICALLY DISCLAIMS ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS
++# FOR A SPECIFIC PURPOSE OR NONINFRINGEMENT CONCERNING THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2008-08-11 23:05:54 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_DNGL),)
++CONFIG_WL_DNGL := "wlconfig_lx_router_dngl"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_DNGL)
++
++wl_suffix := dngl
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl/wl_dngl_onchip_g/Makefile b/main/components/driver/wl/wl_dngl_onchip_g/Makefile
+new file mode 100644
+index 0000000..2b45587
+--- /dev/null
++++ b/main/components/driver/wl/wl_dngl_onchip_g/Makefile
+@@ -0,0 +1,39 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright 2007, Broadcom Corporation
++# All Rights Reserved.
++# 
++# THIS SOFTWARE IS OFFERED "AS IS", AND BROADCOM GRANTS NO WARRANTIES OF ANY
++# KIND, EXPRESS OR IMPLIED, BY STATUTE, COMMUNICATION OR OTHERWISE. BROADCOM
++# SPECIFICALLY DISCLAIMS ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS
++# FOR A SPECIFIC PURPOSE OR NONINFRINGEMENT CONCERNING THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2008-08-11 23:05:54 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_DNGL_MIMO),)
++CONFIG_WL_DNGL_MIMO := "wlconfig_lx_router_dngl_mimo"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_DNGL_MIMO)
++
++wl_suffix := dngl_mimo
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl/wl_generic.mk b/main/components/driver/wl/wl_generic.mk
+new file mode 100644
+index 0000000..a7b8517
+--- /dev/null
++++ b/main/components/driver/wl/wl_generic.mk
+@@ -0,0 +1,219 @@
++#
++# Generic portion of the Broadcom wl driver makefile
++#
++# input: O_TARGET, CONFIG_WL_CONF and wl_suffix
++# output: obj-m, obj-y
++#
++# $Id: wl_generic.mk,v 1.10 2011-01-21 22:12:09 $
++#
++
++ifneq ($(wildcard ../../../../src/router/dpsta),)
++    DPSTASRC := $(SRCBASE_OFFSET)/router/dpsta
++else
++    DPSTASRC := $(SRCBASE_OFFSET)/../components/router/dpsta
++endif
++
++REBUILD_WL_MODULE=$(shell if [ -d "$(src)/$(SRCBASE_OFFSET)/wl/sys" -a "$(REUSE_PREBUILT_WL)" != "1" ]; then echo 1; else echo 0; fi)
++
++# If source directory (src/wl/sys) exists and REUSE_PREBUILT_WL is undefined, 
++# then build inside $(SRCBASE_OFFSET)/wl/sys, otherwise use pre-builts
++ifeq ($(REBUILD_WL_MODULE),1)
++
++    # Get the source files and flags from the specified config file
++    # (Remove config's string quotes before trying to use the file)
++    ifeq ($(CONFIG_WL_CONF),)
++         $(error var_vlist($(VLIST)) var_config_wl_use($(shell env|grep CONFIG_WL_USE)))
++         $(error CONFIG_WL_CONF is undefined)
++    endif
++
++    WLCONFFILE := $(strip $(subst ",,$(CONFIG_WL_CONF))) 
++    WLCFGDIR   := $(src)/$(SRCBASE_OFFSET)/wl/config
++    
++    # define OS flag to pick up wl osl file from wl.mk
++    WLLX=1
++    ifdef CONFIG_DPSTA
++        DPSTA=1
++    endif
++    ifdef CONFIG_CR4_OFFLOAD
++        WLOFFLD=1
++    endif
++    include $(WLCFGDIR)/$(WLCONFFILE)
++    # Disable ROUTER_COMA in ARM router for now.
++ifeq ($(ARCH), arm)
++    ROUTER_COMA=0
++endif
++
++    ifeq ($(WLAUTOD11SHM),1)
++        # Include makefile to build d11 shm files
++        D11SHM_SRCBASE := $(src)/$(SRCBASE_OFFSET)
++        D11SHM_TEMPDIR := $(D11SHM_SRCBASE)/wl
++        EXTRA_CFLAGS += -I$(D11SHM_TEMPDIR)
++        IFLAGS += -I$(D11SHM_TEMPDIR)
++        D11SHM_IFLAGS := $(IFLAGS)
++        D11SHM_CFLAGS := $(DFLAGS) $(IFLAGS) $(WFLAGS)
++        D11SHM_CFGFILE := $(D11SHM_SRCBASE)/wl/sys/wlc_cfg.h
++        D11SHMCDIR := src/wl
++        include $(D11SHM_SRCBASE)/makefiles/d11shm.mk
++        D11SHM_TARGET := $(D11SHM_HEADER)
++    endif
++
++    include $(WLCFGDIR)/wl.mk
++
++    WLAN_ComponentsInUse := bcmwifi ppr olpc keymgmt iocv dump hal phy
++    WLAN_ComponentsInUse += phymods  # old name of phy, preserved for compatibility
++    ifeq ($(WLCLMAPI),1)
++        WLAN_ComponentsInUse += clm clm-api
++    endif
++    include $(src)/$(SRCBASE_OFFSET)/makefiles/WLAN_Common.mk
++
++    ifeq ($(WLFILES_SRC),)
++         $(error WLFILES_SRC is undefined in $(WLCFGDIR)/$(WLCONFFILE))
++    endif
++
++    ifeq ($(WLCLMAPI),1)
++      ifeq ($(WLCLMLOAD),1)
++        CLM_TYPE ?= min
++      else
++        CLM_TYPE ?= router
++      endif
++    $(call WLAN_GenClmCompilerRule,$(firstword $(wildcard $(addprefix $(src)/$(SRCBASE_OFFSET)/, wl/clm/src ../components/clm-api/src))),$(src)/$(SRCBASE_OFFSET))
++    endif
++    
++    # need -I. to pick up wlconf.h in build directory
++   
++    ifeq ($(CONFIG_WL_ALL_PASSIVE_ON),y)
++    EXTRA_CFLAGS    += -DWL_ALL_PASSIVE_ON -DWL_ALL_PASSIVE
++    else
++    ifeq ($(CONFIG_WL_ALL_PASSIVE_RUNTIME),y)
++    EXTRA_CFLAGS    += -DWL_ALL_PASSIVE
++    endif
++    endif
++    ifeq ($(CONFIG_CACHE_L310),y)
++    # WLENT_AP: only define WL_PL310_WAR if ACP is not enabled.
++      ifneq ($(CONFIG_PLAT_ACP_ENABLE),y)
++        EXTRA_CFLAGS    += -DWL_PL310_WAR
++      endif
++    endif
++    ifeq ($(CONFIG_WLENT_GCOV_PROF),y)
++    EXTRA_CFLAGS += -Wno-error=uninitialized
++    endif
++    EXTRA_CFLAGS += -DDMA $(WLFLAGS)
++    #EXTRA_CFLAGS += -DWLENT_CONVERGED_PKG
++    EXTRA_CFLAGS += -I$(src) -I$(src)/.. -I$(src)/$(SRCBASE_OFFSET)/wl/linux \
++		    -I$(src)/$(SRCBASE_OFFSET)/wl/sys -I$(src)/$(SRCBASE_OFFSET)/wl/dot1as/include \
++		    -I$(src)/$(SRCBASE_OFFSET)/wl/dot1as/src -I$(src)/$(SRCBASE_OFFSET)/wl/proxd/include
++    EXTRA_CFLAGS += $(WLAN_ComponentIncPathA) $(WLAN_IncPathA)
++
++    ifneq ("$(CONFIG_CC_OPTIMIZE_FOR_SIZE)","y")
++         EXTRA_CFLAGS += -finline-limit=2048
++    endif
++
++    # include path for dpsta.h
++    EXTRA_CFLAGS += -I$(src)/$(DPSTASRC)
++
++    # Build the phy source files iff -DPHY_HAL is present, handling either old (src) or new (components) phy location.
++    ifneq ($(findstring PHY_HAL,$(WLFLAGS)),)
++        PHYLOC := $(firstword $(wildcard $(src)/$(SRCBASE_OFFSET)/../components/phy/old $(src)/$(SRCBASE_OFFSET)/wl/phy))
++        EXTRA_CFLAGS += -I$(PHYLOC)
++    else
++	WLFILES_SRC := $(filter-out src/wl/phy/%,$(WLFILES_SRC))
++	WLFILES_SRC := $(filter-out components/phy/%,$(WLFILES_SRC))
++    endif
++
++#ifdef WLTEST
++	ifeq ($(WLTEST),1)
++		EXTRA_CFLAGS += -DBCMDBG_PHYDUMP
++	endif
++#endif
++
++    # The paths in WLFILES_SRC need a bit of adjustment.
++    WL_OBJS := $(sort $(patsubst %.c,%.o,$(addprefix $(SRCBASE_OFFSET)/,$(patsubst src/%,%,$(filter src/%, $(WLFILES_SRC))) $(addprefix ../, $(filter-out src/%, $(WLFILES_SRC))))))
++
++	WL_OBJS += $(SRCBASE_OFFSET)/emf/emf/emfc.o  $(SRCBASE_OFFSET)/emf/igs/igsc.o $(SRCBASE_OFFSET)/emf/igs/igsc_sdb.o \
++				$(SRCBASE_OFFSET)/emf/igs/osl_linux.o
++
++	WL_OBJS += $(hnd-objs)
++
++	EXTRA_CFLAGS += -I$(src)/$(SRCBASE_OFFSET)/include/emf/igs/
++	EXTRA_CFLAGS += -I$(src)/$(SRCBASE_OFFSET)/include/emf/emf/
++	EXTRA_CFLAGS += -I$(src)/$(SRCBASE_OFFSET)/../components/router/emf/emf
++	EXTRA_CFLAGS += -I$(src)/$(SRCBASE_OFFSET)/../components/router/emf/igs
++
++	EXTRA_CFLAGS += -O1
++
++#WLENT_AP start
++# Remove proprietary proxd files from source list if they are not present
++REBUILD_WLC_FFT=$(shell if [ -e "$(src)/$(SRCBASE_OFFSET)/wl/proxd/src/wlc_fft.c" ]; then echo 1; else echo 0; fi)
++REBUILD_WLC_TOF=$(shell if [ -e "$(src)/$(SRCBASE_OFFSET)/wl/proxd/src/wlc_tof.c" ]; then echo 1; else echo 0; fi)
++REBUILD_WLC_TOF_ADJ=$(shell if [ -e "$(src)/$(SRCBASE_OFFSET)/wl/proxd/src/wlc_tof_adj.c" ]; then echo 1; else echo 0; fi)
++
++ifneq ($(REBUILD_WLC_FFT),1)
++	WLFILES_SRC := $(filter-out src/wl/proxd/src/wlc_fft.c,$(WLFILES_SRC))
++endif
++
++ifneq ($(REBUILD_WLC_TOF),1)
++	WLFILES_SRC := $(filter-out src/wl/proxd/src/wlc_tof.c,$(WLFILES_SRC))
++endif
++
++ifneq ($(REBUILD_WLC_FFT),1)
++	WLFILES_SRC := $(filter-out src/wl/proxd/src/wlc_tof_adj.c,$(WLFILES_SRC))
++endif
++#WLENT_AP end
++
++    # wl-objs is for linking to wl.o
++    $(TARGET)-objs := $(WLCONF_O) $(WL_OBJS)
++    obj-$(CONFIG_WL) := $(TARGET).o
++
++else # SRCBASE/wl/sys doesn't exist
++
++    # Otherwise, assume prebuilt object module(s) in src/wl/linux directory
++    prebuilt := wl_$(wl_suffix).o
++    $(TARGET)-objs := $(SRCBASE_OFFSET)/wl/linux/$(prebuilt)
++    obj-$(CONFIG_WL) := $(TARGET).o
++
++    ifeq ("$(CONFIG_WL_USBAP)","y")
++        wl_high-objs := $(SRCBASE_OFFSET)/wl/linux/wl_high.o
++        obj-m += wl_high.o
++    endif
++endif
++
++
++#WL_CONF_H: wlconf.h
++
++UPDATESH   := $(WLCFGDIR)/diffupdate.sh
++
++WLTUNEFILE ?= wltunable_lx_router.h
++
++$(obj)/$(WLCONF_O): $(obj)/$(WLCONF_H) $(D11SHM_TARGET) FORCE
++
++ifneq ($(D11SHM_TARGET),)
++$(D11SHM_TARGET): $(obj)/$(WLCONF_H)
++endif
++
++$(addprefix $(obj)/, $(WL_OBJS)): $(obj)/$(WLCONF_H) $(D11SHM_TARGET)
++
++$(WLCONF_H) wlconf.h: $(obj)/$(WLCONF_H)
++	cp -a $< $@
++
++$(obj)/$(WLCONF_H): $(WLCFGDIR)/$(WLTUNEFILE) FORCE
++	[ ! -f $@ ] || chmod +w $@
++#WLENT_AP start - more debug information in make output
++	@echo "********************"
++#WLENT_AP end
++	@echo "check and update config file"
++#WLENT_AP start - more debug information in make output
++#	@echo $(if $(VLIST),"VLIST          = $(VLIST)")
++	@echo "VLIST = $(VLIST)"
++#WLENT_AP end
++	@echo "CONFIG_WL_CONF = $(CONFIG_WL_CONF)"
++	@echo "WLTUNEFILE     = $(WLTUNEFILE)"
++#WLENT_AP start - more debug information in make output
++	@echo "TARGET         = $(TARGET)"
++	@echo "WLFILES_SRC    = $(WLFILES_SRC)"
++#WLENT_AP end
++	cp $< wltemp
++	$(UPDATESH) wltemp $@
++
++FORCE:
++
++clean-files += $(SRCBASE_OFFSET)/wl/sys/*.o $(SRCBASE_OFFSET)/../components/phy/old/*.o $(SRCBASE_OFFSET)/wl/phy/*.o $(SRCBASE_OFFSET)/wl/ppr/src/*.o $(SRCBASE_OFFSET)/wl/sys/.*.*.cmd $(SRCBASE_OFFSET)/../components/phy/old/.*.*.cmd $(SRCBASE_OFFSET)/wl/phy/.*.*.cmd $(SRCBASE_OFFSET)/bcmcrypto/.*.*.cmd $(SRCBASE_OFFSET)/wl/clm/src/*.o $(SRCBASE_OFFSET)/wl/clm/src/.*.*.cmd $(SRCBASE_OFFSET)/shared/bcmwifi/src/*.o $(SRCBASE_OFFSET)/shared/bcmwifi/src/.*.*.cmd $(WLCONF_H) $(WLCONF_O)
+diff --git a/main/components/driver/wl/wl_high/Makefile b/main/components/driver/wl/wl_high/Makefile
+new file mode 100644
+index 0000000..0298118
+--- /dev/null
++++ b/main/components/driver/wl/wl_high/Makefile
+@@ -0,0 +1,49 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.4 2010-10-07 09:29:27 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_HIGH),)
++CONFIG_WL_HIGH := "wlconfig_lx_router_high"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_HIGH)
++
++wl_suffix := high
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
++
++ifneq ($(wildcard $(src)/$(SRCBASE_OFFSET)/shared/zlib),)
++EXTRA_CFLAGS += -I$(src)/$(SRCBASE_OFFSET)/shared/zlib
++endif
+diff --git a/main/components/driver/wl/wl_hnd.mk b/main/components/driver/wl/wl_hnd.mk
+new file mode 100644
+index 0000000..b44bd58
+--- /dev/null
++++ b/main/components/driver/wl/wl_hnd.mk
+@@ -0,0 +1,192 @@
++#
++# Makefile for Broadcom Home Networking Division (HND) shared driver code
++#
++# Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.5 2008-05-02 22:49:54 $
++#
++
++SHARED   := $(SRCBASE_OFFSET)/shared
++ROUTER   := $(SRCBASE_OFFSET)/../components/router
++SRC      := $(SRCBASE_OFFSET)
++WLSHARED := wlconfig_lx_shared
++
++ifeq ($(WLENT_CONVERGED_PKG), 1)
++WLCFGDIR := $(src)/$(SRCBASE_OFFSET)/wl_rsdb/config
++WLSYSDIR := $(src)/$(SRCBASE_OFFSET)/wl_rsdb/sys
++else
++WLCFGDIR := $(src)/$(SRCBASE_OFFSET)/wl/config
++WLSYSDIR := $(src)/$(SRCBASE_OFFSET)/wl/sys
++endif
++
++ifeq ($(CONFIG_BUZZZ_FUNC),y)
++subdir-ccflags-y += -O0 -fno-inline -finstrument-functions
++endif # CONFIG_BUZZZ_FUNC
++
++ifneq ($(wildcard $(WLCFGDIR)),)
++include $(WLCFGDIR)/$(WLSHARED)
++#include $(WLCFGDIR)/wl.mk
++endif
++
++hnd-objs := $(addprefix $(SHARED)/, $(sort $(WLFILES:.c=.o)))
++HND_OBJS := $(addprefix $(src)/$(SHARED)/, $(sort $(WLFILES:.c=.o)))
++
++EXTRA_CFLAGS += $(WLFLAGS) -DBCM5354 -DLINUX_HYBRID_POSTPROCESSING_REMOVAL
++
++# WLENT_CONVERGED_PKG
++ifeq ($(CONFIG_WLENT_CONVERGED_PKG), y)
++	EXTRA_CFLAGS += -DWLENT_CONVERGED_PKG
++endif
++
++# For the ARM NS platform...
++ifneq ($(CONFIG_MACH_BRCM_NS),)
++EXTRA_CFLAGS    += -DROBO_SRAB -DBCMDMASGLISTOSL
++endif
++
++# WLENT_FIXUPS
++# For the ARM NS Plus platform...
++ifneq ($(CONFIG_MACH_BRCM_NSP),)
++EXTRA_CFLAGS    += -DROBO_SRAB -DBCMDMASGLISTOSL
++endif
++
++# PHY2P5G WLENT
++ifneq ($(CONFIG_BCM_PHY2P5G),)
++HND_OBJS += $(src)/$(SHARED)/bcmiproc_robo_serdes.o
++hnd-objs += $(SHARED)/bcmiproc_robo_serdes.o
++endif
++
++# WLENT_FIXUPS
++ifeq ($(CONFIG_PLAT_BCM5301X),y)
++EXTRA_CFLAGS    += -DBCM5301X
++endif
++
++# WLENT_AP
++#EXTRA_CFLAGS += -DWLENT_ASSERT
++
++ifneq ($(CONFIG_BCM947XX),y)
++HND_OBJS += $(src)/$(SHARED)/nvramstubs.o
++hnd-objs += $(SHARED)/nvramstubs.o
++endif
++
++ifeq ($(CONFIG_ET_47XX),y)
++HND_OBJS += $(src)/$(SHARED)/bcmrobo.o
++hnd-objs += $(SHARED)/bcmrobo.o
++else
++ifeq ($(CONFIG_BCM57XX),y)
++HND_OBJS += $(src)/$(SHARED)/bcmrobo.o
++hnd-objs += $(SHARED)/bcmrobo.o
++endif
++endif
++
++ifeq ($(CONFIG_BCM_GMAC3),y)
++HND_OBJS += $(src)/$(SHARED)/hndfwd.o
++hnd-objs += $(SHARED)/hndfwd.o
++endif
++
++ifdef CONFIG_USB_RNDIS
++EXTRA_CFLAGS += -DCONFIG_USBRNDIS_RETAIL
++endif                                  
++
++ifeq ($(BCMDBG_MEM),1)
++EXTRA_CFLAGS += -DBCMDBG_MEM
++endif
++
++#obj-$(CONFIG_HND) := hnd.o shared_ksyms.o
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmutils.c),)
++$(src)/$(SHARED)/bcmutils.o: $(src)/$(SHARED)/linux/bcmutils.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmrobo.c),)
++$(src)/$(SHARED)/bcmrobo.o: $(src)/$(SHARED)/linux/bcmrobo.o
++	cp $< $@
++endif
++
++# WLENT_CONVERGED_PKG
++ifeq ($(WLENT_CONVERGED_PKG), 1)
++ifeq ($(wildcard $(src)/$(SHARED)/hnddma_rsdb.c),)
++$(src)/$(SHARED)/hnddma_rsdb.o: $(src)/$(SHARED)/linux/hnddma_rsdb.o
++	cp $< $@
++endif
++else
++ifeq ($(wildcard $(src)/$(SHARED)/hnddma.c),)
++$(src)/$(SHARED)/hnddma.o: $(src)/$(SHARED)/linux/hnddma.o
++	cp $< $@
++endif
++endif # WLENT_CONVERGED_PKG
++
++ifeq ($(wildcard $(src)/$(SHARED)/hndfwd.c),)
++$(src)/$(SHARED)/hndfwd.o: $(src)/$(SHARED)/linux/hndfwd.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/linux_osl.c),)
++$(src)/$(SHARED)/linux_osl.o: $(src)/$(SHARED)/linux/linux_osl.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/sbutils.c),)
++$(src)/$(SHARED)/sbutils.o: $(src)/$(SHARED)/linux/sbutils.o
++	cp $< $@
++endif
++
++# WLENT_CONVERGED_PKG
++ifeq ($(CONFIG_WLENT_CONVERGED_PKG), y)
++ifeq ($(wildcard $(src)/$(SHARED)/hndpmu_rsdb.c),)
++$(src)/$(SHARED)/hndpmu_rsdb.o: $(src)/$(SHARED)/linux/hndpmu_rsdb.o
++	cp $< $@
++endif
++else
++ifeq ($(wildcard $(src)/$(SHARED)/hndpmu.c),)
++$(src)/$(SHARED)/hndpmu.o: $(src)/$(SHARED)/linux/hndpmu.o
++	cp $< $@
++endif
++endif # CONFIG_WLENT_CONVERGED_PKG
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmsrom.c),)
++$(src)/$(SHARED)/bcmsrom.o: $(src)/$(SHARED)/linux/bcmsrom.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/nvramstubs.c),)
++$(src)/$(SHARED)/nvramstubs.o: $(src)/$(SHARED)/linux/nvramstubs.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmwpa.c),)
++$(src)/$(SHARED)/bcmwpa.o: $(src)/$(SHARED)/linux/bcmwpa.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/bcmotp.c),)
++$(src)/$(SHARED)/bcmotp.o: $(src)/$(SHARED)/linux/bcmotp.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/nicpci.c),)
++$(src)/$(SHARED)/nicpci.o: $(src)/$(SHARED)/linux/nicpci.o
++	cp $< $@
++endif
++
++ifeq ($(wildcard $(src)/$(SHARED)/pcie_core.c),)
++$(src)/$(SHARED)/pcie_core.o: $(src)/$(SHARED)/linux/pcie_core.o
++	cp $< $@
++endif
++
++#$(src)/shared_ksyms.c: $(src)/shared_ksyms.sh $(HND_OBJS)
++#	sh -e $< $(HND_OBJS) > $@
++
++clean-files += $(SHARED)/*.o $(SHARED)/.*.o.cmd
+diff --git a/main/components/driver/wl/wl_sta/Makefile b/main/components/driver/wl/wl_sta/Makefile
+new file mode 100644
+index 0000000..6e05a41
+--- /dev/null
++++ b/main/components/driver/wl/wl_sta/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:40 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_STA),)
++CONFIG_WL_STA := "wlconfig_lx_router_sta"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_STA)
++
++wl_suffix := sta
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl/wl_sta_onchip_g/Makefile b/main/components/driver/wl/wl_sta_onchip_g/Makefile
+new file mode 100644
+index 0000000..e9ba5c4
+--- /dev/null
++++ b/main/components/driver/wl/wl_sta_onchip_g/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2016, Broadcom. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:41 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_STA_ONCHIP_G),)
++CONFIG_WL_STA_ONCHIP_G := "wlconfig_lx_router_sta_1chipG"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_STA_ONCHIP_G)
++
++wl_suffix := sta_onchip_g
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl/wlconf.c b/main/components/driver/wl/wlconf.c
+new file mode 100644
+index 0000000..24d9e4d
+--- /dev/null
++++ b/main/components/driver/wl/wlconf.c
+@@ -0,0 +1 @@
++#include <wlconf.h>
+diff --git a/main/components/driver/wl/wlconf.h b/main/components/driver/wl/wlconf.h
+new file mode 100644
+index 0000000..799535f
+--- /dev/null
++++ b/main/components/driver/wl/wlconf.h
+@@ -0,0 +1,106 @@
++/*
++ * Broadcom 802.11abg Networking Device Driver Configuration file
++ *
++ * Copyright (C) 2016, Broadcom. All Rights Reserved.
++ * 
++ * Permission to use, copy, modify, and/or distribute this software for any
++ * purpose with or without fee is hereby granted, provided that the above
++ * copyright notice and this permission notice appear in all copies.
++ * 
++ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++ * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++ * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++ * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ *
++ * $Id: wltunable_lx_router.h 591139 2015-10-07 05:37:41Z $
++ *
++ * wl driver tunables
++ */
++
++#define D11CONF		0x77a7baa0	/* D11 Core Rev 5 (4306C0), 7 (4712), 9 (4318b0, 5352),
++					 * 11 (4321a1), 12 (4321b/c), 13 (5354), 15(4312),
++					 * 16 (4322), 17 (4716), 18 (43224a0), 21 (5356),
++					 * 23 (43224b0), 24 (4313), 25 (5357a0), 26 (4331a0),
++					 * 28 (5357b0), 29 (4331B0), 30(43228).
++					 */
++#ifndef DHDAP
++#define D11CONF2	0x00030500	/* D11 Core Rev > 31, Rev 40(4360a0),
++					 * 42(4360B0), 48(4354), 49(43602a0)
++					 */
++#define D11CONF3	0x00000003	/* D11 Core Rev > 63, Rev 64 (4365b1), 65 (4365c0) */
++#else
++#define D11CONF2	0x00010500	/* Excluding 43602 for DHDAP builds */
++#define D11CONF3	0x00000000	/* Excluding 4365a0 for DHDAP builds */
++#endif
++
++
++#define NRXBUFPOST	56	/* # rx buffers posted */
++#define RXBND		24	/* max # rx frames to process */
++#define PKTCBND		36	/* max # rx frames to chain */
++#ifdef __ARM_ARCH_7A__
++#define CTFPOOLSZ       512	/* max buffers in ctfpool */
++#else
++#define CTFPOOLSZ       192	/* max buffers in ctfpool */
++#endif
++
++#define WME_PER_AC_TX_PARAMS 1
++#define WME_PER_AC_TUNING 1
++
++#define NTXD_AC3X3		512	/* TX descriptor ring */
++#define NRXD_AC3X3		512	/* RX descriptor ring */
++#define NTXD_LARGE_AC3X3	2048	/* TX descriptor ring */
++#define NRXD_LARGE_AC3X3	2048	/* RX descriptor ring */
++#define NRXBUFPOST_AC3X3	500	/* # rx buffers posted */
++#define RXBND_AC3X3		36	/* max # rx frames to process */
++#ifdef __ARM_ARCH_7A__
++#if defined(BCM_GMAC3)
++#define CTFPOOLSZ_AC3X3		1536	/* max buffers in ctfpool */
++#else
++#define CTFPOOLSZ_AC3X3		1024	/* max buffers in ctfpool */
++#endif /* ! BCM_GMAC3 */
++#else
++#define CTFPOOLSZ_AC3X3		512	/* max buffers in ctfpool */
++#endif /* ! __ARM_ARCH_7A__ */
++#define PKTCBND_AC3X3		48	/* max # rx frames to chain */
++
++#define TXMR			2	/* number of outstanding reads */
++#define TXPREFTHRESH		8	/* prefetch threshold */
++#define TXPREFCTL		16	/* max descr allowed in prefetch request */
++#define TXBURSTLEN		256	/* burst length for dma reads */
++
++#define RXPREFTHRESH		1	/* prefetch threshold */
++#define RXPREFCTL		8	/* max descr allowed in prefetch request */
++#define RXBURSTLEN		256	/* burst length for dma writes */
++
++#define MRRS			512	/* Max read request size */
++
++/* AC2 settings */
++#define TXMR_AC2		12	/* number of outstanding reads */
++#define TXPREFTHRESH_AC2	8	/* prefetch threshold */
++#define TXPREFCTL_AC2		16	/* max descr allowed in prefetch request */
++#define TXBURSTLEN_AC2		1024	/* burst length for dma reads */
++#define RXPREFTHRESH_AC2	8	/* prefetch threshold */
++#define RXPREFCTL_AC2		16	/* max descr allowed in prefetch request */
++#define RXBURSTLEN_AC2		128	/* burst length for dma writes */
++#define MRRS_AC2		1024	/* Max read request size */
++/* AC2 settings */
++
++#ifdef WLENT_AP
++/* Lower the queue size for each SCBs AMPDU queue. This ensures that an AP with active
++   downstream traffic to ~128 STAs and 256 MB RAM does not run out of memory.
++   This value could be increased for platforms that have more memory (or support
++   less STAs). */
++#define AMPDU_PKTQ_LEN		576
++#else
++#define AMPDU_PKTQ_LEN		1536
++#endif
++#define AMPDU_PKTQ_FAVORED_LEN  4096
++
++#define WLRXEXTHDROOM -1        /* to reserve extra headroom in DMA Rx buffer */
++
++#ifdef WLENT_AP
++#define MAXSCBCUBBIES 32
++#endif
+diff --git a/main/components/driver/wl_common.mk b/main/components/driver/wl_common.mk
+new file mode 100644
+index 0000000..ab35fba
+--- /dev/null
++++ b/main/components/driver/wl_common.mk
+@@ -0,0 +1,79 @@
++ifeq ($(PLT),powerpc)
++EXTRA_CFLAGS += -DBCMDMA64OSL=1 -w
++KBUILD_CFLAGS += -D__PPC__
++KBUILD_CFLAGS += -DIL_BIGENDIAN
++else ifeq ($(PLT),rv160w_260w)
++#KBUILD_CFLAGS += -D__RV160W_260W__
++ROUTER_COMA=0
++KBUILD_CFLAGS += -DBCMDBG
++ifeq ($(CONFIG_BRCM_CPKTC),y)
++#KBUILD_CFLAGS += -DCPKTC -DPKTC -DPPFE_FASTPATH
++#KBUILD_CFLAGS += -DNCNB_CSKB -DPPFE_FASTPATH -DCMEMCPY
++endif
++else ifeq ($(PLT),ls1021)
++KBUILD_CFLAGS += -D__LS1024__ -DBCMPHY64OSL
++KBUILD_CFLAGS += -DBCMPHY64OSL
++ROUTER_COMA=0
++endif
++KBUILD_CFLAGS += -DBCMDRIVER -Dlinux -DNO_WL_EAGLE_OFFLOAD
++
++ifeq ($(THIRD_PARTY_ARCH),1)
++KBUILD_CFLAGS += -DTHIRD_PARTY_ARCH=1
++else
++KBUILD_CFLAGS += -DTHIRD_PARTY_ARCH=0
++endif
++
++ifneq ($(CONFIG_DHDAP),)
++KBUILD_CFLAGS += -DDHDAP
++endif
++
++#KBUILD_CFLAGS += -I$(SRCBASE)/include
++#KBUILD_CFLAGS += $(WLAN_ComponentIncPath)
++#KBUILD_CFLAGS += $(WLAN_StdIncPathA)
++
++# Broadcom features compile options
++ifneq ($(CONFIG_BCM_CTF),)
++KBUILD_CFLAGS += -DHNDCTF -DCTFPOOL -DCTFMAP -DPKTC -DCTF_PPPOE
++ifneq ($(CONFIG_WL_USBAP),)
++KBUILD_CFLAGS += -DCTFPOOL_SPINLOCK
++endif
++ifneq ($(CONFIG_IPV6),)
++KBUILD_CFLAGS += -DCTF_IPV6
++endif
++endif
++
++ifneq ($(CONFIG_BCM_GMAC3),)
++KBUILD_CFLAGS += -DBCM_GMAC3
++endif
++
++ifneq ($(CONFIG_BCM_FA),)
++KBUILD_CFLAGS += -DBCMFA
++endif
++
++ifeq ($(CONFIG_PLAT_ACP_ENABLE),y)
++KBUILD_CFLAGS += -DBCM47XX_ACP -DBCM47XX_ACP_WAR
++endif
++
++ifneq ($(CONFIG_BCM47XX),)
++KBUILD_CFLAGS += -DBCM47XX
++KBUILD_AFLAGS += -DBCM47XX
++endif
++
++ifneq ($(CONFIG_MTD_BCMCONF_PARTS),)
++KBUILD_CFLAGS += -DBCMCONFMTD
++endif
++
++ifneq ($(CONFIG_WLENT_VLAN),)
++KBUILD_CFLAGS += -DWLENT_VLAN
++endif
++
++ifneq ($(CONFIG_WLENT_QOS),)
++KBUILD_CFLAGS += -DWLENT_QOS
++endif
++
++#ifneq ($(CONFIG_CR4_OFFLOAD),)
++#KBUILD_CFLAGS += -DWLOFFLD
++#KBUILD_CFLAGS += -DWLENT_LOCATION
++#endif
++
++
+diff --git a/main/components/driver/wl_rsdb/Makefile b/main/components/driver/wl_rsdb/Makefile
+new file mode 100644
+index 0000000..a1d786c
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/Makefile
+@@ -0,0 +1,76 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.13 2010-12-13 20:23:49 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../src
++
++TARGET := wl
++WLCONF_H := wlconf.h
++WLCONF_O := wlconf.o
++
++ifeq ($(CONFIG_BUZZZ_FUNC),y)
++subdir-ccflags-y += -O0 -fno-inline -finstrument-functions
++endif # CONFIG_BUZZZ_FUNC
++
++# Generate list of supported variants
++# WLENT_AP start: only build APSTA variant
++#VLIST_BASE := AP STA APSTA
++#ifeq ($(CONFIG_WL_USE_AP_SDSTD),y)
++#  VLIST_BASE   += AP_SDSTD
++#endif
++VLIST_BASE := APSTA
++# WLENT_AP end
++VLIST          += $(VLIST_BASE)
++
++ifeq ($(CONFIG_WL_USBAP),y)
++# Do variants because we need two drivers for dual band operation
++WL_VARIANTS	:= 1
++VLIST		+= HIGH
++# Note that we don't use CONFIG_WL_USE_HIGH because we need to leave WL_SUFFIX for
++# the other driver. HIGH driver is always called wl_high and loaded upon hotplut
++# event.
++endif
++
++ifeq ($(BUILD_WL_ONCHIP_G),true)
++  VLIST        += $(foreach base,$(VLIST_BASE),$(base)_ONCHIP_G)
++endif # BUILD_WL_ONCHIP_G
++
++# Set suffix and config based on the selected variant
++WL_SUFFIX := $(strip $(foreach v,$(VLIST),$(if $(CONFIG_WL_USE_$(v)),$(v))))
++CONFIG_WL_CONF := $(CONFIG_WL_$(WL_SUFFIX))
++
++# Module file names use lowercase of the suffix
++wl_suffix := $(shell echo "$(WL_SUFFIX)" | tr A-Z a-z)
++
++
++# For PREBUILD and postbuild w/WLSRC, compile variants in subdirs
++# Subdir names use lowercase versions of the variant suffixes
++# WLENT_AP - the wlsubdirs should be returned to the original, previously
++#  commented out version, as when the new version is used, the make process
++#  still attempts to build src files that have been removed from the
++#  WLFILES_SRC list
++wlsubdirs := $(addprefix wl_,$(foreach v,$(VLIST),$(shell echo "$(v)/" | tr A-Z a-z)))
++#wlsubdirs := $(addprefix wl_,$(foreach v,$(VLIST),$(shell echo "$(v)" | tr A-Z a-z)))
++
++
++subdir-y += $(wlsubdirs)
++subdir-m += $(wlsubdirs)
++
++.NOTPARALLEL:
++include $(src)/wl_generic.mk
+diff --git a/main/components/driver/wl_rsdb/wl_ap/Makefile b/main/components/driver/wl_rsdb/wl_ap/Makefile
+new file mode 100644
+index 0000000..3fa8694
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_ap/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:35 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_AP),)
++CONFIG_WL_AP := "wlconfig_lx_router_ap"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_AP)
++
++wl_suffix := ap
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl_rsdb/wl_ap_onchip_g/Makefile b/main/components/driver/wl_rsdb/wl_ap_onchip_g/Makefile
+new file mode 100644
+index 0000000..bacd9b7
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_ap_onchip_g/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:37 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_AP_ONCHIP_G),)
++CONFIG_WL_AP_ONCHIP_G := "wlconfig_lx_router_ap_1chipG"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_AP_ONCHIP_G)
++
++wl_suffix := ap_onchip_g
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl_rsdb/wl_ap_sdstd/Makefile b/main/components/driver/wl_rsdb/wl_ap_sdstd/Makefile
+new file mode 100644
+index 0000000..4d3a379
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_ap_sdstd/Makefile
+@@ -0,0 +1,39 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright 2007, Broadcom Corporation
++# All Rights Reserved.
++# 
++# THIS SOFTWARE IS OFFERED "AS IS", AND BROADCOM GRANTS NO WARRANTIES OF ANY
++# KIND, EXPRESS OR IMPLIED, BY STATUTE, COMMUNICATION OR OTHERWISE. BROADCOM
++# SPECIFICALLY DISCLAIMS ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS
++# FOR A SPECIFIC PURPOSE OR NONINFRINGEMENT CONCERNING THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2008-08-11 23:05:54 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_AP_SDSTD),)
++CONFIG_WL_AP_SDSTD := "wlconfig_lx_router_ap_sdstd"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_AP_SDSTD)
++
++wl_suffix := ap_sdstd
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl_rsdb/wl_apsta/Makefile b/main/components/driver/wl_rsdb/wl_apsta/Makefile
+new file mode 100644
+index 0000000..c6586c5
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_apsta/Makefile
+@@ -0,0 +1,47 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:38 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_APSTA),)
++CONFIG_WL_APSTA := "wlconfig_lx_router_apsta"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_APSTA)
++
++wl_suffix := apsta
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifeq ($(CONFIG_WLENT_GCOV_PROF),)
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++#include $(src)/../wl_generic.mk
++else
++# Normal makefile
++#KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++#all:
++#	$(MAKE) -C $(KERNELDIR) M=`pwd`
++#clean:
++#	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++#include ../wl_generic.mk
++endif
++endif
+diff --git a/main/components/driver/wl_rsdb/wl_apsta_onchip_g/Makefile b/main/components/driver/wl_rsdb/wl_apsta_onchip_g/Makefile
+new file mode 100644
+index 0000000..efcd6d6
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_apsta_onchip_g/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:39 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_APSTA_ONCHIP_G),)
++CONFIG_WL_APSTA_ONCHIP_G := "wlconfig_lx_router_apsta_1chipG"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_APSTA_ONCHIP_G)
++
++wl_suffix := apsta_onchip_g
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl_rsdb/wl_dngl/Makefile b/main/components/driver/wl_rsdb/wl_dngl/Makefile
+new file mode 100644
+index 0000000..5eef40c
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_dngl/Makefile
+@@ -0,0 +1,39 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright 2007, Broadcom Corporation
++# All Rights Reserved.
++# 
++# THIS SOFTWARE IS OFFERED "AS IS", AND BROADCOM GRANTS NO WARRANTIES OF ANY
++# KIND, EXPRESS OR IMPLIED, BY STATUTE, COMMUNICATION OR OTHERWISE. BROADCOM
++# SPECIFICALLY DISCLAIMS ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS
++# FOR A SPECIFIC PURPOSE OR NONINFRINGEMENT CONCERNING THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2008-08-11 23:05:54 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_DNGL),)
++CONFIG_WL_DNGL := "wlconfig_lx_router_dngl"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_DNGL)
++
++wl_suffix := dngl
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl_rsdb/wl_dngl_onchip_g/Makefile b/main/components/driver/wl_rsdb/wl_dngl_onchip_g/Makefile
+new file mode 100644
+index 0000000..2b45587
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_dngl_onchip_g/Makefile
+@@ -0,0 +1,39 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright 2007, Broadcom Corporation
++# All Rights Reserved.
++# 
++# THIS SOFTWARE IS OFFERED "AS IS", AND BROADCOM GRANTS NO WARRANTIES OF ANY
++# KIND, EXPRESS OR IMPLIED, BY STATUTE, COMMUNICATION OR OTHERWISE. BROADCOM
++# SPECIFICALLY DISCLAIMS ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS
++# FOR A SPECIFIC PURPOSE OR NONINFRINGEMENT CONCERNING THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2008-08-11 23:05:54 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_DNGL_MIMO),)
++CONFIG_WL_DNGL_MIMO := "wlconfig_lx_router_dngl_mimo"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_DNGL_MIMO)
++
++wl_suffix := dngl_mimo
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl_rsdb/wl_generic.mk b/main/components/driver/wl_rsdb/wl_generic.mk
+new file mode 100644
+index 0000000..97deb3c
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_generic.mk
+@@ -0,0 +1,204 @@
++#
++# Generic portion of the Broadcom wl driver makefile
++#
++# input: O_TARGET, CONFIG_WL_CONF and wl_suffix
++# output: obj-m, obj-y
++#
++# $Id: wl_generic.mk,v 1.10 2011-01-21 22:12:09 $
++#
++
++ifneq ($(wildcard ../../../../src/router/dpsta),)
++    DPSTASRC := $(SRCBASE_OFFSET)/router/dpsta
++else
++    DPSTASRC := $(SRCBASE_OFFSET)/../components/router/dpsta
++endif
++
++REBUILD_WL_MODULE=$(shell if [ -d "$(src)/$(SRCBASE_OFFSET)/wl_rsdb/sys" -a "$(REUSE_PREBUILT_WL)" != "1" ]; then echo 1; else echo 0; fi)
++# REBUILD_WL_MODULE=$(shell if [ -d "$(src)/$(SRCBASE_OFFSET)/wl/sys" -a "$(REUSE_PREBUILT_WL)" != "1" ]; then echo 1; else echo 0; fi)
++
++# If source directory (src/wl/sys) exists and REUSE_PREBUILT_WL is undefined, 
++# then build inside $(SRCBASE_OFFSET)/wl/sys, otherwise use pre-builts
++ifeq ($(REBUILD_WL_MODULE),1)
++
++    # Get the source files and flags from the specified config file
++    # (Remove config's string quotes before trying to use the file)
++    ifeq ($(CONFIG_WL_CONF),)
++         $(error var_vlist($(VLIST)) var_config_wl_use($(shell env|grep CONFIG_WL_USE)))
++         $(error CONFIG_WL_CONF is undefined)
++    endif
++
++    WLCONFFILE := $(strip $(subst ",,$(CONFIG_WL_CONF))) 
++#    WLCFGDIR   := $(src)/$(SRCBASE_OFFSET)/wl/config
++    WLCFGDIR   := $(src)/$(SRCBASE_OFFSET)/wl_rsdb/config
++    
++    # define OS flag to pick up wl osl file from wl.mk
++    WLLX=1
++    ifdef CONFIG_DPSTA
++        DPSTA=1
++    endif
++    ifdef CONFIG_CR4_OFFLOAD
++#        WLOFFLD=1 
++    endif
++#    include $(WLCFGDIR)/$(WLCONFFILE)
++    include $(WLCFGDIR)/wlconfig_lx_router_apsta_rsdb
++    # Disable ROUTER_COMA in ARM router for now.
++ifeq ($(ARCH), arm)
++    ROUTER_COMA=0
++endif
++    include $(WLCFGDIR)/wl.mk
++
++    WLAN_ComponentsInUse := bcmwifi ppr olpc keymgmt iocv dump hal phymods
++    ifeq ($(WLCLMAPI),1)
++        WLAN_ComponentsInUse += clm
++    endif
++    include $(src)/$(SRCBASE_OFFSET)/makefiles/WLAN_Common_rsdb.mk
++    
++    ifeq ($(WLFILES_SRC),)
++         $(error WLFILES_SRC is undefined in $(WLCFGDIR)/$(WLCONFFILE))
++    endif
++    
++    ifeq ($(WLCLMAPI),1)
++    CLM_TYPE ?= router
++    $(call WLAN_GenClmCompilerRule,$(src)/$(SRCBASE_OFFSET)/wl_rsdb/clm/src,$(src)/$(SRCBASE_OFFSET))
++#	$(call WLAN_GenClmCompilerRule,$(src)/$(SRCBASE_OFFSET)/wl_rsdb/clm/src,$(src)/$(SRCBASE_OFFSET))
++    endif
++    
++    # need -I. to pick up wlconf.h in build directory
++   
++    ifeq ($(CONFIG_WL_ALL_PASSIVE_ON),y)
++    EXTRA_CFLAGS    += -DWL_ALL_PASSIVE_ON -DWL_ALL_PASSIVE
++    else
++    ifeq ($(CONFIG_WL_ALL_PASSIVE_RUNTIME),y)
++    EXTRA_CFLAGS    += -DWL_ALL_PASSIVE
++    endif
++    endif
++    ifeq ($(CONFIG_CACHE_L310),y)
++    # WLENT_AP: only define WL_PL310_WAR if ACP is not enabled.
++      ifneq ($(CONFIG_PLAT_ACP_ENABLE),y)
++        EXTRA_CFLAGS    += -DWL_PL310_WAR
++      endif
++    endif
++# WLENT_AP: Temporary fix for WLDEBUG=1 builds, turn off Werror.
++#  Builds w/o WLDEBUG=1 go through driver/net/hnd instead of
++#  drivers/net/wl, so Werror is not on.
++#    EXTRA_CFLAGS += -DDMA $(WLFLAGS) -Werror
++    EXTRA_CFLAGS += -DDMA $(WLFLAGS)
++#    EXTRA_CFLAGS += -DWLENT_CONVERGED_PKG
++    EXTRA_CFLAGS += -I$(src) -I$(src)/.. -I$(src)/$(SRCBASE_OFFSET)/wl_rsdb/linux \
++		    -I$(src)/$(SRCBASE_OFFSET)/wl_rsdb/sys -I$(src)/$(SRCBASE_OFFSET)/wl_rsdb/dot1as/include \
++		    -I$(src)/$(SRCBASE_OFFSET)/wl_rsdb/dot1as/src -I$(src)/$(SRCBASE_OFFSET)/wl_rsdb/proxd/include
++    EXTRA_CFLAGS += $(WLAN_ComponentIncPathA) $(WLAN_IncPathA)
++
++    ifneq ("$(CONFIG_CC_OPTIMIZE_FOR_SIZE)","y")
++         EXTRA_CFLAGS += -finline-limit=2048
++    endif
++    
++    # include path for dpsta.h
++    EXTRA_CFLAGS += -I$(src)/$(DPSTASRC)
++
++    # Build the phy source files iff -DPHY_HAL is present.
++    ifneq ($(findstring PHY_HAL,$(WLFLAGS)),)
++        EXTRA_CFLAGS += -I$(src)/$(SRCBASE_OFFSET)/wl_rsdb/phy
++    else
++	WLFILES_SRC := $(filter-out src/wl_rsdb/phy/%,$(WLFILES_SRC))
++    endif
++
++    # The paths in WLFILES_SRC need a bit of adjustment.
++    WL_OBJS := $(sort $(patsubst %.c,%.o,$(addprefix $(SRCBASE_OFFSET)/,$(patsubst src/%,%,$(WLFILES_SRC)))))
++
++#WLENT_AP start
++# Remove proprietary proxd files from source list if they are not present
++REBUILD_WLC_FFT=$(shell if [ -e "$(src)/$(SRCBASE_OFFSET)/wl_rsdb/proxd/src/wlc_fft.c" ]; then echo 1; else echo 0; fi)
++REBUILD_WLC_TOF=$(shell if [ -e "$(src)/$(SRCBASE_OFFSET)/wl_rsdb/proxd/src/wlc_tof.c" ]; then echo 1; else echo 0; fi)
++REBUILD_WLC_TOF_ADJ=$(shell if [ -e "$(src)/$(SRCBASE_OFFSET)/wl_rsdb/proxd/src/wlc_tof_adj.c" ]; then echo 1; else echo 0; fi)
++
++ifneq ($(REBUILD_WLC_FFT),1)
++	WLFILES_SRC := $(filter-out src/wl_rsdb/proxd/src/wlc_fft.c,$(WLFILES_SRC))
++endif
++
++ifneq ($(REBUILD_WLC_TOF),1)
++	WLFILES_SRC := $(filter-out src/wl_rsdb/proxd/src/wlc_tof.c,$(WLFILES_SRC))
++endif
++
++ifneq ($(REBUILD_WLC_FFT),1)
++	WLFILES_SRC := $(filter-out src/wl_rsdb/proxd/src/wlc_tof_adj.c,$(WLFILES_SRC))
++endif
++#WLENT_AP end
++
++    # wl-objs is for linking to wl.o
++    $(TARGET)-objs := $(WLCONF_O) $(WL_OBJS)
++    obj-$(CONFIG_WL) := $(TARGET).o
++
++else # SRCBASE/wl/sys doesn't exist
++
++    # Otherwise, assume prebuilt object module(s) in src/wl/linux directory
++    prebuilt := wl_$(wl_suffix).o
++    $(TARGET)-objs := $(SRCBASE_OFFSET)/wl_rsdb/linux/$(prebuilt)
++    obj-$(CONFIG_WL) := $(TARGET).o
++
++    ifeq ("$(CONFIG_WL_USBAP)","y")
++        wl_high-objs := $(SRCBASE_OFFSET)/wl_rsdb/linux/wl_high.o
++        obj-m += wl_high.o
++    endif
++endif
++
++
++#WL_CONF_H: wlconf.h
++
++UPDATESH   := $(WLCFGDIR)/diffupdate.sh
++
++WLTUNEFILE ?= wltunable_lx_router.h
++
++$(obj)/$(WLCONF_O): $(obj)/$(WLCONF_H) FORCE
++
++$(obj)/$(WLCONF_H): $(WLCFGDIR)/$(WLTUNEFILE) FORCE
++	[ ! -f $@ ] || chmod +w $@
++#WLENT_AP start - more debug information in make output
++	@echo "********************"
++#WLENT_AP end
++	@echo "check and update config file"
++#WLENT_AP start - more debug information in make output
++#	@echo $(if $(VLIST),"VLIST          = $(VLIST)")
++	@echo "VLIST = $(VLIST)"
++#WLENT_AP end
++	@echo "CONFIG_WL_CONF = $(CONFIG_WL_CONF)"
++	@echo "WLTUNEFILE     = $(WLTUNEFILE)"
++#WLENT_AP start - more debug information in make output
++	@echo "TARGET         = $(TARGET)"
++	@echo "WLFILES_SRC    = $(WLFILES_SRC)"
++#kiran start
++	@echo "WLAN_TreeBaseA = $(WLAN_TreeBaseA)"
++	@echo "WLAN_TreeBaseR = $(WLAN_TreeBaseR)"
++	@echo "WLAN_SrcBaseA = $(WLAN_SrcBaseA)"
++	@echo "WLAN_SrcBaseR = $(WLAN_SrcBaseR)"
++	@echo "WLAN_ComponentsInUse = $(WLAN_ComponentsInUse)"
++	@echo "WLAN_ComponentPathsInUse = $(WLAN_ComponentPathsInUse)"
++	@echo "WLAN_ComponentIncPathsInUse = $(WLAN_ComponentIncPathsInUse)"
++	@echo "WLAN_ComponentSrcPathsInUse = $(WLAN_ComponentSrcPathsInUse)"
++	@echo "WLAN_StdSrcDirs = $(WLAN_StdSrcDirs)"
++	@echo "WLAN_SrcIncDirs = $(WLAN_SrcIncDirs)"
++	@echo "WLAN_StdSrcDirsR = $(WLAN_StdSrcDirsR)"
++	@echo "WLAN_SrcIncDirsR = $(WLAN_SrcIncDirsR)"
++	@echo "WLAN_StdIncPathR = $(WLAN_StdIncPathR)"
++	@echo "WLAN_IncDirsR = $(WLAN_IncDirsR)"
++	@echo "WLAN_IncPathR = $(WLAN_IncPathR)"
++	@echo "WLAN_StdSrcDirsA = $(WLAN_StdSrcDirsA)"
++	@echo "WLAN_IncDirsA = $(WLAN_IncDirsA)"
++	@echo "WLAN_IncPathA = $(WLAN_IncPathA)"
++	@echo "WLAN_ComponentSrcDirsR = $(WLAN_ComponentSrcDirsR)"
++	@echo "WLAN_ComponentIncDirsR = $(WLAN_ComponentIncDirsR)"
++	@echo "WLAN_ComponentIncPathR = $(WLAN_ComponentIncPathR)"
++	@echo "WLAN_ComponentSrcDirsA = $(WLAN_ComponentSrcDirsA)"
++	@echo "WLAN_ComponentIncDirsA = $(WLAN_ComponentIncDirsA)"
++	@echo "WLAN_ComponentIncPathA = $(WLAN_ComponentIncPathA)"
++	@echo "WLAN_ComponentSrcDirs = $(WLAN_ComponentSrcDirs)"
++	@echo "WLAN_ComponentIncDirs = $(WLAN_ComponentIncDirs)"
++	@echo "WLAN_ComponentIncPath = $(WLAN_ComponentIncPath)"
++#kiran end
++#WLENT_AP end
++	cp $< wltemp
++	$(UPDATESH) wltemp $@
++
++FORCE:
++
++clean-files += $(SRCBASE_OFFSET)/wl_rsdb/sys/*.o $(SRCBASE_OFFSET)/wl_rsdb/phy/*.o $(SRCBASE_OFFSET)/wl_rsdb/ppr/src/*.o $(SRCBASE_OFFSET)/wl_rsdb/sys/.*.*.cmd $(SRCBASE_OFFSET)/wl_rsdb/phy/.*.*.cmd $(SRCBASE_OFFSET)/bcmcrypto/.*.*.cmd $(SRCBASE_OFFSET)/wl_rsdb/clm/src/*.o $(SRCBASE_OFFSET)/wl_rsdb/clm/src/.*.*.cmd $(SRCBASE_OFFSET)/shared/bcmwifi/src/.*.*.cmd $(SRCBASE_OFFSET)/shared/bcmwifi/src/.*.*.cmd $(WLCONF_H) $(WLCONF_O)
+diff --git a/main/components/driver/wl_rsdb/wl_high/Makefile b/main/components/driver/wl_rsdb/wl_high/Makefile
+new file mode 100644
+index 0000000..665c5ab
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_high/Makefile
+@@ -0,0 +1,49 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.4 2010-10-07 09:29:27 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_HIGH),)
++CONFIG_WL_HIGH := "wlconfig_lx_router_high"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_HIGH)
++
++wl_suffix := high
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
++
++ifneq ($(wildcard $(src)/$(SRCBASE_OFFSET)/shared/zlib),)
++EXTRA_CFLAGS += -I$(src)/$(SRCBASE_OFFSET)/shared/zlib
++endif
+diff --git a/main/components/driver/wl_rsdb/wl_sta/Makefile b/main/components/driver/wl_rsdb/wl_sta/Makefile
+new file mode 100644
+index 0000000..eab462c
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_sta/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:40 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_STA),)
++CONFIG_WL_STA := "wlconfig_lx_router_sta"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_STA)
++
++wl_suffix := sta
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl_rsdb/wl_sta_onchip_g/Makefile b/main/components/driver/wl_rsdb/wl_sta_onchip_g/Makefile
+new file mode 100644
+index 0000000..0a15e79
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wl_sta_onchip_g/Makefile
+@@ -0,0 +1,45 @@
++#
++# Makefile for the Broadcom wl driver
++#
++# Copyright (C) 2015, Broadcom Corporation. All Rights Reserved.
++# 
++# Permission to use, copy, modify, and/or distribute this software for any
++# purpose with or without fee is hereby granted, provided that the above
++# copyright notice and this permission notice appear in all copies.
++# 
++# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
++# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
++# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
++# SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
++# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
++# OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++# CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++#
++# $Id: Makefile,v 1.2 2007-11-17 01:37:41 $
++#
++
++SRCBASE_OFFSET := ../../../../../../../../src
++
++ifeq ($(CONFIG_WL_STA_ONCHIP_G),)
++CONFIG_WL_STA_ONCHIP_G := "wlconfig_lx_router_sta_1chipG"
++endif
++CONFIG_WL_CONF = $(CONFIG_WL_STA_ONCHIP_G)
++
++wl_suffix := sta_onchip_g
++
++TARGET := wl_$(wl_suffix)
++WLCONF_H := ../wlconf.h
++WLCONF_O := ../wlconf.o
++
++ifneq ($(KERNELRELEASE),)
++# kbuild part of makefile
++include $(src)/../wl_generic.mk
++else
++# Normal makefile
++KERNELDIR := $(BASEDIR)/components/opensource/linux/linux-2.6.36
++all:
++	$(MAKE) -C $(KERNELDIR) M=`pwd`
++clean:
++	$(MAKE) -C $(KERNELDIR) M=`pwd` clean
++include ../wl_generic.mk
++endif
+diff --git a/main/components/driver/wl_rsdb/wlconf.c b/main/components/driver/wl_rsdb/wlconf.c
+new file mode 100644
+index 0000000..24d9e4d
+--- /dev/null
++++ b/main/components/driver/wl_rsdb/wlconf.c
+@@ -0,0 +1 @@
++#include <wlconf.h>
+diff --git a/main/components/router/.config b/main/components/router/.config
+index 2f70e95..cc96f8d 100644
+--- a/main/components/router/.config
++++ b/main/components/router/.config
+@@ -31,9 +31,12 @@ CONFIG_UCLIBC=y
+ # CONFIG_USBAP is not set
+ # CONFIG_GMAC3 is not set
+ # CONFIG_DHDAP is not set
++# CONFIG_RSDB is not set
++# CONFIG_WLENT_CONVERGED_PKG is not set
++# CONFIG_WLENT_MACSEC is not set
++# CONFIG_PLAT_BCM58522 is not set
+ # CONFIG_UBIFS_FS is not set
+ # CONFIG_UBIFS_FS_8G is not set
+-# CONFIG_RSDB is not set
+ CONFIG_SQUASHFS=y
+ # CONFIG_CRAMFS is not set
+ 
+@@ -43,7 +46,7 @@ CONFIG_SQUASHFS=y
+ CONFIG_VENDOR=broadcom
+ CONFIG_UDHCPD=y
+ CONFIG_PPP=y
+-CONFIG_LIBUPNP=y
++CONFIG_LIBUPNP=n
+ CONFIG_IGD=y
+ # CONFIG_SAMBA is not set
+ CONFIG_TASKSET=y
+@@ -57,7 +60,7 @@ CONFIG_MPSTAT=y
+ # CONFIG_DLNA_DMS is not set
+ # CONFIG_DLNA_DMR is not set
+ CONFIG_MFP=y
+-CONFIG_HSPOT=y
++CONFIG_HSPOT=n
+ CONFIG_WNM=y
+ CONFIG_NAS=y
+ # CONFIG_WAPI is not set
+@@ -101,7 +104,6 @@ CONFIG_FAILSAFE_UPGRADE_SUPPORT=y
+ # CONFIG_MDNSRESPONDER is not set
+ CONFIG_LIBZ=y
+ # CONFIG_SOUND is not set
+-CONFIG_LIBID3TAG=y
+ AIRPLAYDIR=$(BASEDIR)/airplay
+ CONFIG_BCMASPMD=y
+ 
+@@ -156,6 +158,5 @@ CONFIG_VMSTAT=y
+ #
+ # Advanced Router Features
+ #
+-# WLENT_AP: disable visualization, not needed 
+ # CONFIG_VISUALIZATION is not set
+ # CONFIG_WLENT_AIRIQ is not set
+diff --git a/main/components/router/Makefile b/main/components/router/Makefile
+index 7556fee..82d2b36 100644
+--- a/main/components/router/Makefile
++++ b/main/components/router/Makefile
+@@ -42,13 +42,18 @@ ifneq ($(findstring arm,$(PLT)),)
+   ARCH := arm
+ else ifneq ($(findstring mipsel,$(PLT)),)
+   ARCH := mips
++else ifneq ($(findstring rv160w_260w,$(PLT)),)
++  ARCH := arm
+ else
+   echo "PLT is not defined"
+   error
+ endif
+ endif
+ 
++PLATFORM := $(LOCAL_PLATFORM)
++
+ # uClibc wrapper
++ifeq ($(filter rv160w_260w,$(PLT)),)
+ ifeq ($(CONFIG_UCLIBC),y)
+ PLATFORM := $(PLT)-uclibc
+ else ifeq ($(CONFIG_GLIBC),y)
+@@ -56,6 +61,7 @@ PLATFORM := $(PLT)-glibc
+ else
+ PLATFORM := $(PLT)
+ endif
++endif
+ 
+ # Source bases
+ export PLATFORM LIBDIR USRLIBDIR LINUX_VERSION
+@@ -91,9 +97,13 @@ else
+ ifneq ($(strip $(BCA_HNDROUTER)),)  #WLENT  
+ export	LINUXDIR ?= $(SRCBASE)/linux/linux
+ SUBMAKE_SETTINGS ?= SRCBASE=$(SRCBASE)
+-else
++else ifeq ($(LINUXDIR),)
+ export	LINUXDIR := $(SRCBASE)/linux/linux
+ SUBMAKE_SETTINGS  = SRCBASE=$(SRCBASE)
++else
++export	KBUILD_VERBOSE := 1
++export	BUILD_MFG := 0
++SUBMAKE_SETTINGS = SRCBASE=$(SRCBASE) BASEDIR=$(BASEDIR)
+ endif
+ endif
+ 
+@@ -141,6 +151,11 @@ export BSA_DIR := $(BLUETOOTH_DIR)/3rdparty/embedded/bsa_examples/linux/server/b
+ export BUILD := i386-pc-linux-gnu
+ export HOSTCC := gcc
+ 
++ifneq ($(filter rv160w_260w,$(PLT)),)
++export CROSS_COMPILE := $(LOCAL_CROSS_COMPILE)
++export TOOLCHAIN := $(LOCAL_TOOLCHAIN)
++endif
++
+ ifeq ($(PLATFORM),mipsel)
+ export CROSS_COMPILE := mipsel-linux-
+ export CONFIGURE := ./configure mipsel-linux --build=$(BUILD)
+@@ -319,6 +334,11 @@ export CFLAGS += -DWL_PROXDETECT
+ export CFLAGS += -DWLENT_LOCATION
+ endif
+ 
++ifneq ($(USE_FREESCALE_ARCH),)
++export CFLAGS += -DFREESCALE_ARCH
++export EXTRA_LDFLAGS += -luci
++endif
++
+ #ifeq ($(CONFIG_CR4_OFFLOAD),y)
+ #export CFLAGS += -DWLOFFLD
+ #endif
+@@ -328,9 +348,11 @@ ifeq ($(CONFIG_TRAFFIC_MGMT_RSSI_POLICY),y)
+ export CFLAGS += -DTRAFFIC_MGMT_RSSI_POLICY
+ endif
+ 
++ifneq ($(TARGET_STRIP),1)
+ #if !defined(BCMDBG)
+ obj-$(CONFIG_UTELNETD) += utelnetd
+ #endif
++endif
+ 
+ MNL_CFLAGS:="-I$(LIBMNL_DIR)/install/include"
+ MNL_LIBS:="-L$(LIBMNL_DIR)/install/lib -lmnl"
+@@ -665,8 +687,10 @@ obj-$(CONFIG_APLAY) += alsa-utils/aplay
+ obj-$(CONFIG_NVRAM) += nvram
+ obj-$(CONFIG_SHARED) += shared
+ obj-$(CONFIG_LIBBCM) += libbcm
++ifneq ($(TARGET_STRIP),1)
+ obj-$(CONFIG_HTTPD) += httpd
+ obj-$(CONFIG_RC) += rc
++endif
+ ifeq ($(LINUX_VERSION)$(PLT),2_6_36arm)
+ obj-$(CONFIG_VISUALIZATION) += libsqlite3 libjsonc libxml2 visdcoll visdcon
+ obj-$(CONFIG_TREND_IQOS) += libjsonc
+@@ -674,17 +698,22 @@ endif
+ ifeq ($(LINUX_VERSION)$(PLT),3_10_52arm)
+ obj-$(CONFIG_VISUALIZATION) += libsqlite3 libjsonc libxml2 visdcoll visdcon
+ endif
++ifneq ($(TARGET_STRIP),1)
+ obj-$(CONFIG_WWW) += www
+ obj-$(CONFIG_GLIBC) += lib
+ obj-$(CONFIG_UCLIBC) += lib
++endif
+ obj-$(CONFIG_WLCONF) += wlconf
++ifneq ($(TARGET_STRIP),1)
+ obj-$(CONFIG_BRIDGE) += bridge
+ obj-$(CONFIG_BUSYBOX) += busybox
+ obj-$(CONFIG_DNSMASQ) += dnsmasq
+ obj-$(CONFIG_IPTABLES) += iptables
+ obj-$(CONFIG_LIBIPT) += iptables
++endif
+ # Build only for kernel >= 2.6.36.
+ ifeq ($(call wlan_version_ge,$(BCM_KVERSIONSTRING),2.6.36),TRUE)
++ifneq ($(TARGET_STRIP),1)
+ obj-$(CONFIG_LIBSTDCPP) += libstdcpp
+ obj-$(CONFIG_LIBFLOW) += libflow
+ obj-$(CONFIG_LIBMNL) += libmnl
+@@ -692,6 +721,7 @@ obj-$(CONFIG_LIBNFNETLINK) += libnfnetlink
+ obj-$(CONFIG_LIBNETFILTER_CONNTRACK) += libnetfilter_conntrack
+ obj-$(CONFIG_LIBNETFILTER_QUEUE) += libnetfilter_queue
+ endif
++endif
+ obj-$(CONFIG_HSPOT) += hspot_ap
+ obj-$(CONFIG_NAS) += nas
+ obj-$(CONFIG_WAPI) += wapi/wapid
+@@ -699,36 +729,47 @@ obj-$(CONFIG_WAPI_IAS) += wapi/as
+ obj-$(CONFIG_SES) += ses/ses
+ obj-$(CONFIG_SES_CL) += ses/ses_cl
+ obj-$(CONFIG_EZC) += ezc
++ifneq ($(TARGET_STRIP),1)
+ obj-$(CONFIG_NETCONF) += netconf
+ obj-$(CONFIG_NTP) += ntpclient
+ obj-$(CONFIG_PPP) += ppp
+ obj-$(CONFIG_UDHCPD) += udhcpd
+ obj-$(CONFIG_IGD) += igd
++endif
+ obj-$(CONFIG_LIBUPNP) += libupnp
++ifneq ($(TARGET_STRIP),1)
+ obj-$(CONFIG_FFMPEG) += ffmpeg
+ obj-$(CONFIG_DLNA_DMR) += dlna/dmr
+ obj-$(CONFIG_DLNA_DMS) += dlna/dms
+ obj-$(CONFIG_SAMBA) += samba
++endif
+ obj-$(CONFIG_UTILS) += utils
+ obj-$(CONFIG_WLEXE) += wlexe
++ifneq ($(TARGET_STRIP),1)
+ obj-$(CONFIG_ETC) += etc
+ obj-$(CONFIG_VLAN) += vlan
+ # WLENT_AP BEGIN
+ obj-$(CONFIG_CRYPTOTEST) += cryptotest
+ # WLENT_AP END
++endif
+ obj-$(CONFIG_WPS) += wps
+ obj-$(CONFIG_NFC) += nfc
++ifneq ($(TARGET_STRIP),1)
+ obj-$(CONFIG_EMF) += emf
+ obj-$(CONFIG_EMF) += igs
+ obj-$(CONFIG_IGMP_PROXY) += igmp
++endif
+ obj-$(CONFIG_WL_ACI) += aci
+ ifeq (2_6,$(LINUX_VERSION))
++ifneq ($(TARGET_STRIP),1)
+ obj-y += udev
+ obj-y += hotplug2
+ #if defined(BCMDBG)
+ obj-$(CONFIG_NVRAM) += crashlog
+ #endif
+ endif
++endif
++ifneq ($(TARGET_STRIP),1)
+ obj-$(CONFIG_LLD2D) += lltd/wrt54g-linux
+ #if defined(BCMDBG)
+ obj-$(CONFIG_UTELNETD) += utelnetd
+@@ -741,9 +782,11 @@ endif
+ #if defined(PHYMON)
+ obj-$(CONFIG_PHYMON_UTILITY) += phymon
+ #endif
++endif
+ #if defined(EXT_ACS)
+ obj-$(CONFIG_EXTACS) += acsd
+ #endif
++ifneq ($(TARGET_STRIP),1)
+ #if defined(BCM_BSD)
+ obj-$(CONFIG_BCMBSD) += bsd
+ #endif
+@@ -755,6 +798,7 @@ obj-$(CONFIG_BCMDRSDBD) += drsdbd
+ #endif
+ 
+ obj-$(CONFIG_VMSTAT) += vmstat
++endif
+ ifeq ($(LINUX_VERSION)$(PLT),2_6_36arm)
+ obj-$(CONFIG_MPSTAT) += mpstat
+ obj-$(CONFIG_TASKSET) += taskset
+@@ -780,8 +824,10 @@ endif
+ #obj-$(CONFIG_DHCPV6C) += dhcp6c
+ endif #BCA_HNDROUTER
+ 
++ifneq ($(TARGET_STRIP),1)
+ # WLENT_TP_DUMP
+ obj-y += tpdump
++endif
+ 
+ # BUZZZ tools: function call tracing, performance monitoring, event history
+ obj-$(CONFIG_BUZZZ) += buzzz
+@@ -804,6 +850,7 @@ endif
+ # always build eap dispatcher
+ obj-y += eapd/linux
+ 
++ifneq ($(TARGET_STRIP),1)
+ ifeq ($(CONFIG_VOIP),y)
+ obj-y += voipd
+ endif
+@@ -816,11 +863,15 @@ endif
+ # always build bandsteerd
+ obj-y += bandsteerd
+ #WLENT_BANDSTEER end
++endif
+ 
++ifneq ($(TARGET_STRIP),1)
+ #WLENT_SAS start
+ obj-y += sasd
+ #WLENT_SAS end
++endif
+ 
++ifneq ($(TARGET_STRIP),1)
+ #WLENT Wireless Intrusion Detection Examples start
+ obj-y += wids
+ #WLENT Wireless Intrusion Detection Examples end
+@@ -830,6 +881,7 @@ ifeq ($(CONFIG_WLENT_BSA_SERVER),y)
+ obj-y += bluetooth
+ endif
+ #WLENT_AP end
++endif
+ 
+ obj-clean := $(foreach obj,$(obj-y) $(obj-n),$(obj)-clean)
+ obj-install := $(foreach obj,$(obj-y),$(obj)-install)
+@@ -898,26 +950,36 @@ else
+ ifneq (2_4,$(LINUX_VERSION))
+ ifneq ($(BUILD_MFG), 1)
+ ifdef ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	# EMAKE build
+ 	$(MAKE) -C ${LINUXDIR} $(SUBMAKE_SETTINGS) zImage
++endif
+ else # ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	# GMAKE build
+ 	(echo '.NOTPARALLEL:' ; cat ${LINUXDIR}/Makefile) |\
+ 	    $(MAKE) -C ${LINUXDIR} -f - $(SUBMAKE_SETTINGS) zImage
++endif	    
+ endif # ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) CONFIG_SQUASHFS=$(CONFIG_SQUASHFS) -C $(SRCBASE_ROUTER)/compressed ARCH=$(ARCH)
++endif
+ endif # BUILD_MFG
+ else  # LINUXDIR
+ ifdef ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	# EMAKE build
+ 	$(if $(shell grep "CONFIG_EMBEDDED_RAMDISK=y" ${LINUXDIR}/.config),,\
+ 	  $(MAKE) -C ${LINUXDIR} $(SUBMAKE_SETTINGS) zImage)
++endif	  
+ else # ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	# GMAKE build
+ 	$(if $(shell grep "CONFIG_EMBEDDED_RAMDISK=y" ${LINUXDIR}/.config),, \
+ 	  (echo '.NOTPARALLEL:' ; cat ${LINUXDIR}/Makefile) | \
+ 	  $(MAKE) -C ${LINUXDIR} -f - $(SUBMAKE_SETTINGS) zImage \
+ 	 )
++endif
+ endif # ECLOUD_BUILD_ID
+ endif # LINUXDIR
+ ifdef ECLOUD_BUILD_ID
+@@ -925,29 +987,39 @@ ifdef ECLOUD_BUILD_ID
+ ifneq (2_6,$(LINUX_VERSION))  #/* 2_6_36, 3_10_52 */
+ 	# The each Kernel modules xx.mod.c need the symbols in vmlinux,
+ 	# So how can we do the make modules before the vmlinux is ready?
++ifneq ($(TARGET_STRIP),1)	
+ 	$(if $(shell grep "CONFIG_MODULES=y" ${LINUXDIR}/.config), \
+ 	  $(MAKE) -C ${LINUXDIR} modules)
++endif	  
+ else
++ifneq ($(TARGET_STRIP),1)
+ 	$(if $(shell grep "CONFIG_MODULES=y" ${LINUXDIR}/.config), \
+ 	  $(MAKE) -C ${LINUXDIR} -f - $(SUBMAKE_SETTINGS) MFG_WAR=1 zImage ; \
+ 	  $(MAKE) -C ${LINUXDIR} modules)
+ endif
++endif
+ else # ECLOUD_BUILD_ID
+ 	# GMAKE build
+ ifneq (2_6,$(LINUX_VERSION))  #/* 2_6_36, 3_10_52 */
+ 	# The each Kernel modules xx.mod.c need the symbols in vmlinux,
+ 	# So how can we do the make modules before the vmlinux is ready?
++ifneq ($(TARGET_STRIP),1)	
+ 	$(if $(shell grep "CONFIG_MODULES=y" ${LINUXDIR}/.config), \
+ 	  (echo '.NOTPARALLEL:' ; cat ${LINUXDIR}/Makefile) | $(MAKE) -C ${LINUXDIR} -f - $(SUBMAKE_SETTINGS) MFG_WAR=1 zImage ; \
+ 	  (echo '.NOTPARALLEL:' ; cat ${LINUXDIR}/Makefile) | $(MAKE) -C ${LINUXDIR} -f - ARCH=$(ARCH) modules)
++endif	  
+ else
++ifneq ($(TARGET_STRIP),1)
+ 	$(if $(shell grep "CONFIG_MODULES=y" ${LINUXDIR}/.config), \
+ 	  (echo '.NOTPARALLEL:' ; cat ${LINUXDIR}/Makefile) | $(MAKE) -C ${LINUXDIR} -f - ARCH=$(ARCH) modules \
+ 	 )
+ endif
++endif
+ endif # ECLOUD_BUILD_ID
+ 	# Preserve the debug versions of these and strip for release
++ifneq ($(TARGET_STRIP),1)	
+ 	$(call STRIP_DEBUG_SYMBOLS,$(LINUXDIR)/vmlinux)
++endif	
+ ifneq (2_4,$(LINUX_VERSION))
+ 	$(call STRIP_DEBUG_SYMBOLS,$(LINUXDIR)/drivers/net/wl/wl.ko)
+ ifeq ("$(CONFIG_USBAP)","y")
+@@ -1017,16 +1089,22 @@ clean: router-clean
+ ifeq ($(strip $(BCA_HNDROUTER)),)  #WLENT  
+ 	@echo cleaning LINUXDIR = $(LINUXDIR)
+ ifneq (2_4,$(LINUX_VERSION))
++ifneq ($(TARGET_STRIP),1)
+ 	# we need to pass some conf file for cleaning 2.6. The kbuild clean doesn't seem to
+ 	# to load the .config the way our wl Makefile is expecting.
+ 	$(MAKE) CONFIG_WL_CONF=wlconfig_lx_router_ap -C $(LINUXDIR) $(SUBMAKE_SETTINGS) clean
+ 	$(MAKE) -C $(SRCBASE_ROUTER)/compressed ARCH=$(ARCH) clean
++endif
+ else
++ifneq ($(TARGET_STRIP),1)
+ 	$(MAKE) -C $(LINUXDIR) $(SUBMAKE_SETTINGS) clean
+ endif
++endif
++ifneq ($(TARGET_STRIP),1)
+ 	$(MAKE) -C $(SRCBASE)/cfe/build/broadcom/bcm947xx ARCH=$(ARCH) clean
+ endif # BCA_HNDROUTER
+ 	[ ! -f $(SRCBASE)/tools/misc/Makefile ] || $(MAKE) -C $(SRCBASE)/tools/misc clean
++endif
+ 
+ distclean mrproper: clean
+ 	rm -f .config .config.plt $(LINUXDIR)/.config
+@@ -1049,12 +1127,16 @@ ifneq ("$(CONFIG_WAPI)$(CONFIG_WAPI_IAS)","")
+ #	[ ! -d wapi/wapid ] || $(MAKE) -C wapi/wapid optimize
+ endif
+ 	# Install (and possibly optimize) C library
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) lib-install
++endif
++ifneq ($(TARGET_STRIP),1)
+ 	# Install modules into filesystem
+ 	if grep -q "CONFIG_MODULES=y" $(LINUXDIR)/.config ; then \
+ 	    $(MAKE) -C $(LINUXDIR) $(SUBMAKE_SETTINGS) \
+ 		modules_install DEPMOD=/bin/true INSTALL_MOD_PATH=$(TARGETDIR) ; \
+ 	fi
++endif
+ ifneq (2_4,$(LINUX_VERSION))
+ ifeq ("$(CONFIG_USBAP)","y")
+ 	# Don't delete wl_high.ko for USBAP
+@@ -1070,6 +1152,7 @@ else
+ 	find $(TARGETDIR) -name "wl_*.o" | xargs rm -rf
+ endif
+ endif
++ifneq ($(TARGET_STRIP),1)
+     #WLENT_AP BEGIN
+ 	if grep -q "CONFIG_IPROC_PAE=m" $(LINUXDIR)/.config ; then \
+         mkdir -p $(TARGETDIR)/lib/firmware ;\
+@@ -1079,35 +1162,46 @@ endif
+     #WLENT_AP END
+ 	# Prepare filesystem
+ 	cd $(TARGETDIR) && $(TOP)/misc/rootprep.sh
++endif
+ 
+ ifeq ($(CONFIG_SQUASHFS), y)
+ ifneq (2_6,$(LINUX_VERSION)) # /* 2_6_36, 3_10_52 */
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) -C squashfs-4.2 mksquashfs
+ 	squashfs-4.2/mksquashfs $(TARGETDIR) $(PLATFORMDIR)/$(ROOT_IMG) -noappend -all-root
++endif
+ else
++ifneq ($(TARGET_STRIP),1)
+ 	# Make sure mksquashfs 3.0 is used
+ 	+$(MAKE) -C squashfs mksquashfs
+ 	squashfs/mksquashfs $(TARGETDIR) $(PLATFORMDIR)/$(ROOT_IMG) -noappend -all-root
++endif	
+ endif
+ else 
+ ifeq ($(CONFIG_UBIFS_FS_8G), y)
++ifneq ($(TARGET_STRIP),1)
+         # for 4K page, 256K block with 1024b sectors
+ 	ubi-utils/mkfs.ubifs -F -r $(TARGETDIR) -m 4096 -e 258048 -c 478 -o $(PLATFORMDIR)/rfs.ubifs
+ 	ubi-utils/ubinize -o $(PLATFORMDIR)/$(ROOT_IMG) -m 4096 -p 256KiB -s 1024 ubi-utils/ubi-rootfs.cfg
++endif
+ else
+ ifeq ($(CONFIG_UBIFS_FS), y) #WLENT_AP
++ifneq ($(TARGET_STRIP),1)
+ 	ubi-utils/mkfs.ubifs -F -r $(TARGETDIR) -m 2048 -e 129024 -c 200 -o $(PLATFORMDIR)/rfs.ubifs
+ ifeq ($(PLATFORM),arm-glibc)
+ 	ubi-utils/ubinize -o $(PLATFORMDIR)/$(ROOT_IMG) -m 2048 -p 128KiB -s 512 ubi-utils/ubi-rootfs-glibc.cfg
+ else
+ 	ubi-utils/ubinize -o $(PLATFORMDIR)/$(ROOT_IMG) -m 2048 -p 128KiB -s 512 ubi-utils/ubi-rootfs.cfg
+ endif
++endif
+ else
++ifneq ($(TARGET_STRIP),1)
+ 	# Make sure mkcramfs-2.0 is used
+ 	+$(MAKE) -C $(CRAMFSDIR) mkcramfs
+ 	# '-u 0 -g 0' will set the uid and gid of all the files to 0 (root)
+ 	# These options are currently only available on our version of mkcramfs
+ 	$(CRAMFSDIR)/mkcramfs -u 0 -g 0 $(TARGETDIR) $(PLATFORMDIR)/$(ROOT_IMG)
++endif	
+ endif # CONFIG_UBIFS_FS
+ endif # CONFIG_UBIFS_FS_8G
+ endif # CONFIG_SQUASHFS
+@@ -1115,35 +1209,48 @@ endif # CONFIG_SQUASHFS
+ ifneq (2_4,$(LINUX_VERSION))
+ 	# Package kernel and filesystem
+ ifeq ($(BUILD_MFG), 1)
++ifneq ($(TARGET_STRIP),1)
+ 	cd $(TARGETDIR) ; \
+ 	find . | cpio -o -H newc | gzip > $(LINUXDIR)/usr/initramfs_data.cpio.gz
+ 	ls -l $(LINUXDIR)/usr/initramfs_data.cpio.gz
++endif	
+ ifdef ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	# EMAKE build
+ 	$(MAKE) -C ${LINUXDIR} $(SUBMAKE_SETTINGS) zImage
+ 	+$(MAKE) CONFIG_SQUASHFS=$(CONFIG_SQUASHFS) -C $(SRCBASE_ROUTER)/compressed ARCH=$(ARCH)
++endif
+ else # ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	# GMAKE build
+ 	(echo '.NOTPARALLEL:' ; cat ${LINUXDIR}/Makefile) | $(MAKE) -C ${LINUXDIR} -f - $(SUBMAKE_SETTINGS) zImage
+ 	+$(MAKE) CONFIG_SQUASHFS=$(CONFIG_SQUASHFS) -C $(SRCBASE_ROUTER)/compressed ARCH=$(ARCH)
++endif	
+ endif # ECLOUD_BUILD_ID
+ else # BUILD_MFG
+ ifeq ($(CONFIG_UBIFS_FS) || $(CONFIG_UBIFS_FS_8G), y) #WLENT_AP
++ifneq ($(TARGET_STRIP),1)
+ 	cp $(SRCBASE)/router/compressed/vmlinuz $(PLATFORMDIR)/
+ 	ubi-utils/trx -o $(PLATFORMDIR)/linux.trx $(PLATFORMDIR)/vmlinuz -i 256k $(PLATFORMDIR)/$(ROOT_IMG)
+ 	cp $(SRCBASE)/router/compressed/vmlinuz-gzip $(PLATFORMDIR)/
+ 	ubi-utils/trx -o $(PLATFORMDIR)/linux-gzip.trx $(PLATFORMDIR)/vmlinuz-gzip -i 256k $(PLATFORMDIR)/$(ROOT_IMG)
++endif
+ else
++ifneq ($(TARGET_STRIP),1)
+ 	cp $(SRCBASE_ROUTER)/compressed/vmlinuz $(PLATFORMDIR)/
+ 	trx -o $(PLATFORMDIR)/linux.trx $(PLATFORMDIR)/vmlinuz $(PLATFORMDIR)/$(ROOT_IMG)
+ 	cp $(SRCBASE_ROUTER)/compressed/vmlinuz-gzip $(PLATFORMDIR)/
+ 	trx -o $(PLATFORMDIR)/linux-gzip.trx $(PLATFORMDIR)/vmlinuz-gzip $(PLATFORMDIR)/$(ROOT_IMG)
+ endif
++endif
+ endif # BUILD_MFG
+ 	# Pad self-booting Linux to a 64 KB boundary
++ifneq ($(TARGET_STRIP),1)
+ 	cp $(SRCBASE_ROUTER)/compressed/zImage $(PLATFORMDIR)/
++endif
+ else # LINUXDIR
+ ifdef ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	# EMAKE build
+ 	# Package kernel and filesystem
+ 	$(if $(shell grep "CONFIG_EMBEDDED_RAMDISK=y" ${LINUXDIR}/.config), \
+@@ -1155,7 +1262,9 @@ ifdef ECLOUD_BUILD_ID
+ 		cp $(LINUXDIR)/arch/mips/brcm-boards/bcm947xx/compressed/vmlinuz-gzip $(PLATFORMDIR)/ ; \
+ 		trx -o $(PLATFORMDIR)/linux-gzip.trx $(PLATFORMDIR)/vmlinuz-gzip $(PLATFORMDIR)/$(ROOT_IMG) ; \
+ 	)
++endif
+ else # ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	# GMAKE build
+ 	# Package kernel and filesystem
+ 	$(if $(shell grep "CONFIG_EMBEDDED_RAMDISK=y" ${LINUXDIR}/.config), \
+@@ -1168,13 +1277,18 @@ else # ECLOUD_BUILD_ID
+ 		cp $(LINUXDIR)/arch/mips/brcm-boards/bcm947xx/compressed/vmlinuz-gzip $(PLATFORMDIR)/ ; \
+ 		ubi-utils/trx -o $(PLATFORMDIR)/linux-gzip.trx $(PLATFORMDIR)/vmlinuz-gzip $(PLATFORMDIR)/$(ROOT_IMG) ; \
+ 	)
++endif
+ endif # ECLOUD_BUILD_ID
++ifneq ($(TARGET_STRIP),1)
+ 	# Pad self-booting Linux to a 64 KB boundary
+ 	cp $(LINUXDIR)/arch/mips/brcm-boards/bcm947xx/compressed/zImage $(PLATFORMDIR)/
++endif	
+ endif # LINUXDIR
++ifneq ($(TARGET_STRIP),1)
+ 	dd conv=sync bs=64k < $(PLATFORMDIR)/zImage > $(PLATFORMDIR)/linux.bin
+ 	# Append filesystem to self-booting Linux
+ 	cat $(PLATFORMDIR)/$(ROOT_IMG) >> $(PLATFORMDIR)/linux.bin
++endif	
+ endif # BCA_HNDROUTER
+ 
+ linux3_acnr.trx:
+@@ -1281,6 +1395,7 @@ linux3_nsp.trx:
+ # sibling target is specific for release build scripts used. src/router/misc/toplevel-release.mk will do it.
+ # Create linux-ap.trx or linux-apsta.trx and copy to $(SIBLING_INSTALL_DIR) foldir.
+ sibling:
++ifneq ($(TARGET_STRIP),1)
+ ifneq ($(BUILD_MFG), 1)
+ 	if grep -q "CONFIG_WL_USE_AP=y" $(LINUXDIR)/.config ; then \
+                 cp $(LINUXDIR)/.config $(LINUXDIR)/.config.chk ; \
+@@ -1312,6 +1427,7 @@ ifneq ($(BUILD_MFG), 1)
+ endif
+ 	# MFG will not build TRX
+ 	@true;
++endif
+ 
+ #
+ # Configuration rules
+@@ -1356,6 +1472,7 @@ oldconfig: oldconf
+ 
+ # Default configurations
+ .config:
++ifneq ($(TARGET_STRIP),1)
+ ifneq (2_4,$(LINUX_VERSION))
+ ifneq ($(strip $(BCA_HNDROUTER)),)  #WLENT  
+ 	cp config/defconfig-4.1-vista-dhdap-router $@
+@@ -1366,19 +1483,25 @@ else
+ 	cp config/defconfig $@
+ endif
+ 	+$(MAKE) SRCBASE=$(SRCBASE) LINUXDIR=$(LINUXDIR) oldconfig
++endif
+ 
+ $(LINUXDIR)/.config:
++ifneq ($(TARGET_STRIP),1)
+ ifneq (2_4,$(LINUX_VERSION))
+ 	cp $(LINUXDIR)/arch/$(ARCH)/defconfig-2.6-bcm947xx $@
+ else
+ 	cp $(LINUXDIR)/arch/$(ARCH)/defconfig-bcm947xx $@
+ endif
++endif
+ 
+ # Overwrite Kernel .config
+ check_kernel_config: $(LINUXDIR)/.config
+ ifeq ($(strip $(BCA_HNDROUTER)),)  #WLENT  
++ifneq ($(TARGET_STRIP),1)
+ 	cp -f $(LINUXDIR)/.config $(LINUXDIR)/.config.tmp
++endif
+ ifeq ($(CONFIG_SQUASHFS), y)
++ifneq ($(TARGET_STRIP),1)
+ 	if ! grep -q "CONFIG_SQUASHFS=y" $(LINUXDIR)/.config ; then \
+ 		cp $(LINUXDIR)/.config $(LINUXDIR)/.config.chk ; \
+ 		sed -e "s/CONFIG_CRAMFS=y/# CONFIG_CRAMFS is not set/g" $(LINUXDIR)/.config.chk | \
+@@ -1387,7 +1510,10 @@ ifeq ($(CONFIG_SQUASHFS), y)
+ 		rm -f $(LINUXDIR)/.config.chk ; \
+ 	fi
+ endif
++endif
++
+ ifeq ($(CONFIG_UBIFS_FS) || $(CONFIG_UBIFS_FS_8G), y) #WLENT_AP
++ifneq ($(TARGET_STRIP),1)
+ 	if ! grep -q "CONFIG_UBIFS_FS=y" $(LINUXDIR)/.config ; then \
+ 		cp $(LINUXDIR)/.config $(LINUXDIR)/.config.chk ; \
+ 		sed -e "s/CONFIG_SQUASHFS=y/# CONFIG_SQUASHFS is not set/g" $(LINUXDIR)/.config.chk | \
+@@ -1397,7 +1523,9 @@ ifeq ($(CONFIG_UBIFS_FS) || $(CONFIG_UBIFS_FS_8G), y) #WLENT_AP
+ 		rm -f $(LINUXDIR)/.config.chk ; \
+ 	fi
+ endif
++endif
+ ifeq ($(CONFIG_CRAMFS), y)
++ifneq ($(TARGET_STRIP),1)
+ 	if ! grep -q "CONFIG_CRAMFS=y" $(LINUXDIR)/.config ; then \
+ 		cp $(LINUXDIR)/.config $(LINUXDIR)/.config.chk ; \
+ 		sed -e "s/CONFIG_SQUASHFS=y/# CONFIG_SQUASHFS is not set/g" $(LINUXDIR)/.config.chk | \
+@@ -1406,23 +1534,29 @@ ifeq ($(CONFIG_CRAMFS), y)
+ 		rm -f $(LINUXDIR)/.config.chk ; \
+ 	fi
+ endif
++endif
+ ifeq ($(CONFIG_SHRINK_MEMORY), y)
++ifneq ($(TARGET_STRIP),1)
+ 	if ! grep -q "CONFIG_SHRINKMEM=y" $(LINUXDIR)/.config ; then \
+ 		cp $(LINUXDIR)/.config $(LINUXDIR)/.config.chk ; \
+ 		sed -e "s/# CONFIG_SHRINKMEM is not set/CONFIG_SHRINKMEM=y/g" $(LINUXDIR)/.config.chk > \
+ 		$(LINUXDIR)/.config ; \
+ 		rm -f $(LINUXDIR)/.config.chk ; \
+ 	fi
++endif	
+ else
++ifneq ($(TARGET_STRIP),1)
+ 	if grep -q "CONFIG_SHRINKMEM=y" $(LINUXDIR)/.config ; then \
+ 		cp $(LINUXDIR)/.config $(LINUXDIR)/.config.chk ; \
+ 		sed -e "s/CONFIG_SHRINKMEM=y/# CONFIG_SHRINKMEM is not set/g" $(LINUXDIR)/.config.chk > \
+ 		$(LINUXDIR)/.config ; \
+ 		rm -f $(LINUXDIR)/.config.chk ; \
+ 	fi
++endif	
+ endif
+ 	# Do not override CONFIG_PLAT_MUX_CONSOLE if CONFIG_NFC is disable, others may enable it.
+ ifeq ($(CONFIG_NFC), y)
++ifneq ($(TARGET_STRIP),1)
+ 	if ! grep -q "CONFIG_PLAT_MUX_CONSOLE=y" $(LINUXDIR)/.config ; then \
+ 		cp $(LINUXDIR)/.config $(LINUXDIR)/.config.chk ; \
+ 		sed -e "s/# CONFIG_PLAT_MUX_CONSOLE is not set/CONFIG_PLAT_MUX_CONSOLE=y/g" $(LINUXDIR)/.config.chk > \
+@@ -1430,11 +1564,14 @@ ifeq ($(CONFIG_NFC), y)
+ 		rm -f $(LINUXDIR)/.config.chk ; \
+ 	fi
+ endif
++endif
++ifneq ($(TARGET_STRIP),1)
+ 	# Make kernel config again if changed
+ 	$(if $(shell [ ! cmp ${LINUXDIR}/.config ${LINUXDIR}/.config.tmp >/dev/null 2>&1 ] && echo "y"), \
+ 	+$(MAKE) -C ${LINUXDIR} $(SUBMAKE_SETTINGS) oldconfig < /dev/null \
+ 	)
+ endif
++endif
+ 
+ #
+ # Overrides
+@@ -1475,23 +1612,33 @@ ifeq (3_10_52,$(LINUX_VERSION))
+ BB_DIFF_LINES=$(shell diff busybox-1.22.1/.config busybox-1.22.1/configs/bbconfig-$(CONFIG_BUSYBOX_CONFIG) | wc -l)
+ 
+ busybox-1.22.1/.config:
++ifneq ($(TARGET_STRIP),1)
+ 	cd $(@D) && cp configs/bbconfig-$(CONFIG_BUSYBOX_CONFIG) .config && $(MAKE) oldconfig
++endif
+ 
+ busybox-1.22.1/Config.h: dummy
++ifneq ($(TARGET_STRIP),1)
+ 	cd $(@D) && rm -f Config.h && ln -sf include/autoconf.h Config.h && touch Config.h
+ ifneq ($(BB_DIFF_LINES),4)
+ 	cd $(@D) && cp configs/bbconfig-$(CONFIG_BUSYBOX_CONFIG) .config && $(MAKE) clean
+ endif
++endif
+ 
+ .PHONY: busybox
+ busybox: busybox-1.22.1/.config busybox-1.22.1/Config.h
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) -C busybox-1.22.1 ARCH=$(ARCH) INSTALL
++endif
+ 
+ busybox-install:
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) -C busybox-1.22.1 ARCH=$(ARCH) CONFIG_PREFIX=$(INSTALLDIR)/busybox install
++endif
+ 
+ busybox-clean:
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) -C busybox-1.22.1 ARCH=$(ARCH) clean
++endif
+ 
+ rc: netconf nvram shared
+ 	+$(MAKE) LINUXDIR=$(LINUXDIR) EXTRA_LDFLAGS=$(EXTRA_LDFLAGS) -C rc
+@@ -1504,23 +1651,33 @@ else
+ BB_DIFF_LINES=$(shell diff busybox-1.x/.config busybox-1.x/configs/bbconfig-$(CONFIG_BUSYBOX_CONFIG) | wc -l)
+ 
+ busybox-1.x/.config:
++ifneq ($(TARGET_STRIP),1)
+ 	cd $(@D) && cp -f configs/bbconfig-$(CONFIG_BUSYBOX_CONFIG) .config && $(MAKE) oldconfig
++endif
+ 
+ busybox-1.x/Config.h: dummy
++ifneq ($(TARGET_STRIP),1)
+ 	cd $(@D) && rm -f Config.h && ln -sf include/autoconf.h Config.h && touch Config.h
+ ifneq ($(BB_DIFF_LINES),4)
+ 	cd $(@D) && cp -f configs/bbconfig-$(CONFIG_BUSYBOX_CONFIG) .config && $(MAKE) clean
+ endif
++endif
+ 
+ .PHONY: busybox
+ busybox: busybox-1.x/.config busybox-1.x/Config.h
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) -C busybox-1.x ARCH=$(ARCH) INSTALL
++endif
+ 
+ busybox-install:
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) -C busybox-1.x ARCH=$(ARCH) CONFIG_PREFIX=$(INSTALLDIR)/busybox install
++endif
+ 
+ busybox-clean:
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) -C busybox-1.x ARCH=$(ARCH) clean
++endif
+ 
+ rc: netconf nvram shared
+ 	+$(MAKE) LINUXDIR=$(LINUXDIR) EXTRA_LDFLAGS=$(EXTRA_LDFLAGS) -C rc
+@@ -1533,14 +1690,20 @@ CURBBCFG := $(CONFIG_BUSYBOX_CONFIG).h
+ OLDBBCFG := $(shell basename $$(readlink busybox/Config.h) 2> /dev/null)
+ busybox/Config.h: dummy
+ ifneq ($(OLDBBCFG),$(CURBBCFG))
++ifneq ($(TARGET_STRIP),1)
+ 	cd busybox && rm -f Config.h && ln -sf configs/$(CURBBCFG) Config.h && touch Config.h
+ endif
++endif
+ 
+ busybox: busybox/Config.h
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) -C busybox STRIPTOOL=$(STRIP)
++endif
+ 
+ busybox-install:
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) -C busybox STRIPTOOL=$(STRIP) PREFIX=$(INSTALLDIR)/busybox install
++endif
+ 
+ rc: netconf nvram shared
+ ifneq ($(CONFIG_BUSYBOX),)
+@@ -1551,10 +1714,14 @@ endif
+ 
+ 
+ rc-install: rc
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) LINUXDIR=$(LINUXDIR) INSTALLDIR=$(INSTALLDIR)/rc -C rc install
++endif
+ 
+ lib-install:
++ifneq ($(TARGET_STRIP),1)
+ 	+$(MAKE) LX_VERS=$(LINUX_VERSION) INSTALLDIR=$(INSTALLDIR)/lib ARCH=$(ARCH) -C lib install
++endif
+ 
+ www:
+ 	+$(MAKE) -C www/$(CONFIG_VENDOR) INSTALLDIR=$(INSTALLDIR)/www
+@@ -1750,6 +1917,7 @@ libmnl-clean:
+ 	+$(MAKE) -C $(LIBMNL_DIR) KERNEL_DIR=$(LINUXDIR) clean
+ 
+ $(LIBNFNETLINK_DIR)/Makefile:
++ifneq ($(TARGET_STRIP),1)
+ 	cd $(LIBNFNETLINK_DIR) && \
+ 	 CC=$(CC) ./configure \
+ 	    --target=$(PLATFORM)-linux \
+@@ -1757,6 +1925,7 @@ $(LIBNFNETLINK_DIR)/Makefile:
+ 	    --build=`/bin/arch`-linux \
+ 	    --with-kernel=$(LINUXDIR) \
+ 	    --prefix=$(LIBNFNETLINK_DIR)/install
++endif
+ 
+ libnfnetlink: $(LIBNFNETLINK_DIR)/Makefile
+ 	+$(MAKE) -C $(LIBNFNETLINK_DIR)
+@@ -2377,6 +2546,20 @@ dhcp6s-clean dhcp6c-clean:
+ #dhcp6s-clean dhcp6c-clean:
+ dhcp6-clean:
+ 
++driver_build:
++	@echo ">>>>>>>>>>>>>>>>>>> Building wl modules >>>>>>>>>>>>>>>>"
++	$(if $(shell grep "CONFIG_MODULES=y" ${LINUXDIR}/.config), \
++	  $(MAKE) -C $(LINUXDIR) SUBDIRS=$(PWD)/../components/driver modules V=1 -j8)
++	@echo "<<<<<<<<<<<<<<<<<<< Build wl modules done <<<<<<<<<<<<<<"
++
++driver_build-install:
++	if grep -q "CONFIG_MODULES=y" $(LINUXDIR)/.config ; then \
++	    $(MAKE) -C $(LINUXDIR) SUBDIRS=$(PWD)/../components/driver \
++		modules_install DEPMOD=/bin/true INSTALL_MOD_PATH=$(TARGETDIR) ; \
++	fi
++
++driver_build-clean:
++	$(MAKE) -C $(LINUXDIR) SUBDIRS=$(PWD)/../components/driver clean
+ 
+ #WLENT_TP_DUMP
+ tpdump: dummy
+@@ -2392,6 +2575,8 @@ ifeq ($(CONFIG_WLEXE),y)
+ ifneq ($(wildcard $(SRCBASE_SYS)/wl/exe/GNUmakefile),)
+ ifeq ($(ARCH),arm)
+ 	$(MAKE) TARGETARCH=arm_le ARCH_SFX="" TARGET_PREFIX=$(CROSS_COMPILE) -C $(SRCBASE_SYS)/wl/exe
++else ifeq ($(PLT),rv160w_260w)
++	$(MAKE) TARGETARCH=rv160w_260w ARCH_SFX="" TARGET_PREFIX=$(CROSS_COMPILE) -C $(SRCBASE_SYS)/wl/exe
+ else
+ 	$(MAKE) TARGETARCH=mips ARCH_SFX="" TARGET_PREFIX=$(CROSS_COMPILE) -C $(SRCBASE_SYS)/wl/exe
+ endif
+@@ -2399,6 +2584,8 @@ endif
+ 	install $(SRCBASE_SYS)/wl/exe/wl wlexe
+ ifeq ($(ARCH),arm)
+ 	install $(SRCBASE_SYS)/wl/exe/socket_noasd/arm_le/wl_server_socket wlexe
++else ifeq ($(PLT),rv160w_260w)
++	install $(SRCBASE_SYS)/wl/exe/socket_noasd/rv160w_260w/wl_server_socket wlexe
+ else
+ 	install $(SRCBASE_SYS)/wl/exe/socket_noasd/mips/wl_server_socket wlexe
+ endif
+@@ -2410,6 +2597,8 @@ wlexe-clean:
+ ifneq ($(wildcard $(SRCBASE_SYS)/wl/exe/GNUmakefile),)
+ ifeq ($(ARCH),arm)
+ 	$(MAKE) TARGETARCH=arm_le ARCH_SFX="" TARGET_PREFIX=$(CROSS_COMPILE) -C $(SRCBASE_SYS)/wl/exe clean
++else ifeq ($(PLT),rv160w_260w)
++	$(MAKE) TARGETARCH=rv160w_260w TARGET_PREFIX=$(CROSS_COMPILE) -C $(SRCBASE_SYS)/wl/exe clean
+ else
+ 	$(MAKE) TARGETARCH=mips ARCH_SFX="" TARGET_PREFIX=$(CROSS_COMPILE) -C $(SRCBASE_SYS)/wl/exe clean
+ endif
+@@ -2457,8 +2646,16 @@ bluetooth-clean:
+ 	$(MAKE) -C $(BSA_DIR) -f Makefile.all clean
+ #endif WLENT_AP
+ 
++remove_unused_files:
++	@rm -f $(TARGETDIR)/bin/*.png
++	@rm -f $(TARGETDIR)/usr/sbin/epi_ttcp
++	@rm -f $(TARGETDIR)/usr/sbin/et
++
+ 
+ .PHONY: all clean distclean mrproper install package check_kernel_config
++ifneq ($(filter powerpc rv160w_260w,$(PLT)),)
++.PHONY: driver_build driver_build-clean driver_build-install
++endif
+ .PHONY: conf mconf oldconf kconf kmconf config menuconfig oldconfig
+ .PHONY: dummy netconf
+ .PHONY: libstdcpp libstdcpp-install
+diff --git a/main/components/router/shared/bcmconfig.h b/main/components/router/shared/bcmconfig.h
+index e89e8ca..c302c29 100644
+--- a/main/components/router/shared/bcmconfig.h
++++ b/main/components/router/shared/bcmconfig.h
+@@ -17,7 +17,7 @@
+ #define __CONFIG_WLCONF__ 1
+ #define __CONFIG_BRIDGE__ 1
+ #define __CONFIG_VLAN__ 1
+-#undef __CONFIG_CRYPTOTEST__
++#define __CONFIG_CRYPTOTEST__ 1
+ #define __CONFIG_HTTPD__ 1
+ #define __CONFIG_WWW__ 1
+ #define __CONFIG_NETCONF__ 1
+@@ -31,6 +31,8 @@
+ #undef __CONFIG_DHDAP__
+ #undef __CONFIG_RSDB__
+ #undef __CONFIG_WLENT_CONVERGED_PKG__
++#undef __CONFIG_WLENT_MACSEC__
++#undef __CONFIG_PLAT_BCM58522__
+ #undef __CONFIG_UBIFS_FS__
+ #undef __CONFIG_UBIFS_FS_8G__
+ #define __CONFIG_SQUASHFS__ 1
+@@ -57,7 +59,7 @@
+ #undef __CONFIG_DLNA_DMR__
+ #define __CONFIG_MFP__ 1
+ #define __CONFIG_HSPOT__ 1
+-#undef __CONFIG_WNM__
++#define __CONFIG_WNM__ 1
+ #define __CONFIG_NAS__ 1
+ #undef __CONFIG_WAPI__
+ #undef __CONFIG_WAPI_IAS__
+@@ -82,11 +84,12 @@
+ #define __CONFIG_BCMDCS__ 1
+ #define __CONFIG_EXTACS__ 1
+ #define __CONFIG_BCMBSD__ 1
+-#undef __CONFIG_BCMSSD__
+-#undef __CONFIG_TOAD__
++#define __CONFIG_BCMSSD__ 1
++#define __CONFIG_TOAD__ 1
+ #define __CONFIG_PROXDETECT__ 1
+-#define __CONFIG_CR4_OFFLOAD__ 1
+-#undef __CONFIG_CURL__
++#undef __CONFIG_CR4_OFFLOAD__
++#undef __CONFIG_TREND_IQOS__
++#define __CONFIG_CURL__ 1
+ #define __CONFIG_IPV6__ 1
+ #undef __CONFIG_RADVD__
+ #undef __CONFIG_IPROUTE2__
+@@ -97,9 +100,10 @@
+ #define __CONFIG_FAILSAFE_UPGRADE_SUPPORT__ 1
+ #undef __CONFIG_VOIP__
+ #undef __CONFIG_MDNSRESPONDER__
+-#undef __CONFIG_LIBZ__
++#define __CONFIG_LIBZ__ 1
+ #undef __CONFIG_SOUND__
+ #define __AIRPLAYDIR__ "$(BASEDIR)/airplay"
++#define __CONFIG_BCMASPMD__ 1
+ 
+ /*
+  * Additional C libraries
+@@ -132,12 +136,12 @@
+ #undef __CONFIG_WIRELESS__
+ #undef __CONFIG_TRUEFFS__
+ #undef __CONFIG_FDISK__
+-#undef __CONFIG_DISKTYPE__
++#define __CONFIG_DISKTYPE__ 1
+ #undef __CONFIG_E2FSPROGS__
+ #undef __CONFIG_NCURSES__
+ #undef __CONFIG_TERMINFO__
+ #undef __CONFIG_NTSW__
+-#undef __CONFIG_B57LDIAG__
++#define __CONFIG_B57LDIAG__ 1
+ #undef __CONFIG_ETHTOOL__
+ #undef __CONFIG_LIBPCAP__
+ #undef __CONFIG_TCPDUMP__
+@@ -147,6 +151,7 @@
+ #undef __CONFIG_GDBSERVER__
+ #undef __CONFIG_PDRIVER__
+ #define __CONFIG_VMSTAT__ 1
++#undef __CONFIG_CIFS__
+ 
+ /*
+  * Advanced Router Features
+diff --git a/main/components/router/shared/shutils.c b/main/components/router/shared/shutils.c
+index 9165edf..98143e3 100644
+--- a/main/components/router/shared/shutils.c
++++ b/main/components/router/shared/shutils.c
+@@ -801,7 +801,7 @@ nvifname_to_osifname(const char *nvifname, char *osifname_buf,
+ 		return -1;
+ 	}
+ 
+-	if (strstr(nvifname, "eth") || strstr(nvifname, ".")) {
++	if (strstr(nvifname, "eth") || strstr(nvifname, ".") || strstr(nvifname, WL_DEV_NAME)) {
+ 		strncpy(osifname_buf, nvifname, osifname_buf_len);
+ 		return 0;
+ 	}
+diff --git a/main/src/Makefile b/main/src/Makefile
+index 4634cd5..12ae26b 100644
+--- a/main/src/Makefile
++++ b/main/src/Makefile
+@@ -30,9 +30,14 @@ ifeq ($(PLT),arm)
+ ARCH = arm
+ endif
+ 
++ifeq ($(PLT),rv160w_260w)
++ARCH = rv160w_260w
++endif
++
+ install: all
+ 	install -d $(RELEASEDIR)/image
+ 	$(MAKE) -C ../components/router install PLT=$(PLT)
++ifneq ($(TARGET_STRIP),1)
+ 	-cp ../components/router/$(PLT)/linux.trx $(RELEASEDIR)/image/linux-glibc.trx
+ 	-cp ../components/router/$(PLT)-uclibc/linux.trx $(RELEASEDIR)/image/linux.trx
+ 	-cp ../components/router/$(PLT)-uclibc/linux-gzip.trx $(RELEASEDIR)/image/linux-gzip.trx
+@@ -74,12 +79,15 @@ endif
+ 	cp cfe/build/broadcom/bcm947xx/cfe.bin $(RELEASEDIR)/image/cfe-nflash.bin
+ 	cp cfe/build/broadcom/bcm947xx/compressed/cfez.bin $(RELEASEDIR)/image/cfez-nflash.bin
+ endif
++endif
+ 	cp shared/nvram/*.txt $(RELEASEDIR)/image/
+ 
+ all clean:
+ 	$(MAKE) -C ../components/router $@ PLT=$(PLT)
+ ifneq ($(wildcard cfe),)
++ifeq ($(filter rv160w_260w,$(PLT)),)
+ 	$(MAKE) -C cfe $@ ARCH=$(ARCH)
+ endif
++endif
+ 
+ .PHONY: all clean install
+diff --git a/main/src/build-rv160w_260w.sh b/main/src/build-rv160w_260w.sh
+new file mode 100755
+index 0000000..049f62d
+--- /dev/null
++++ b/main/src/build-rv160w_260w.sh
+@@ -0,0 +1,112 @@
++#! /bin/bash
++
++ESDK_PATH=/work-4T1/ryan/rv340-5.4.1/git-local/rv340-dev
++ESDK_VER="5.1.4.1"
++export ARCH=arm
++export PLT=rv160w_260w
++export DEST_APPS_DIR=${ESDK_PATH}/package/freescale/broadcom-esdk-wlan/files/c2krv16x-26x/apps-${ESDK_VER}-5.00.3
++export DEST_MODULE=${ESDK_PATH}/package/freescale/broadcom-esdk-wlan/files/c2krv16x-26x/wl-${ESDK_VER}-5.00.3.ko
++export LINUX_VERSION=3.2.54
++export LOCAL_PLATFORM=rv160w_260w-glibc
++export LOCAL_TOOLCHAIN_PATH=${ESDK_PATH}/staging_dir/toolchain-arm_v7-a_gcc-4.5-linaro_glibc-2.14.1_eabi/bin
++export STAGING_DIR=${ESDK_PATH}/staging_dir/target-arm_v7-a_glibc-2.14.1_eabi
++export PATH=${PATH}:${LOCAL_TOOLCHAIN_PATH}
++export LOCAL_CROSS_COMPILE=arm-openwrt-linux-
++export LOCAL_TOOCHAIN=${BOARD_ARCH}
++export BRCM_DRIVER_BUILD_DIR=$PWD/../../
++export LINUXDIR=${ESDK_PATH}/build_dir/linux-comcerto2000_hgw/linux-3.2.54
++
++export WLTEST=1
++
++# This is used for "nvram"
++export USE_FREESCALE_ARCH=1
++
++
++export TARGET_STRIP=1
++export INSTALL_MOD_STRIP=1
++
++export THIRD_PARTY_ARCH=1
++
++do_export() {
++	export CONFIG_HND=y
++	#export CONFIG_ET=m
++	#export CONFIG_ET_47XX=y
++	# CONFIG_ET_ALL_PASSIVE_ON is not set
++	#export CONFIG_ET_ALL_PASSIVE_RUNTIME=y
++	# export CONFIG_BCM_CTF=m
++	#export CONFIG_BCM_FA=y
++	# CONFIG_BCM_GMAC3 is not set
++	# CONFIG_WL_EMULATOR is not set
++	# CONFIG_BCM57XX is not set
++	export CONFIG_WL=m
++	# CONFIG_DHDAP is not set
++	# CONFIG_WAPI is not set
++	# CONFIG_WL_USE_AP is not set
++	# CONFIG_WL_USE_AP_SDSTD is not set
++	# CONFIG_WL_USE_STA is not set
++	export CONFIG_WL_USE_APSTA=m
++	# CONFIG_WL_USE_AP_ONCHIP_G is not set
++	# CONFIG_WL_USE_STA_ONCHIP_G is not set
++	# CONFIG_WL_USE_APSTA_ONCHIP_G is not set
++	# CONFIG_WL_USBAP is not set
++	export CONFIG_WL_AP="wlconfig_lx_router_ap"
++	export CONFIG_WL_AP_SDSTD="wlconfig_lx_router_ap_sdstd"
++	export CONFIG_WL_STA="wlconfig_lx_router_sta"
++	export CONFIG_WL_APSTA="wlconfig_lx_router_apsta"
++	export CONFIG_WL_AP_ONCHIP_G="wlconfig_lx_router_ap_1chipG"
++	export CONFIG_WL_STA_ONCHIP_G="wlconfig_lx_router_sta_1chipG"
++	export CONFIG_WL_HIGH="wlconfig_lx_router_high"
++	# CONFIG_WL_ALL_PASSIVE_ON is not set
++	export CONFIG_WL_ALL_PASSIVE_RUNTIME=y
++	# export CONFIG_DPSTA=m
++	#export CONFIG_EMF=m
++	export CONFIG_WLENT_VLAN=y
++	export CONFIG_WLENT_QOS=y
++}
++
++do_make() {
++	do_export
++
++	export BCMDBG_ENABLE=1
++	make -j8
++	make -C ../components/router remove_unused_files
++}
++
++do_module() {
++	do_export
++
++	make -j 8 -C ../components/router/ driver_build PLT=${PLT}
++	make -j 8 -C ../components/router/ driver_build-install PLT=${PLT}
++
++}
++
++do_makeall() {
++	do_export
++	make -j 8 -C ../components/router/ driver_build PLT=${PLT}
++	make -j 8 -C ../components/router/ driver_build-install PLT=${PLT}
++	make -j8
++	make -C ../components/router remove_unused_files
++}
++
++do_clean() {
++	do_export
++
++	make clean
++}
++do_cleanall()  {
++	do_export
++
++	make clean
++	make -j 1 -C ../components/router/ driver_build-clean PLT=${PLT}
++}
++
++do_install() {
++	mkdir -p ${DEST_APPS_DIR}
++	cp -a ../components/router/${LOCAL_PLATFORM}/target/lib/modules/3.2.54/extra/wl/wl.ko ${DEST_MODULE}
++	rm -rf ${DEST_APPS_DIR}/bin
++	rm -rf ${DEST_APPS_DIR}/usr
++	cp -a ../components/router/${LOCAL_PLATFORM}/target/bin ${DEST_APPS_DIR}/
++	cp -a ../components/router/${LOCAL_PLATFORM}/target/usr ${DEST_APPS_DIR}/
++}
++
++do_$1
+diff --git a/main/src/shared/linux_osl.c b/main/src/shared/linux_osl.c
+index 624cf03..d44bfd6 100644
+--- a/main/src/shared/linux_osl.c
++++ b/main/src/shared/linux_osl.c
+@@ -521,30 +521,41 @@ osl_prefetch(const void *ptr)
+ inline int BCMFASTPATH
+ osl_arch_is_coherent(void)
+ {
++#if THIRD_PARTY_ARCH
++	return 0;
++#else
+ #ifdef BCM47XX_CA9
+ 	return arch_is_coherent();
+ #else
+ 	return 0;
+ #endif
++#endif
+ }
+ 
+ inline int BCMFASTPATH
+ osl_acp_war_enab(void)
+ {
++#if THIRD_PARTY_ARCH
++	return 0;
++#else
++
+ #ifdef BCM47XX_CA9
+ 	return ACP_WAR_ENAB();
+ #else
+ 	return 0;
+ #endif /* BCM47XX_CA9 */
++#endif
+ }
+ 
+ inline void BCMFASTPATH
+ osl_cache_flush(void *va, uint size)
+ {
++#if !THIRD_PARTY_ARCH
+ #ifdef BCM47XX_CA9
+ 	if (arch_is_coherent() || (ACP_WAR_ENAB() && (virt_to_phys(va) < ACP_WIN_LIMIT)))
+ 		return;
+ #endif /* BCM47XX_CA9 */
++#endif
+ 
+ 	if (size > 0)
+ 		dma_sync_single_for_device(OSH_NULL, virt_to_dma(OSH_NULL, va), size, DMA_TX);
+@@ -553,10 +564,12 @@ osl_cache_flush(void *va, uint size)
+ inline void BCMFASTPATH
+ osl_cache_inv(void *va, uint size)
+ {
++#if !THIRD_PARTY_ARCH
+ #ifdef BCM47XX_CA9
+ 	if (arch_is_coherent() || (ACP_WAR_ENAB() && (virt_to_phys(va) < ACP_WIN_LIMIT)))
+ 		return;
+ #endif /* BCM47XX_CA9 */
++#endif
+ 
+ 	dma_sync_single_for_cpu(OSH_NULL, virt_to_dma(OSH_NULL, va), size, DMA_RX);
+ }
+@@ -1765,12 +1778,12 @@ osl_dma_unmap(osl_t *osh, uint pa, uint size, int direction)
+     if (!osl_is_flag_set(osh, OSL_ACP_COHERENCE)) /* WLENT */
+     {
+ 	ASSERT((osh && (osh->magic == OS_HANDLE_MAGIC)));
+-
++#if !THIRD_PARTY_ARCH
+ #if defined(BCM47XX_CA9)
+ 	if (osl_is_flag_set(osh, OSL_ACP_COHERENCE) && (pa < ACP_WIN_LIMIT))
+ 		return;
+ #endif /* BCM47XX_CA9 */
+-
++#endif
+ 	dir = (direction == DMA_TX)? PCI_DMA_TODEVICE: PCI_DMA_FROMDEVICE;
+ 	pci_unmap_single(osh->pdev, (uint32)pa, size, dir);
+     }
+@@ -2574,7 +2587,11 @@ inline void osl_pcie_rreg(osl_t *osh, ulong addr, void *v, uint size)
+ #if defined(BCM_GMAC3)
+ 	const int acp_war_enab = 1;
+ #else  /* !BCM_GMAC3 */
++#if THIRD_PARTY_ARCH
++	int acp_war_enab = osl_acp_war_enab();
++#else
+ 	int acp_war_enab = ACP_WAR_ENAB();
++#endif
+ #endif /* !BCM_GMAC3 */
+ 
+ 	if (osh && BUSTYPE(osh->bustype) == PCI_BUS)
+@@ -2619,7 +2636,11 @@ inline void osl_bpt_rreg(osl_t *osh, ulong addr, void *v, uint size)
+ 		pci_access = 1;
+ 
+ #if LINUX_VERSION_CODE != KERNEL_VERSION(3, 10, 52) /* WLENT_AP Kernel 3.10 */
++#if THIRD_PARTY_ARCH
++	if (pci_access && osl_acp_war_enab())
++#else
+ 	if (pci_access && ACP_WAR_ENAB())
++#endif
+ 		spin_lock_irqsave(&l2x0_reg_lock, flags);
+ #endif
+ #endif /* BCM47XX_CA9 */
+@@ -2649,7 +2670,11 @@ inline void osl_bpt_rreg(osl_t *osh, ulong addr, void *v, uint size)
+ 
+ #if defined(BCM47XX_CA9)
+ #if LINUX_VERSION_CODE != KERNEL_VERSION(3, 10, 52) /* WLENT_AP Kernel 3.10 */
++#if THIRD_PARTY_ARCH
++	if (pci_access && osl_acp_war_enab())
++#else
+ 	if (pci_access && ACP_WAR_ENAB())
++#endif
+ 		spin_unlock_irqrestore(&l2x0_reg_lock, flags);
+ #endif
+ #endif /* BCM47XX_CA9 */
+diff --git a/main/src/wl/config/wlconfig_lx_router_apsta b/main/src/wl/config/wlconfig_lx_router_apsta
+index 41ec75c..73466bd 100755
+--- a/main/src/wl/config/wlconfig_lx_router_apsta
++++ b/main/src/wl/config/wlconfig_lx_router_apsta
+@@ -130,7 +130,7 @@ WLENT_CLM_EXPORT=1
+ WLPKTENG=1
+ WLENT_DFS_TEST_MODE=1
+ WLENT_11AC_ONLY_MODE=1
+-WLENT_SAS=1
++WLENT_SAS=0
+ # Note that WLENT_BFI_BLK_EXTEND must be set to 1 if WLENT_SAS is 1
+ # as WLENT_SAS needs extra space in the BFI block.
+ WLENT_BFI_BLK_EXTEND=1
+@@ -163,9 +163,9 @@ WLENT_PKT_INJECTOR=1
+ WLENT_TXD_EXT_MU=1
+ 
+ #Below items are for proximity detection (location)
+-WLENT_LOCATION=1
+-WLOFFLD=1
+-WL_PROXDETECT=1
++WLENT_LOCATION=0
++WLOFFLD=0
++WL_PROXDETECT=0
+ WL_TOF=1
+ WL_FTM=1
+ WLWNM=1
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index 9762bf7..254f6e9 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -581,7 +581,7 @@ module_param(nompc, int, 0);
+ #define quote_str(s) to_str(s)
+ 
+ #ifndef BRCM_WLAN_IFNAME
+-#define BRCM_WLAN_IFNAME eth%d
++#define BRCM_WLAN_IFNAME wl%d
+ #endif
+ 
+ static char intf_name[IFNAMSIZ] = quote_str(BRCM_WLAN_IFNAME);
+@@ -867,7 +867,9 @@ wl_thread_dpc_wlthread(void *data)
+ static int wl_vlan_rx_add_vid(struct net_device *dev, unsigned short proto, unsigned short vid);
+ static int wl_vlan_rx_kill_vid(struct net_device *dev, unsigned short proto, unsigned short vid);
+ #else
++#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0)
+ static void wl_vlan_rx_register(struct net_device *dev, struct vlan_group *grp);
++#endif
+ static void wl_vlan_rx_add_vid(struct net_device *dev, unsigned short vid);
+ static void wl_vlan_rx_kill_vid(struct net_device *dev, unsigned short vid);
+ #endif
+@@ -900,7 +902,7 @@ static const struct net_device_ops wl_netdev_ops =
+ #endif
+ 	.ndo_do_ioctl = wl_ioctl,
+ #ifdef WLENT_VLAN
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 52)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0)
+     .ndo_vlan_rx_register   = wl_vlan_rx_register,
+ #endif
+     .ndo_vlan_rx_add_vid    = wl_vlan_rx_add_vid,
+@@ -988,7 +990,7 @@ wl_if_setup(struct net_device *dev)
+ }
+ 
+ #ifdef WLENT_VLAN
+-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 52)
++#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0)
+ static void wl_vlan_rx_register(struct net_device *dev, struct vlan_group *grp)
+ {
+     priv_link_t *priv_link;
+@@ -1041,7 +1043,7 @@ static void wl_vlan_rx_kill_vid(struct net_device *dev, unsigned short vid)
+ 
+     WL_TMP(("%s: removing vlanid %d from vlan filter (%p)\n", dev->name, vid, priv_link)); 
+ 
+-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 52))
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 2, 0))
+     vlan_group_set_device(priv_link->vlgrp, vid, NULL);
+ #endif
+ 
+@@ -5168,12 +5170,17 @@ sendup_next:
+           WL_APSTA_RX(("%s(): vlanid %d\n", __FUNCTION__, vlan_id));
+           __vlan_hwaccel_put_tag(skb, htons(ETH_P_8021Q), vlan_id);
+ #else
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 2, 0)
++          WL_APSTA_RX(("%s(): vlanid %d\n", __FUNCTION__, vlan_id));
++          __vlan_hwaccel_put_tag(skb, vlan_id);
++#else         
+           if (priv_link && priv_link->vlgrp) {
+               WL_APSTA_RX(("vlgrp %p\n", priv_link->vlgrp));
+               vlan_hwaccel_rx(skb, priv_link->vlgrp, vlan_id);
+               return;
+           }
+ #endif
++#endif
+       }
+     }
+ #endif
+diff --git a/main/src/wl/sys/wlc_hs20.c b/main/src/wl/sys/wlc_hs20.c
+index 46a476c..1a80be1 100644
+--- a/main/src/wl/sys/wlc_hs20.c
++++ b/main/src/wl/sys/wlc_hs20.c
+@@ -32,11 +32,11 @@
+ #include <typedefs.h>
+ #include <bcmdefs.h>
+ #include <bcmutils.h>
++#include <wlioctl.h>
+ #include <wl_dbg.h>
+ #include <osl.h>
+ #include <siutils.h>
+ #include <d11.h>
+-#include <wlioctl.h>
+ #include <wlc_pub.h>
+ #include <wlc_rate.h>
+ #include <wlc.h>
+diff --git a/main/src/wl/sys/wlc_ie_mgmt_lib.c b/main/src/wl/sys/wlc_ie_mgmt_lib.c
+index d581bc4..95cffc7 100644
+--- a/main/src/wl/sys/wlc_ie_mgmt_lib.c
++++ b/main/src/wl/sys/wlc_ie_mgmt_lib.c
+@@ -23,7 +23,6 @@
+ #include <typedefs.h>
+ #include <bcmdefs.h>
+ #include <bcmutils.h>
+-#include <wl_dbg.h>
+ #if defined(BCMDBG) || defined(BCMDBG_ERR)
+ #include <osl.h>
+ #include <siutils.h>
+@@ -34,6 +33,7 @@
+ #include <wlc_rate.h>
+ #include <wlc.h>
+ #endif /* BCMDBG || BCMDBG_ERR */
++#include <wl_dbg.h>
+ #include <wlc_ie_mgmt_dbg.h>
+ #include <wlc_ie_mgmt_lib.h>
+ 
+diff --git a/sys/src/wl/exe/GNUmakefile b/sys/src/wl/exe/GNUmakefile
+index 5ddfdbe..d08153a 100644
+--- a/sys/src/wl/exe/GNUmakefile
++++ b/sys/src/wl/exe/GNUmakefile
+@@ -600,6 +600,7 @@ WLHIGHSTUB   := obj/wlhighstub/$(TARGETARCH)/wlhighstub$(ARCH_SFX)
+ ifeq (,$(findstring android,$(TARGETARCH)))
+ # LDFLAGS      += -lrt
+ endif
++LDFLAGS += -lrt
+ 
+ # ASD specific flags
+ ifeq ($(ASD),1)
+-- 
+1.7.10
+

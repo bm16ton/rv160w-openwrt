@@ -1,0 +1,137 @@
+From 9e3389d6b5d8f7cbcaf5157c130786c4c25b9837 Mon Sep 17 00:00:00 2001
+From: Ganesh Reddy <ganesh.reddy@nxp.com>
+Date: Thu, 4 Jul 2019 16:38:31 +0530
+Subject: [PATCH] Regenerated patch from the original PATCH_net_1_4.patch part
+ of CVE-2019-11477
+
+This patch is appliying as per CVE-2019-11477 (https://github.com/Netflix/security-bulletins/blob/master/advisories/third-party/2019-001.md)
+Original patch reference is https://github.com/Netflix/security-bulletins/blob/master/advisories/third-party/2019-001/PATCH_net_1_4.patch
+It is tuned as per current Linux kernel in our ASK-7.1.1.
+
+Signed-off-by: Ganesh Reddy <ganesh.reddy@nxp.com>
+---
+ include/linux/tcp.h   |  3 +++
+ include/net/tcp.h     |  2 ++
+ net/ipv4/tcp.c        |  1 +
+ net/ipv4/tcp_input.c  | 27 ++++++++++++++++++++++++---
+ net/ipv4/tcp_output.c |  4 ++--
+ 5 files changed, 32 insertions(+), 5 deletions(-)
+
+diff --git a/include/linux/tcp.h b/include/linux/tcp.h
+index e8bbf40..d2e8b43 100644
+--- a/include/linux/tcp.h
++++ b/include/linux/tcp.h
+@@ -395,4 +395,7 @@ static inline int fastopen_init_queue(struct sock *sk, int backlog)
+ 	return 0;
+ }
+ 
++int tcp_skb_shift(struct sk_buff *to, struct sk_buff *from, int pcount,
++                 int shiftlen);
++
+ #endif	/* _LINUX_TCP_H */
+diff --git a/include/net/tcp.h b/include/net/tcp.h
+index ef17cc9..6ae6088 100644
+--- a/include/net/tcp.h
++++ b/include/net/tcp.h
+@@ -54,6 +54,8 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
+ 
+ #define MAX_TCP_HEADER	(128 + MAX_HEADER)
+ #define MAX_TCP_OPTION_SPACE 40
++#define TCP_MIN_SND_MSS                48
++#define TCP_MIN_GSO_SIZE       (TCP_MIN_SND_MSS - MAX_TCP_OPTION_SPACE)
+ 
+ /*
+  * Never offer a window over 32767 without using window scaling. Some
+diff --git a/net/ipv4/tcp.c b/net/ipv4/tcp.c
+index bb2ce74..73d5dc7 100644
+--- a/net/ipv4/tcp.c
++++ b/net/ipv4/tcp.c
+@@ -3041,6 +3041,7 @@ void __init tcp_init(void)
+ 	int max_rshare, max_wshare, cnt;
+ 	unsigned int i;
+ 
++	BUILD_BUG_ON(TCP_MIN_SND_MSS <= MAX_TCP_OPTION_SPACE);
+ 	sock_skb_cb_check_size(sizeof(struct tcp_skb_cb));
+ 
+ 	percpu_counter_init(&tcp_sockets_allocated, 0, GFP_KERNEL);
+diff --git a/net/ipv4/tcp_input.c b/net/ipv4/tcp_input.c
+index c9ab964..72de473 100644
+--- a/net/ipv4/tcp_input.c
++++ b/net/ipv4/tcp_input.c
+@@ -1308,7 +1308,8 @@ static bool tcp_shifted_skb(struct sock *sk, struct sk_buff *skb,
+ 	TCP_SKB_CB(skb)->seq += shifted;
+ 
+ 	tcp_skb_pcount_add(prev, pcount);
+-	BUG_ON(tcp_skb_pcount(skb) < pcount);
++	//BUG_ON(tcp_skb_pcount(skb) < pcount);
++	WARN_ON_ONCE(tcp_skb_pcount(skb) < pcount);
+ 	tcp_skb_pcount_add(skb, -pcount);
+ 
+ 	/* When we're adding to gso_segs == 1, gso_size will be zero,
+@@ -1374,6 +1375,21 @@ static int skb_can_shift(const struct sk_buff *skb)
+ 	return !skb_headlen(skb) && skb_is_nonlinear(skb);
+ }
+ 
++int tcp_skb_shift(struct sk_buff *to, struct sk_buff *from,
++		int pcount, int shiftlen)
++{
++	/* TCP min gso_size is 8 bytes (TCP_MIN_GSO_SIZE)
++	 * Since TCP_SKB_CB(skb)->tcp_gso_segs is 16 bits, we need
++	 * to make sure not storing more than 65535 * 8 bytes per skb,
++	 * even if current MSS is bigger.
++	 */
++	if (unlikely(to->len + shiftlen >= 65535 * TCP_MIN_GSO_SIZE))
++		return 0;
++	if (unlikely(tcp_skb_pcount(to) + pcount > 65535))
++		return 0;
++	return skb_shift(to, from, shiftlen);
++}
++
+ /* Try collapsing SACK blocks spanning across multiple skbs to a single
+  * skb.
+  */
+@@ -1479,7 +1495,8 @@ static struct sk_buff *tcp_shift_skb_data(struct sock *sk, struct sk_buff *skb,
+ 	if (!after(TCP_SKB_CB(skb)->seq + len, tp->snd_una))
+ 		goto fallback;
+ 
+-	if (!skb_shift(prev, skb, len))
++	//if (!skb_shift(prev, skb, len))
++	if (!tcp_skb_shift(prev, skb, pcount, len))
+ 		goto fallback;
+ 	if (!tcp_shifted_skb(sk, skb, state, pcount, len, mss, dup_sack))
+ 		goto out;
+@@ -1498,11 +1515,15 @@ static struct sk_buff *tcp_shift_skb_data(struct sock *sk, struct sk_buff *skb,
+ 		goto out;
+ 
+ 	len = skb->len;
++/*
+ 	if (skb_shift(prev, skb, len)) {
+ 		pcount += tcp_skb_pcount(skb);
+ 		tcp_shifted_skb(sk, skb, state, tcp_skb_pcount(skb), len, mss, 0);
+ 	}
+-
++*/
++	pcount = tcp_skb_pcount(skb);
++	if (tcp_skb_shift(prev, skb, pcount, len))
++		tcp_shifted_skb(sk, prev, skb, state, pcount, len, mss, 0);
+ out:
+ 	state->fack_count += pcount;
+ 	return prev;
+diff --git a/net/ipv4/tcp_output.c b/net/ipv4/tcp_output.c
+index 5777b13..62693b0 100644
+--- a/net/ipv4/tcp_output.c
++++ b/net/ipv4/tcp_output.c
+@@ -1323,8 +1323,8 @@ static inline int __tcp_mtu_to_mss(struct sock *sk, int pmtu)
+ 	mss_now -= icsk->icsk_ext_hdr_len;
+ 
+ 	/* Then reserve room for full set of TCP options and 8 bytes of data */
+-	if (mss_now < 48)
+-		mss_now = 48;
++	if (mss_now < TCP_MIN_SND_MSS)
++		mss_now = TCP_MIN_SND_MSS;
+ 	return mss_now;
+ }
+ 
+-- 
+1.9.1
+

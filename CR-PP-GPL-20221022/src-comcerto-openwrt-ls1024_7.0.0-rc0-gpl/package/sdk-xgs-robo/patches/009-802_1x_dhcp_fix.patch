@@ -1,0 +1,48 @@
+diff -ruaN a/src/soc/robo/gex/sec.c b/src/soc/robo/gex/sec.c
+--- a/src/soc/robo/gex/sec.c	2017-11-16 14:53:08.823129105 +0530
++++ b/src/soc/robo/gex/sec.c	2017-11-16 15:37:48.343128786 +0530
+@@ -116,6 +116,7 @@
+ int 
+ drv_gex_security_set(int unit, soc_pbmp_t bmp, uint32 state, uint32 mask)
+ {
++    uint32 reg_value, temp1;
+     int             rv = SOC_E_NONE;
+     uint32          temp, flag = 0;
+     uint64          reg_value64;
+@@ -289,7 +290,17 @@
+                     (unit, DRV_MEM_ARL, (uint32 *)&arl_entry, flag)) < 0) {
+                     return rv;
+                 }
+-                              
++		/* block DHCP packets*/
++	    	temp1=0;
++		if ((rv = REG_READ_EAP_GLO_CONr(unit, &reg_value)) < 0) {
++			return rv;
++	    	}
++	    	soc_EAP_GLO_CONr_field_set(unit, &reg_value, EN_DHCPf, &temp1);
++		if ((rv = REG_WRITE_EAP_GLO_CONr(unit, &reg_value)) < 0) 
++		{
++	        	return rv;
++    		}
++		      
+                 port_sec_state[port] = DRV_SECURITY_PORT_UNCONTROLLED;
+            }
+             break;
+@@ -382,6 +393,17 @@
+                 if (mask & DRV_SECURITY_IGNORE_VIOLATION) {
+                     /* not implemented yet */
+                 }
++
++		 /* Allow DHCP packets*/
++                temp1=1;
++                if ((rv = REG_READ_EAP_GLO_CONr(unit, &reg_value)) < 0) {
++                        return rv;
++                }
++                soc_EAP_GLO_CONr_field_set(unit, &reg_value, EN_DHCPf, &temp1);
++                if ((rv = REG_WRITE_EAP_GLO_CONr(unit, &reg_value)) < 0)  
++                {
++                        return rv;
++                }
+                 port_sec_state[port] = DRV_SECURITY_PORT_UNAUTHENTICATE;
+             }
+ 

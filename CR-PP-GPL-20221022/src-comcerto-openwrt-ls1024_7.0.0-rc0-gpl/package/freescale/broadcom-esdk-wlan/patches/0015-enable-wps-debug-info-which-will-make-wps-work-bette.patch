@@ -1,0 +1,41 @@
+From f3acf6aaf378bed7938f7168959a7b0951277f01 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:16:20 +0800
+Subject: [PATCH 15/63] enable-wps-debug-info-which-will-make-wps-work-bette
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/common/include/tutrace.h |    3 +++
+ main/components/router/Makefile                   |    2 ++
+ 2 files changed, 5 insertions(+)
+
+diff --git a/main/components/apps/wps/common/include/tutrace.h b/main/components/apps/wps/common/include/tutrace.h
+index 2d5e6e4..ee358cc 100644
+--- a/main/components/apps/wps/common/include/tutrace.h
++++ b/main/components/apps/wps/common/include/tutrace.h
+@@ -47,6 +47,9 @@ int WPS_HexDumpAscii(unsigned int level, char *title, unsigned char *buf, unsign
+ #define TUTRACE_INFO       TUINFO, __FUNCTION__, __LINE__
+ #define TUTRACE_NFC        TUNFC, __FUNCTION__, __LINE__
+ 
++
++#define _TUDEBUGTRACE
++
+ #ifdef _TUDEBUGTRACE
+ 
+ #define TUTRACE(VARGLST)   print_traceMsg VARGLST
+diff --git a/main/components/router/Makefile b/main/components/router/Makefile
+index 82d2b36..3348cf4 100644
+--- a/main/components/router/Makefile
++++ b/main/components/router/Makefile
+@@ -910,6 +910,8 @@ ifeq ($(WLTEST),1)
+ export CFLAGS += -DWLTEST
+ endif
+ 
++export CFLAGS += -DBCMDBG
++
+ ifeq ($(CONFIG_WLEXE),y)
+ export CONFIG_WLEXE
+ export RWL ?= 0
+-- 
+1.7.10
+

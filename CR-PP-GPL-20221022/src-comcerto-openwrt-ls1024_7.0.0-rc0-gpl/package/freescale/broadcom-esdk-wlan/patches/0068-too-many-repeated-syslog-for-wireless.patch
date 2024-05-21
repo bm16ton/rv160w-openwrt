@@ -1,0 +1,99 @@
+diff --git a/main/src/wl/sys/wl_dbg.h b/main/src/wl/sys/wl_dbg.h
+index 6f85f8e..50412a1 100644
+--- a/main/src/wl/sys/wl_dbg.h
++++ b/main/src/wl/sys/wl_dbg.h
+@@ -800,6 +800,8 @@ extern struct msg_filter_s *msg_filters;
+ 
+ #endif
+ 
++#define WL_ERROR_EXT(args) WL_AMPDU(args)
++
+ extern uint32 wl_msg_level;
+ extern uint32 wl_msg_level2;
+ #endif /* _wl_dbg_h_ */
+diff --git a/main/src/wl/sys/wlc.c b/main/src/wl/sys/wlc.c
+index 0516355..a059439 100755
+--- a/main/src/wl/sys/wlc.c
++++ b/main/src/wl/sys/wlc.c
+@@ -5777,7 +5777,7 @@ wlc_scan_request_ex(
+ 	wlc_radio_mpc_upd(wlc);
+ #endif /* STA */
+ 	if (!wlc->pub->up) {
+-		WL_ERROR(("wl%d: %s, can not scan while driver is down\n",
++		WL_ERROR_EXT(("wl%d: %s, can not scan while driver is down\n",
+ 			wlc->pub->unit, __FUNCTION__));
+ 		err = BCME_NOTUP;
+ 	}
+@@ -5821,7 +5821,7 @@ wlc_scan_request_ex(
+ 
+ 	/* make it consistent with wlc_scan() w.r.t. invoking callback */
+ 	if (cb && fn != NULL) {
+-		WL_ERROR(("wl%d: %s, can not scan due to error %d\n",
++		WL_ERROR_EXT(("wl%d: %s, can not scan due to error %d\n",
+ 		          wlc->pub->unit, __FUNCTION__, err));
+ 		(fn)(arg, WLC_E_STATUS_ERROR, cfg);
+ 	}
+@@ -12616,7 +12616,7 @@ wlc_watchdog(void *arg)
+     if (!(SCAN_IN_PROGRESS(wlc->scan))) {
+ #endif
+         if ((err = wlc_lq_chanim_update(wlc, wlc->chanspec, CHANIM_WD)) != BCME_OK) {
+-        	WL_ERROR(("wl%d: %s: WLC_CHANIM upd fail %d\n", wlc->pub->unit,
++            WL_ERROR_EXT(("wl%d: %s: WLC_CHANIM upd fail %d\n", wlc->pub->unit,
+         		__FUNCTION__, err));
+         }
+ #ifdef WLENT_AIRIQ
+@@ -25995,12 +25995,12 @@ wlc_statsupd(wlc_info_t *wlc)
+ 	delta = macstat_snapshot[MCSTOFF_RXF0OVFL] - rxf0ovfl;
+ 	delta1 = macstat_snapshot[MCSTOFF_RXHLOVFL] - rxhlovfl;
+ 	if (delta && delta1)
+-		WL_ERROR(("wl%d: rx fifo 0 and hdfifo overflows: %u %u!\n",
++		WL_ERROR_EXT(("wl%d: rx fifo 0 and hdfifo overflows: %u %u!\n",
+ 			wlc->pub->unit, delta, delta1));
+ 	else if (delta)
+-		WL_ERROR(("wl%d: %u rx fifo 0 overflows!\n", wlc->pub->unit, delta));
++		WL_ERROR_EXT(("wl%d: %u rx fifo 0 overflows!\n", wlc->pub->unit, delta));
+ 	else if (delta1)
+-		WL_ERROR(("wl%d: %u rx hlfifo overflows!\n", wlc->pub->unit, delta1));
++		WL_ERROR_EXT(("wl%d: %u rx hlfifo overflows!\n", wlc->pub->unit, delta1));
+ 
+ 	/* check for tx fifo underflows */
+ 	for (i = 0; i < NFIFO; i++) {
+diff --git a/main/src/wl/sys/wlc_ampdu.c b/main/src/wl/sys/wlc_ampdu.c
+index cba72e6..71ff3b9 100755
+--- a/main/src/wl/sys/wlc_ampdu.c
++++ b/main/src/wl/sys/wlc_ampdu.c
+@@ -12994,7 +12994,7 @@ wlc_ampdu_tx_recv_delba(ampdu_tx_info_t *ampdu_tx, struct scb *scb, uint8 tid, u
+ 	WLCNTINCR(ampdu_tx->cnt->rxdelba);
+ 	AMPDUSCBCNTINCR(scb_ampdu_tx->cnt.rxdelba);
+ 
+-	WL_ERROR(("wl%d: %s: AMPDU OFF: tid %d initiator %d reason %d\n",
++	WL_ERROR_EXT(("wl%d: %s: AMPDU OFF: tid %d initiator %d reason %d\n",
+ 		ampdu_tx->wlc->pub->unit, __FUNCTION__, tid, initiator, reason));
+ }
+ 
+diff --git a/main/src/wl/sys/wlc_ampdu_cmn.c b/main/src/wl/sys/wlc_ampdu_cmn.c
+index 9dc4b4a..5b061f2 100644
+--- a/main/src/wl/sys/wlc_ampdu_cmn.c
++++ b/main/src/wl/sys/wlc_ampdu_cmn.c
+@@ -573,7 +573,7 @@ wlc_send_bar(wlc_info_t *wlc, struct scb *scb, uint8 tid, uint16 start_seq,
+ 	bar->bar_control = htol16(tmp);
+ 	bar->seqnum = htol16(start_seq << SEQNUM_SHIFT);
+ 
+-	WL_ERROR(("wl%d.%d: %s: seq 0x%x tid %d\n", wlc->pub->unit,
++	WL_ERROR_EXT(("wl%d.%d: %s: seq 0x%x tid %d\n", wlc->pub->unit,
+ 		WLC_BSSCFG_IDX(scb->bsscfg),  __FUNCTION__, start_seq, tid));
+ 
+ 	/* set same priority as tid */
+diff --git a/main/src/wl/sys/wlc_lq.c b/main/src/wl/sys/wlc_lq.c
+index 0a51414..a90d52f 100644
+--- a/main/src/wl/sys/wlc_lq.c
++++ b/main/src/wl/sys/wlc_lq.c
+@@ -2290,7 +2290,7 @@ wlc_lq_chanim_update(wlc_info_t *wlc, chanspec_t chanspec, uint32 flags)
+ 		int i;
+ 
+ 		if (!WLC_CHANIM_MODE_DETECT(c_info) || SCAN_IN_PROGRESS(wlc->scan)) {
+-			WL_ERROR(("wl%d: %s: WLC_CHANIM upd blocked scan/detect\n", wlc->pub->unit,
++			WL_ERROR_EXT(("wl%d: %s: WLC_CHANIM upd blocked scan/detect\n", wlc->pub->unit,
+ 				__FUNCTION__));
+ 			return BCME_NOTREADY;
+ 		}

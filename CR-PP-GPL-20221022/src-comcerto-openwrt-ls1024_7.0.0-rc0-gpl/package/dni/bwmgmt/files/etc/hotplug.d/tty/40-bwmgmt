@@ -1,0 +1,30 @@
+#!/bin/sh
+
+USBPORT1="usb3"
+USBPORT2="usb1"
+SAVEFILE="/tmp/bwmgmt/data"
+MNTFILE="/mnt/configcert/bwmgmt"
+
+case "$DEVICENAME" in
+	ttyUSB*)
+		# Check which port the com port is connected.
+			tmp=`echo $DEVPATH | grep $USBPORT1`
+			if [ -n "$tmp" ];then
+				USB_NUM=1
+			else
+				USB_NUM=2
+			fi
+
+		if [ "$ACTION" = add ]; then
+			/etc/init.d/bwmgmt start "USB${USB_NUM}"
+		fi
+		if [ "$ACTION" = remove ]; then
+			# Clear connection time, section packages
+			sed -i "s/^[0-9]\+,[0-9]\+,[0-9]\+/0,0,0/g" "$SAVEFILE/USB$USB_NUM"
+			# kill bwmgmtd
+			/etc/init.d/bwmgmt kill_pid "USB${USB_NUM}"
+			# copy to mnt
+			cp -rf $SAVEFILE $MNTFILE
+		fi
+	;;
+esac

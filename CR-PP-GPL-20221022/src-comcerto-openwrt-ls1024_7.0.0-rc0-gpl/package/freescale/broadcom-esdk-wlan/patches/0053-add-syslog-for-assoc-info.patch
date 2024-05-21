@@ -1,0 +1,52 @@
+From 4d6c435b7c14c3432207daec29b7cf6f9493d574 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:32:23 +0800
+Subject: [PATCH 53/63] add-syslog-for-assoc-info
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_ap.c   |    6 ++++++
+ main/src/wl/sys/wlc_psta.c |    3 +++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/main/src/wl/sys/wlc_ap.c b/main/src/wl/sys/wlc_ap.c
+index fc98973..9f896e1 100755
+--- a/main/src/wl/sys/wlc_ap.c
++++ b/main/src/wl/sys/wlc_ap.c
+@@ -2649,6 +2649,10 @@ static void wlc_ap_process_assocreq_done(wlc_ap_info_t *ap, wlc_bsscfg_t *bsscfg
+ 	WL_ASSOC(("wl%d.%d %s %sassociated\n", wlc->pub->unit, WLC_BSSCFG_IDX(bsscfg), sa,
+ 		reassoc ? "re" : ""));
+ 
++	printk(KERN_NOTICE "RADIO %s SSID %s %s %sconnected\n",
++		wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, sa,
++		reassoc ? "re" : "");
++
+ #ifdef WLENT_STATS
+     /* If this is reassociation, save off the prev BSSID in the SCB */
+     if (reassoc && (reassoc_ap != (struct ether_addr *)NULL)) {
+@@ -5322,6 +5326,8 @@ wlc_ap_scb_free_notify(void *context, struct scb *scb)
+ 	if (bsscfg && BSSCFG_AP(bsscfg) && SCB_ASSOCIATED(scb) && wlc->eventq) {
+ 		WL_ASSOC(("wl%d: AP: scb free: indicate disassoc for the STA-%s\n",
+ 			wlc->pub->unit, ea));
++		printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
++			wlc->pub->unit == 0 ? "2.4G" : "5G", bsscfg->SSID, ea);
+ 		wlc_bss_mac_event(wlc, scb->bsscfg, WLC_E_DISASSOC_IND, &scb->ea,
+ 			WLC_E_STATUS_SUCCESS, DOT11_RC_DISASSOC_LEAVING, 0, 0, 0);
+ 	}
+diff --git a/main/src/wl/sys/wlc_psta.c b/main/src/wl/sys/wlc_psta.c
+index a753522..7a26b44 100644
+--- a/main/src/wl/sys/wlc_psta.c
++++ b/main/src/wl/sys/wlc_psta.c
+@@ -466,6 +466,9 @@ wlc_psta_deauth_client(wlc_psta_info_t *psta, struct ether_addr *addr)
+ 	if (cfg == NULL) {
+ 		WL_ERROR(("wl%d: Proxy STA %s link is already gone !!??\n",
+ 		          psta->pub->unit, bcm_ether_ntoa(&psta_ha, eabuf)));
++		printk(KERN_NOTICE "RADIO %s SSID %s %s disconnected\n",
++			   psta->pub->unit == 0 ? "2.4G" : "5G", cfg->SSID,
++			   bcm_ether_ntoa(&psta_ha, eabuf));
+ 		return;
+ 	}
+ 
+-- 
+1.7.10
+

@@ -1,0 +1,94 @@
+From 601feb54e2f1dfb00dbd2ae086b2a663f0299bd8 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:34:18 +0800
+Subject: [PATCH 57/63] Add-trace-info-for-DEVICEREMOVED-log
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/wl/sys/wlc_bmac.c |    7 +++++--
+ main/src/wl/sys/wlc_intr.c |   11 ++++++++---
+ 2 files changed, 13 insertions(+), 5 deletions(-)
+ mode change 100644 => 100755 main/src/wl/sys/wlc_bmac.c
+ mode change 100644 => 100755 main/src/wl/sys/wlc_intr.c
+
+diff --git a/main/src/wl/sys/wlc_bmac.c b/main/src/wl/sys/wlc_bmac.c
+old mode 100644
+new mode 100755
+index aaedd79..81f7a41
+--- a/main/src/wl/sys/wlc_bmac.c
++++ b/main/src/wl/sys/wlc_bmac.c
+@@ -21485,10 +21485,13 @@ wlc_bmac_dma_txfast(wlc_info_t *wlc, uint fifo, void *p, bool commit)
+ 		uint mpdulen, tsoHdrSize = 0;
+ 
+ 		tx_di = WLC_HW_DI(wlc, fifo);
+-
+ 		aqm_di = WLC_HW_AQM_DI(wlc, fifo);
+ 
+-		ASSERT(aqm_di);
++		if (tx_di == NULL || aqm_di == NULL) {
++			printk("aqm_di is NULL.\n");
++			return BCME_NORESOURCE;
++		}
++//		ASSERT(aqm_di);
+ 
+ 		/* Before proceeding ahead first check if an AQM descriptor is available */
+ 		if (!(*wlc_hw->txavail_aqm[fifo])) {
+diff --git a/main/src/wl/sys/wlc_intr.c b/main/src/wl/sys/wlc_intr.c
+old mode 100644
+new mode 100755
+index 800e318..21eb880
+--- a/main/src/wl/sys/wlc_intr.c
++++ b/main/src/wl/sys/wlc_intr.c
+@@ -671,12 +671,14 @@ wlc_intstatus(wlc_info_t *wlc, bool in_isr)
+ 	/* macintstatus includes a DMA interrupt summary bit */
+ 	macintstatus = GET_MACINTSTATUS(osh, regs);
+ 
+-	WL_TRACE(("wl%d: macintstatus: 0x%x\n", wlc_hw->unit, macintstatus));
++	WL_TRACE(("wl%d: macintstatus: 0x%x, clk = %d\n", wlc_hw->unit, macintstatus, wlc_hw->clk));
+ 
+ #ifndef MACOSX
+ 	/* detect cardbus removed, in power down(suspend) and in reset */
+-	if (DEVICEREMOVED(wlc))
++	if (DEVICEREMOVED(wlc)) {
++		WL_ERROR(("wl%d: (clk = %d) Cardbus removed detected in %s.\n", wlc_hw->unit, wlc_hw->clk, __func__));
+ 		return -1;
++	}
+ #endif
+ 
+ 	/* DEVICEREMOVED succeeds even when the core is still resetting,
+@@ -684,6 +686,7 @@ wlc_intstatus(wlc_info_t *wlc, bool in_isr)
+ 	 */
+ 	if (macintstatus == 0xffffffff) {
+ 		WL_HEALTH_LOG(wlc, DEADCHIP_ERROR);
++		WL_ERROR(("wl%d: Invalid macintstatus 0xffffffff detected in %s.\n", wlc_hw->unit, __func__));
+ 		return 0;
+ 	}
+ 
+@@ -878,6 +881,7 @@ wlc_intrsupd(wlc_info_t *wlc)
+ 	/* device is removed */
+ 	if (macintstatus == 0xffffffff) {
+ 		WL_HEALTH_LOG(wlc, DEADCHIP_ERROR);
++		WL_ERROR(("wl%d: Invalid macintstatus 0xffffffff detected in %s.\n", wlc->pub->unit, __func__));
+ 		return FALSE;
+ 	}
+ 
+@@ -923,6 +927,7 @@ wlc_isr(wlc_info_t *wlc, bool *wantdpc)
+             }
+         } 
+ #endif
++		WL_ERROR(("wl%d: DOWN detected in %s.\n", wlc_hw->unit, __func__));
+         return (FALSE);
+     }
+ 	/* read and clear macintstatus and intstatus registers */
+@@ -941,7 +946,7 @@ wlc_isr(wlc_info_t *wlc, bool *wantdpc)
+ 
+ 	if (macintstatus == 0xffffffff) {
+ 		WL_HEALTH_LOG(wlc, DEADCHIP_ERROR);
+-		WL_ERROR(("DEVICEREMOVED detected in the ISR code path.\n"));
++		WL_ERROR(("wl%d: DEVICEREMOVED detected in the ISR code path.\n", wlc_hw->unit));
+ 		/* in rare cases, we may reach this condition as a race condition may occur */
+ 		/* between disabling interrupts and clearing the SW macintmask */
+ 		/* clear mac int status as there is no valid interrupt for us */
+-- 
+1.7.10
+

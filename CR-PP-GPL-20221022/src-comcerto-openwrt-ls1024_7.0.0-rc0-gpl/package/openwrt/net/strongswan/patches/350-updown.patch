@@ -1,0 +1,436 @@
+From e2006eeb5eb18f52a4e8429e6f1fc7f3982e2766 Mon Sep 17 00:00:00 2001
+From: Sridhar Pothuganti <sridhar.pothuganti@nxp.com>
+Date: Wed, 6 Sep 2017 19:40:09 +0530
+Subject: [PATCH] 350-updown
+
+Signed-off-by: Sridhar Pothuganti <sridhar.pothuganti@nxp.com>
+Signed-off-by: skc <chaitanya.sakinam@nxp.com>
+---
+ src/_updown/_updown.in | 306 ++++++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 290 insertions(+), 16 deletions(-)
+
+diff --git a/src/_updown/_updown.in b/src/_updown/_updown.in
+index 6e94ca7..966e870 100644
+--- a/src/_updown/_updown.in
++++ b/src/_updown/_updown.in
+@@ -132,6 +132,11 @@
+ PATH="/sbin:/bin:/usr/sbin:/usr/bin:@sbindir@"
+ export PATH
+ 
++. /lib/functions/network.sh
++. /lib/functions.sh
++
++#EzVpn attributes file
++EZFILE=/etc/cisco_ezvpn_attr
+ # comment to disable logging VPN connections to syslog
+ VPN_LOGGING=1
+ #
+@@ -146,6 +151,10 @@ FAC_PRIO=local0.notice
+ #
+ # local0.notice                   -/var/log/vpn
+ 
++local connName=`echo "$PLUTO_CONNECTION"`
++PLUTO_CONNECTION=`echo "$PLUTO_CONNECTION"|sed 's/-[0-9][0-9]*$//g'`
++PLUTO_CONNECTION=`echo "$PLUTO_CONNECTION"|sed 's/_bkp[0-9]*$//g'`
++
+ # check interface version
+ case "$PLUTO_VERSION" in
+ 1.[0|1])	# Older release?!?  Play it safe, script may be using new features.
+@@ -238,10 +247,10 @@ up-host:iptables)
+ 	# connection to me, with (left/right)firewall=yes, coming up
+ 	# This is used only by the default updown script, not by your custom
+ 	# ones, so do not mess with it; see CAUTION comment up at top.
+-	iptables -I INPUT 1 -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
++	iptables -w -I vpn_input_bypass 1 -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
+ 	    -s $PLUTO_PEER_CLIENT $S_PEER_PORT \
+ 	    -d $PLUTO_ME $D_MY_PORT $IPSEC_POLICY_IN -j ACCEPT
+-	iptables -I OUTPUT 1 -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++	iptables -w -I vpn_output_bypass 1 -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
+ 	    -s $PLUTO_ME $S_MY_PORT $IPSEC_POLICY_OUT \
+ 	    -d $PLUTO_PEER_CLIENT $D_PEER_PORT -j ACCEPT
+ 	#
+@@ -249,7 +258,7 @@ up-host:iptables)
+ 	# IPComp is used (for small inbound packets that are not compressed)
+ 	if [ -n "$PLUTO_IPCOMP" ]
+ 	then
+-	  iptables -I INPUT 1 -i $PLUTO_INTERFACE -p 4 \
++	  iptables -w -I vpn_input_bypass 1 -i $PLUTO_INTERFACE -p 4 \
+ 	      -s $PLUTO_PEER -d $PLUTO_ME $IPSEC_POLICY_IN -j ACCEPT
+ 	fi
+ 	#
+@@ -265,22 +274,63 @@ up-host:iptables)
+ 	      "+ $PLUTO_PEER_ID $PLUTO_PEER_CLIENT == $PLUTO_PEER -- $PLUTO_ME"
+ 	  fi
+ 	fi
++	local connType=`uci get strongswan.$PLUTO_CONNECTION`
++	if [ "$connType" == "site2site" ]
++	then
++	#{
++	  local is_gre_local=`uci get strongswan.$PLUTO_CONNECTION.local_sec_group`
++	  if [ "$is_gre_local"="gre" ]
++	  then
++		local gre_interface_name=`uci get strongswan.$PLUTO_CONNECTION.local_gre_iface`
++		cmm -c tunnel gre-$gre_interface_name add gre ipsec 1
++		local split_dns=`uci get strongswan.$PLUTO_CONNECTION.split_dns`
++		if [ $split_dns -eq 1 ]
++		then
++		#{
++		  local split_dns_config=$(uci_get_state dhcp.splitdns."$PLUTO_CONNECTION")
++		  if [ $split_dns_config -eq 0 ]
++		  then #equal to zero
++		  #{
++		    local split_dns_server1=`uci get strongswan.$PLUTO_CONNECTION.split_dns_server1`
++		    local split_dns_server2=`uci get strongswan.$PLUTO_CONNECTION.split_dns_server2 2>/dev/null`
++		    local split_dns_domain=`uci get strongswan.$PLUTO_CONNECTION.split_dns_domain`
++
++		    for tempDomain in $split_dns_domain
++		    do
++			uci add_list dhcp.@dnsmasq[0].server="/$tempDomain/$split_dns_server1"
++			[ -n "$split_dns_server2" ] && {
++				uci add_list dhcp.@dnsmasq[0].server="/$tempDomain/$split_dns_server2"
++			}
++		    done
++		    uci commit dhcp
++		    /etc/init.d/dnsmasq reload
++		    uci_toggle_state dhcp splitdns $PLUTO_CONNECTION 1
++        #}
++		else #greater than 1
++		  uci_toggle_state dhcp splitdns $PLUTO_CONNECTION `expr $split_dns_config + 1`
++		fi
++	      #}
++	      fi
++
++	  fi
++	#}
++	fi
+ 	;;
+ down-host:iptables)
+ 	# connection to me, with (left/right)firewall=yes, going down
+ 	# This is used only by the default updown script, not by your custom
+ 	# ones, so do not mess with it; see CAUTION comment up at top.
+-	iptables -D INPUT -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
++	iptables -w -D vpn_input_bypass -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
+ 	    -s $PLUTO_PEER_CLIENT $S_PEER_PORT \
+ 	    -d $PLUTO_ME $D_MY_PORT $IPSEC_POLICY_IN -j ACCEPT
+-	iptables -D OUTPUT -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++	iptables -w -D vpn_output_bypass -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
+ 	    -s $PLUTO_ME $S_MY_PORT $IPSEC_POLICY_OUT \
+ 	    -d $PLUTO_PEER_CLIENT $D_PEER_PORT -j ACCEPT
+ 	#
+ 	# IPIP exception teardown
+ 	if [ -n "$PLUTO_IPCOMP" ]
+ 	then
+-	  iptables -D INPUT -i $PLUTO_INTERFACE -p 4 \
++	  iptables -w -D vpn_input_bypass -i $PLUTO_INTERFACE -p 4 \
+ 	      -s $PLUTO_PEER -d $PLUTO_ME $IPSEC_POLICY_IN -j ACCEPT
+ 	fi
+ 	#
+@@ -296,6 +346,51 @@ down-host:iptables)
+ 	    "- $PLUTO_PEER_ID $PLUTO_PEER_CLIENT == $PLUTO_PEER -- $PLUTO_ME"
+ 	  fi
+ 	fi
++	local connType=`uci get strongswan.$PLUTO_CONNECTION`
++	if [ "$connType" == "site2site" ]
++	then
++	#{
++	  local is_gre_local=`uci get strongswan.$PLUTO_CONNECTION.local_sec_group`
++	  if [ "$is_gre_local"="gre" ]
++	  then
++		local gre_interface_name=`uci get strongswan.$PLUTO_CONNECTION.local_gre_iface`
++		cmm -c tunnel gre-$gre_interface_name add gre ipsec 0
++		local split_dns=`uci get strongswan.$PLUTO_CONNECTION.split_dns`
++		if [ $split_dns -eq 1 ]
++		then
++		#{
++		  local split_dns_config=$(uci_get_state dhcp.splitdns."$PLUTO_CONNECTION")
++		  if [ $split_dns_config -eq 1 ]
++		  then #equal to 1 (last ipsec sa down).
++		  #{
++		    local split_dns_server1=`uci get strongswan.$PLUTO_CONNECTION.split_dns_server1`
++		    local split_dns_server2=`uci get strongswan.$PLUTO_CONNECTION.split_dns_server2 2>/dev/null`
++		    local split_dns_domain=`uci get strongswan.$PLUTO_CONNECTION.split_dns_domain`
++
++		    for tempDomain in $split_dns_domain
++		    do
++			uci del_list dhcp.@dnsmasq[0].server="/$tempDomain/$split_dns_server1"
++			[ -n "$split_dns_server2" ] && {
++				uci del_list dhcp.@dnsmasq[0].server="/$tempDomain/$split_dns_server2"
++			}
++		    done
++		    uci commit dhcp
++		    /etc/init.d/dnsmasq reload
++		    uci_toggle_state dhcp splitdns $PLUTO_CONNECTION 0
++            #}
++		  else #not equal to 1
++		    if [ $split_dns_config -ge 2 ]
++		    then
++		      uci_toggle_state dhcp splitdns $PLUTO_CONNECTION `expr $split_dns_config - 1`
++		    fi
++		  fi
++	      #}
++	      fi
++
++	  fi
++	#}
++	fi
++
+ 	;;
+ up-client:iptables)
+ 	# connection to client subnet, with (left/right)firewall=yes, coming up
+@@ -303,22 +398,137 @@ up-client:iptables)
+ 	# ones, so do not mess with it; see CAUTION comment up at top.
+ 	if [ "$PLUTO_PEER_CLIENT" != "$PLUTO_MY_SOURCEIP/32" ]
+ 	then
+-	  iptables -I FORWARD 1 -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++	  iptables -w -I vpn_fw_bypass 1 -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
+ 	      -s $PLUTO_MY_CLIENT $S_MY_PORT \
+ 	      -d $PLUTO_PEER_CLIENT $D_PEER_PORT $IPSEC_POLICY_OUT -j ACCEPT
+-	  iptables -I FORWARD 1 -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
++	  iptables -w -I vpn_fw_bypass 1 -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
+ 	      -s $PLUTO_PEER_CLIENT $S_PEER_PORT \
+ 	      -d $PLUTO_MY_CLIENT $D_MY_PORT $IPSEC_POLICY_IN -j ACCEPT
++	  iptables -w -I vpn_nat_bypass 1 -t nat -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++	      -s $PLUTO_MY_CLIENT $S_MY_PORT \
++	      -d $PLUTO_PEER_CLIENT $D_PEER_PORT $IPSEC_POLICY_OUT -j ACCEPT
++
++	  local connType=`uci get strongswan.$PLUTO_CONNECTION`
++	  if [ "$connType" == "site2site" ]
++	  then
++	  #{
++	    local split_dns=`uci get strongswan.$PLUTO_CONNECTION.split_dns`
++	    if [ $split_dns -eq 1 ]
++	    then
++	    #{
++		local split_dns_config=$(uci_get_state dhcp.splitdns."$PLUTO_CONNECTION")
++		if [ $split_dns_config -eq 0 ]
++		then #equal to zero
++		#{
++		  local split_dns_server1=`uci get strongswan.$PLUTO_CONNECTION.split_dns_server1`
++		  local split_dns_server2=`uci get strongswan.$PLUTO_CONNECTION.split_dns_server2 2>/dev/null`
++		  local split_dns_domain=`uci get strongswan.$PLUTO_CONNECTION.split_dns_domain`
++
++		  for tempDomain in $split_dns_domain
++		  do
++			uci add_list dhcp.@dnsmasq[0].server="/$tempDomain/$split_dns_server1"
++			[ -n "$split_dns_server2" ] && {
++				uci add_list dhcp.@dnsmasq[0].server="/$tempDomain/$split_dns_server2"
++			}
++		  done
++		  uci commit dhcp
++		  /etc/init.d/dnsmasq reload
++		  uci_toggle_state dhcp splitdns $PLUTO_CONNECTION 1
++		#}
++		else #greater than 1
++		  uci_toggle_state dhcp splitdns $PLUTO_CONNECTION `expr $split_dns_config + 1`
++		fi
++	    #}
++	    fi
++	    local netbios=`uci get strongswan.$PLUTO_CONNECTION.netbios`
++	    if [ $netbios -eq 1 ]
++	    then
++		nbvpn add $PLUTO_MY_CLIENT $PLUTO_PEER_CLIENT
++	    fi
++
++	    vpn_clear_connections $PLUTO_MY_CLIENT $PLUTO_PEER_CLIENT
++	  #}
++	  elif [ "$connType" == "client" ]
++	  then
++	   if [ "$connName" == "$PLUTO_CONNECTION" ]
++	   then
++
++		received_backups=$(grep backupserver $EZFILE | cut -d " " -f 2-)
++		auto_conf_backups=$(uci get strongswan.$PLUTO_CONNECTION.backup_server_auto|sed 's/ /,/g')
++
++		if [ "$received_backups" != "$auto_conf_backups" ]
++		then
++			UCIRECORD=`uci show strongswan.$PLUTO_CONNECTION | grep -v backup_server_auto`
++			uci del strongswan.$PLUTO_CONNECTION
++			for line in $UCIRECORD; do
++			   uci set $line
++			done
++
++			local backupServers=`grep backupserver $EZFILE | cut -d " " -f 2-| sed 's/,/ /g'`
++			logger -t VPN "Configuring Tele-worker VPN client back-up server settings. BackupServers: $backupServers"
++
++	    # This will clear the previos data (if any)
++			uci set strongswan.$PLUTO_CONNECTION.backup_server_auto=
++			for backup in $backupServers
++			do
++			  logger -t VPN "BackupServers: $backup"
++			  uci add_list strongswan.$PLUTO_CONNECTION.backup_server_auto=$backup
++			done
++			/etc/init.d/strongswan reload "autobackup"
++			killall -9 tvpnc_timer
++			timerCtrl "+$PLUTO_CONNECTION"
++		fi
++	  fi
++
++	    #Handling split-DNS related data.
++	    local splitdns=`grep -e "^splitdns" $EZFILE | cut -d ' ' -f 2- | sed 's/,/ /g'`
++	    local nameserver=`grep -e "^nameserver" $EZFILE | perl -e 'print reverse<>' | cut -d ' ' -f 2`
++
++	    [ -n "$splitdns" ] && [ -n "$nameserver" ] && {
++	      uci set dhcp.$PLUTO_CONNECTION=dnsmasq
++	      for dns in $splitdns
++	      do
++		for server in $nameserver
++		do
++		  uci add_list dhcp.$PLUTO_CONNECTION.server="/$dns/$server"
++		done
++	      done
++	      uci set dhcp.$PLUTO_CONNECTION.rebind_protection=0
++	      uci commit dhcp
++	      /etc/init.d/dnsmasq reload
++	    }
++	    #Handling addition of SNAT rules incase of tvpnc in client mode
++	    local mode=`uci get strongswan.$PLUTO_CONNECTION.mode 2>/dev/null`
++	    [ "$mode" != "nem" ] && {
++               network_active_lan_subnets lanSubnets
++               local toSource=`echo $PLUTO_MY_CLIENT | cut -d '/' -f 1`
++               local pptpdStartIP=`uci get pptpd.global.ip_start`
++               local pptpdEndIP=`uci get pptpd.global.ip_end`
++               local l2tpdStartIP=`uci get l2tpd.global.ip_start`
++               local l2tpdEndIP=`uci get l2tpd.global.ip_end`
++               iptables -w -I vpn_tvpnc_snat 1 -t nat -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++                  -s $lanSubnets -d $PLUTO_PEER_CLIENT -m comment --comment $PLUTO_CONNECTION  \
++                  -j SNAT --to-source  $toSource
++
++               iptables -w -I vpn_tvpnc_snat 1 -t nat -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++                  -m iprange --src-range $pptpdStartIP-$pptpdEndIP -d $PLUTO_PEER_CLIENT -m comment --comment $PLUTO_CONNECTION \
++                  -j SNAT --to-source  $toSource
++
++               iptables -w -I vpn_tvpnc_snat 1 -t nat -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++                  -m iprange --src-range $l2tpdStartIP-$l2tpdEndIP -d $PLUTO_PEER_CLIENT -m comment --comment $PLUTO_CONNECTION \
++                  -j SNAT --to-source  $toSource
++	    }
++	  fi
+ 	fi
+ 	#
+ 	# a virtual IP requires an INPUT and OUTPUT rule on the host
+ 	# or sometimes host access via the internal IP is needed
+ 	if [ -n "$PLUTO_MY_SOURCEIP" -o -n "$PLUTO_HOST_ACCESS" ]
+ 	then
+-	  iptables -I INPUT 1 -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
++	  iptables -w -I vpn_input_bypass 1 -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
+ 	      -s $PLUTO_PEER_CLIENT $S_PEER_PORT \
+ 	      -d $PLUTO_MY_CLIENT $D_MY_PORT $IPSEC_POLICY_IN -j ACCEPT
+-	  iptables -I OUTPUT 1 -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++	  iptables -w -I vpn_output_bypass 1 -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
+ 	      -s $PLUTO_MY_CLIENT $S_MY_PORT \
+ 	      -d $PLUTO_PEER_CLIENT $D_PEER_PORT $IPSEC_POLICY_OUT -j ACCEPT
+ 	fi
+@@ -328,7 +538,7 @@ up-client:iptables)
+ 	# INPUT is correct here even for forwarded traffic.
+ 	if [ -n "$PLUTO_IPCOMP" ]
+ 	then
+-	  iptables -I INPUT 1 -i $PLUTO_INTERFACE -p 4 \
++	  iptables -w -I vpn_input_bypass 1 -i $PLUTO_INTERFACE -p 4 \
+ 	      -s $PLUTO_PEER -d $PLUTO_ME $IPSEC_POLICY_IN -j ACCEPT
+ 	fi
+ 	#
+@@ -351,25 +561,89 @@ down-client:iptables)
+ 	# ones, so do not mess with it; see CAUTION comment up at top.
+ 	if [ "$PLUTO_PEER_CLIENT" != "$PLUTO_MY_SOURCEIP/32" ]
+ 	then
+-	  iptables -D FORWARD -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++	  iptables -w -D vpn_fw_bypass -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
+ 	      -s $PLUTO_MY_CLIENT $S_MY_PORT \
+ 	      -d $PLUTO_PEER_CLIENT $D_PEER_PORT \
+ 	         $IPSEC_POLICY_OUT -j ACCEPT
+-	  iptables -D FORWARD -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
++	  iptables -w -D vpn_fw_bypass -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
+ 	      -s $PLUTO_PEER_CLIENT $S_PEER_PORT \
+ 	      -d $PLUTO_MY_CLIENT $D_MY_PORT \
+ 	         $IPSEC_POLICY_IN -j ACCEPT
++	  iptables -w -D vpn_nat_bypass -t nat -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++	      -s $PLUTO_MY_CLIENT $S_MY_PORT \
++	      -d $PLUTO_PEER_CLIENT $D_PEER_PORT $IPSEC_POLICY_OUT -j ACCEPT
++
++	  local connType=`uci get strongswan.$PLUTO_CONNECTION`
++	  if [ "$connType" == "site2site" ]
++	  then
++	  #{
++	    local split_dns=`uci get strongswan.$PLUTO_CONNECTION.split_dns`
++	    if [ $split_dns -eq 1 ]
++	    then
++	    #{
++		local split_dns_config=$(uci_get_state dhcp.splitdns."$PLUTO_CONNECTION")
++		if [ $split_dns_config -eq 1 ]
++		then #equal to 1 (last ipsec sa down).
++		#{
++		  local split_dns_server1=`uci get strongswan.$PLUTO_CONNECTION.split_dns_server1`
++		  local split_dns_server2=`uci get strongswan.$PLUTO_CONNECTION.split_dns_server2 2>/dev/null`
++		  local split_dns_domain=`uci get strongswan.$PLUTO_CONNECTION.split_dns_domain`
++
++		  for tempDomain in $split_dns_domain
++		  do
++			uci del_list dhcp.@dnsmasq[0].server="/$tempDomain/$split_dns_server1"
++			[ -n "$split_dns_server2" ] && {
++				uci del_list dhcp.@dnsmasq[0].server="/$tempDomain/$split_dns_server2"
++			}
++		  done
++		  uci commit dhcp
++		  /etc/init.d/dnsmasq reload
++		  uci_toggle_state dhcp splitdns $PLUTO_CONNECTION 0
++		#}
++		else #not equal to 1
++		  if [ $split_dns_config -ge 2 ]
++		  then
++		    uci_toggle_state dhcp splitdns $PLUTO_CONNECTION `expr $split_dns_config - 1`
++		  fi
++		fi
++	    #}
++	    fi
++	    local netbios=`uci get strongswan.$PLUTO_CONNECTION.netbios`
++	    if [ $netbios -eq 1 ]
++	    then
++		nbvpn del $PLUTO_MY_CLIENT $PLUTO_PEER_CLIENT
++	    fi
++
++	  #}
++	  elif [ "$connType" == "client" ]
++	  then
++	  #{
++	    #Handling split-DNS related data.
++	    local isDataConfigured=`uci get dhcp.$PLUTO_CONNECTION 2>/dev/null`
++
++	    [ -n "$isDataConfigured" ] && {
++	      uci delete dhcp.$PLUTO_CONNECTION
++	      uci commit dhcp
++	      /etc/init.d/dnsmasq reload
++	    }
++	    #Handling deletion of SNAT rules incase of tvpnc in client mode
++	    local mode=`uci get strongswan.$PLUTO_CONNECTION.mode 2>/dev/null`
++	    [ "$mode" != "nem" ] && {
++                iptables -w -t nat -F vpn_tvpnc_snat
++	    }
++	  #}
++	  fi
+ 	fi
+ 	#
+ 	# a virtual IP requires an INPUT and OUTPUT rule on the host
+ 	# or sometimes host access via the internal IP is needed
+ 	if [ -n "$PLUTO_MY_SOURCEIP" -o -n "$PLUTO_HOST_ACCESS" ]
+ 	then
+-	  iptables -D INPUT -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
++	  iptables -w -D vpn_input_bypass -i $PLUTO_INTERFACE -p $PLUTO_MY_PROTOCOL \
+ 	      -s $PLUTO_PEER_CLIENT $S_PEER_PORT \
+ 	      -d $PLUTO_MY_CLIENT $D_MY_PORT \
+ 	         $IPSEC_POLICY_IN -j ACCEPT
+-	  iptables -D OUTPUT -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
++	  iptables -w -D vpn_output_bypass -o $PLUTO_INTERFACE -p $PLUTO_PEER_PROTOCOL \
+ 	      -s $PLUTO_MY_CLIENT $S_MY_PORT \
+ 	      -d $PLUTO_PEER_CLIENT $D_PEER_PORT \
+ 	         $IPSEC_POLICY_OUT -j ACCEPT
+@@ -378,7 +652,7 @@ down-client:iptables)
+ 	# IPIP exception teardown
+ 	if [ -n "$PLUTO_IPCOMP" ]
+ 	then
+-	  iptables -D INPUT -i $PLUTO_INTERFACE -p 4 \
++	  iptables -w -D INPUT -i $PLUTO_INTERFACE -p 4 \
+ 	      -s $PLUTO_PEER -d $PLUTO_ME $IPSEC_POLICY_IN -j ACCEPT
+ 	fi
+ 	#
+-- 
+2.7.4
+

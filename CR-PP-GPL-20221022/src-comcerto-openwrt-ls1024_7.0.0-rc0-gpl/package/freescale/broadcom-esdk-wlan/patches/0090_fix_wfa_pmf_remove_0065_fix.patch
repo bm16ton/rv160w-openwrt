@@ -1,0 +1,37 @@
+diff --git a/main/src/shared/hnddma.c b/main/src/shared/hnddma.c
+index a2c92f3..834cfc0 100644
+--- a/main/src/shared/hnddma.c
++++ b/main/src/shared/hnddma.c
+@@ -1815,9 +1815,6 @@ next_frame:
+ 
+ 	/* set actual length */
+ 	pkt_len = MIN((di->rxoffset + len), di->rxbufsize);
+-#ifdef NCNB_CSKB
+-	pkt_len = MAX((di->rxoffset + MIN_OFST), pkt_len);
+-#endif
+ 
+ #if defined(D11_SPLIT_RX_FD)
+ 	if (di->sep_rxhdr) {
+@@ -1855,11 +1852,6 @@ next_frame:
+ #endif
+ 		PKTMSPDOFSTREF(head) = PKTMSPDOFSTREF(head) + mPdu_Offset;
+ 		PKTMSPDLENREF(head) = pkt_len - mPdu_Offset;
+-		if(pkt_len < mPdu_Offset)
+-		{
+-			printk("%s: mspd buf overflow mspdlen = %d mspdoffset= %d pkt_len = %d  mPdu_Offset = %d\n",  
+-				__func__, PKTMSPDLENREF(head), PKTMSPDOFSTREF(head) , pkt_len, mPdu_Offset);
+-		}
+ 	}
+ #endif
+ 
+@@ -4413,10 +4405,6 @@ dma64_txfast(dma_info_t *di, void *p0, bool commit)
+ 			int ofstlen = len - PKTMSPDLEN(di->osh, p);
+ 			int mspd_ofst = PKTMSPDOFST((di->osh),p) - ofstlen;
+ 			void *pDst = (void*)((uchar*)PKTMSPDDATAREF(p) + mspd_ofst);
+-			if(mspd_ofst < 0)
+-			{
+-				printk("%s: overflow address 0x%p, mspd_ofst = %d\n", __func__, pDst, mspd_ofst);
+-			}
+ 			if (!virt_addr_valid(pDst)) {
+ 				memmove(PKTMSPDDATAREF(p) - mspd_ofst, PKTMSPDDATAREF(p), PKTMSPDLENREF(p));
+ 				pDst = PKTMSPDDATAREFCHAR(p);

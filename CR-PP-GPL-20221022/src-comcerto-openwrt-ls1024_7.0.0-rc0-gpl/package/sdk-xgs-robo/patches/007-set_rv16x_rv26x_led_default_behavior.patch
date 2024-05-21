@@ -1,0 +1,24 @@
+# 2017-05-04: harry.lin <harry.lin@deltaww.com>
+# fix bug69236 lan led behavior is abnormal. Set led default behavior.
+--- sdk-xgs-robo-6.5.4/src/soc/robo/drv.c.org	2017-05-04 18:01:32.020670920 +0800
++++ sdk-xgs-robo-6.5.4/src/soc/robo/drv.c	2017-05-04 18:11:44.660670984 +0800
+@@ -1513,12 +1513,17 @@
+ 
+     /* LED initialization for BCM5395 */
+     if (SOC_IS_VULCAN(unit) || SOC_IS_BLACKBIRD(unit) || 
+-        SOC_IS_STARFIGHTER(unit) || SOC_IS_BLACKBIRD2(unit) || 
++        SOC_IS_STARFIGHTER(unit) || 
+         SOC_IS_POLAR(unit) || SOC_IS_NORTHSTAR(unit) || 
+-        SOC_IS_NORTHSTARPLUS(unit) || SOC_IS_STARFIGHTER3(unit) ) {
++        SOC_IS_NORTHSTARPLUS(unit) ) {
+         data = 0x4320;
+         SOC_IF_ERROR_RETURN(REG_WRITE_LED_FUNC1_CTLr(unit, &data));        
+     }
++	else if(SOC_IS_BLACKBIRD2(unit) || SOC_IS_STARFIGHTER3(unit)) {
++		data = 0x220;
++		SOC_IF_ERROR_RETURN(REG_WRITE_LED_FUNC1_CTLr(unit, &data));
++	}
++
+     if (SOC_IS_VULCAN(unit) || SOC_IS_BLACKBIRD(unit) || 
+         SOC_IS_STARFIGHTER(unit) || SOC_IS_BLACKBIRD2(unit) ||
+         SOC_IS_POLAR(unit) || SOC_IS_NORTHSTAR(unit) ||

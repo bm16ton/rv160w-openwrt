@@ -1,0 +1,57 @@
+From 495d1feb5c69640c635392b289a3e5bb4b0f81e5 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:33:47 +0800
+Subject: [PATCH 39/63] optimize-reload-settings-for-reducing-time
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/apps/wps_monitor.c     |    7 +++++++
+ main/components/apps/wps/brcm_apps/include/wps.h          |    1 +
+ main/components/apps/wps/brcm_apps/linux/wps_linux_main.c |    1 +
+ 3 files changed, 9 insertions(+)
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_monitor.c b/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
+index f31d0f4..575ed86 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_monitor.c
+@@ -804,6 +804,13 @@ wps_restarthandler(int sig)
+ }
+ 
+ void
++wps_reload_settings(int sig)
++{
++	wps_flags |= WPSM_WKSP_FLAG_RESTART_WL | WPSM_WKSP_FLAG_SHUTDOWN;
++	return;
++}
++
++void
+ wps_conf_upd(int num, char **list)
+ {
+ 	TUTRACE((TUTRACE_ERR, "Update wps conf!\n"));
+diff --git a/main/components/apps/wps/brcm_apps/include/wps.h b/main/components/apps/wps/brcm_apps/include/wps.h
+index f8fac58..9e0bb62 100644
+--- a/main/components/apps/wps/brcm_apps/include/wps.h
++++ b/main/components/apps/wps/brcm_apps/include/wps.h
+@@ -125,6 +125,7 @@ void wps_osl_restart_wl();
+ /* Common APIs */
+ void wps_stophandler(int sig);
+ void wps_restarthandler(int sig);
++void wps_reload_settings(int sig);
+ int wps_mainloop(int num, char **list);
+ void wps_conf_upd(int num, char **list);
+ void wps_close_session();
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index b941783..f4ef0b6 100644
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -1419,6 +1419,7 @@ main(int argc, char* argv[])
+ 	/* establish a handler to handle SIGTERM. */
+ 	signal(SIGTERM, wps_stophandler);
+ 	signal(SIGUSR1, wps_restarthandler);
++	signal(SIGUSR2, wps_reload_settings);
+ 
+ wps_monitor_restart:
+ 
+-- 
+1.7.10
+

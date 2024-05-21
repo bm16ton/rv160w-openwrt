@@ -1,0 +1,26 @@
+From 367863ff4b28cf409cbd39331e600c3c0bd4b59c Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:19:42 +0800
+Subject: [PATCH 19/63] Update-to-support-8-bridges
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/router/shared/wlif_utils.h |    2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/main/components/router/shared/wlif_utils.h b/main/components/router/shared/wlif_utils.h
+index 20d3db6..7b15838 100644
+--- a/main/components/router/shared/wlif_utils.h
++++ b/main/components/router/shared/wlif_utils.h
+@@ -35,7 +35,7 @@
+ #define ETHER_ADDR_LEN 6
+ #endif
+ 
+-#define WLIFU_MAX_NO_BRIDGE		2
++#define WLIFU_MAX_NO_BRIDGE		8
+ #define WLIFU_MAX_NO_WAN		2
+ 
+ #define MAX_USER_KEY_LEN	80			/* same as NAS_WKSP_MAX_USER_KEY_LEN */
+-- 
+1.7.10
+

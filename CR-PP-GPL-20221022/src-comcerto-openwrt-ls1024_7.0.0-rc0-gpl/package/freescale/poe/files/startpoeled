@@ -1,0 +1,64 @@
+#!/bin/sh
+while [ 1 ]
+do
+    # poll for 3 sec.
+    # set port power limit for class mode upon detection
+    echo 1> /proc/poe/getportstats
+    sleep 2
+    pwr=`cat /proc/poe/portpower` 
+
+    cur_pwr_1=`echo $pwr | cut -d':' -f1`
+
+    if [ "$cur_pwr_1" -eq "9" ]; then
+      sleep 1
+      continue      # Skip rest
+    fi
+
+    cur_pwr_2=`echo $pwr | cut -d':' -f2`
+    cur_pwr_3=`echo $pwr | cut -d':' -f3`
+    cur_pwr_4=`echo $pwr | cut -d':' -f4`
+    prv_pwr_1=`echo $pwr | cut -d':' -f5`
+    prv_pwr_2=`echo $pwr | cut -d':' -f6`
+    prv_pwr_3=`echo $pwr | cut -d':' -f7`
+    prv_pwr_4=`echo $pwr | cut -d':' -f8`
+    consu_pwr=`echo $pwr | cut -d':' -f9`
+    snmp=`echo $pwr | cut -d':' -f10`        
+
+    if [ $cur_pwr_1 -eq 1 ] ||  [ $cur_pwr_1 -eq 0 ]; then
+        echo $cur_pwr_4 > /sys/devices/platform/leds-gpio/leds/rv160w\:\:pse_led4/brightness
+        echo $cur_pwr_3 > /sys/devices/platform/leds-gpio/leds/rv160w\:\:pse_led3/brightness
+        echo $cur_pwr_2 > /sys/devices/platform/leds-gpio/leds/rv160w\:\:pse_led2/brightness
+        echo $cur_pwr_1 > /sys/devices/platform/leds-gpio/leds/rv160w\:\:pse_led1/brightness
+    fi
+
+    for i in 1 2 3 4; do
+        prv="prv_pwr_${i}"
+        eval prv=\$$prv
+        cur="cur_pwr_${i}"
+        eval cur=\$$cur
+
+        if [ $cur -ne $prv ]; then
+            if [ $cur -eq 1 ];then
+                logger -t PoE -p local0.info "Port: LAN$i start power supply"
+                if [ "$snmp" -eq "1" ]; then
+                    notifier -o 0 -g 1 -i 0 -n 2 -v 0 -t 0 -m 3 -g 1 -v 1  -t 1 -m LAN$i
+                fi 
+            else
+                logger -t PoE -p local0.info "Port: LAN$i end power supply"
+                if [ "$snmp" -eq "1" ]; then
+                    notifier -o 0 -g 1 -i 0 -n 2 -v 0 -t 0 -m 6 -g 1 -v 1  -t 1 -m LAN$i
+                fi 
+            fi 
+        fi 
+    done
+
+    if [ "$consu_pwr" -ne "0" ]; then
+        logger -t PoE -p local0.alert "System Power Consumption is greater than the threshold,(in mW) $consu_pwr"
+        if [ "$snmp" -eq "1" ]; then
+            notifier -o 0 -g 1 -i 1 -n 1 -v 2 -t 0 -m $consu_pwr
+        fi 
+    fi
+
+    sleep 1
+done
+

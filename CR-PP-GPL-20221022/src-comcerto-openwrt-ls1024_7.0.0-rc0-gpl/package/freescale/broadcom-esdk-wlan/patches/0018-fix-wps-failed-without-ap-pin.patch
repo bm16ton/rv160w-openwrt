@@ -1,0 +1,42 @@
+From dec384dd40146aec887eb2320ce9be094747e46b Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:18:41 +0800
+Subject: [PATCH 18/63] fix-wps-failed-without-ap-pin
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/apps/wps_ap.c |   14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/main/components/apps/wps/brcm_apps/apps/wps_ap.c b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+index 904c5bd..2f4840e 100644
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ap.c
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ap.c
+@@ -1070,17 +1070,17 @@ wpsap_time_check(wpsap_wksp_t *wps_wksp, unsigned long now)
+ {
+ 	int procstate = 0;
+ 	int rc;
+-	int ap_timeout = 0;
+-	char *value = NULL;
++	//int ap_timeout = 0;
++	//char *value = NULL;
+ 
+-	value = nvram_safe_get("wps_ap_pin_cnt");
+-	ap_timeout = atoi(value);
+-	ap_timeout = (ap_timeout > 0 ? ap_timeout : WPS_OVERALL_TIMEOUT);
++	//value = nvram_safe_get("wps_ap_pin_cnt");
++	//ap_timeout = atoi(value);
++	//ap_timeout = (ap_timeout > 0 ? ap_timeout : WPS_OVERALL_TIMEOUT);
+ 
+ 	/* check overall timeout first */
+ 	if ((now < wps_wksp->start_time) ||
+-		((now - wps_wksp->start_time) > ap_timeout)) {
+-		wps_set_conf("wps_ap_pin_to", "1");
++		((now - wps_wksp->start_time) > WPS_OVERALL_TIMEOUT)) {
++		//wps_set_conf("wps_ap_pin_to", "1");
+ 		return WPS_RESULT_PROCESS_TIMEOUT;
+ 	}
+ 
+-- 
+1.7.10
+

@@ -1,0 +1,9 @@
+<config xmlns="http://tail-f.com/ns/config/1.0">
+  <SNMPv2-MIB xmlns="http://tail-f.com/ns/mibs/SNMPv2-MIB/200210160000Z">
+    <system>
+      <sysName>RV340</sysName>
+      <sysContact>Cisco</sysContact>
+      <sysLocation>Cisco</sysLocation>
+    </system>
+  </SNMPv2-MIB>
+</config>

@@ -1,0 +1,65 @@
+--- a/main/src/wl/sys/wlc_ap.c	2017-03-01 12:48:34.000000000 -0800
++++ b/main/src/wl/sys/wlc_ap.c	2021-10-04 02:47:18.085185272 -0700
+@@ -282,6 +282,9 @@ typedef struct
+ 	wlc_rxchain_pwrsave_t  rxchain_pwrsave;	/* rxchain reduction power save structure */
+ 	ratespec_t	force_bcn_rspec; /* force setup beacon ratespec (in unit of 500kbps) */
+ 	bool		wlancoex;	/* flags to save WLAN dual 2G radios coex status */
++	/* for rxanyerror workaround */
++	uint32		rxanyerr_snapshot;      /* the last rxanyerror snapshot */
++	uint32		rxwar_debounce;         /* deboune period */
+ } wlc_ap_info_pvt_t;
+ 
+ typedef struct wlc_assoc_req
+@@ -3812,6 +3815,41 @@ wlc_dump_pwrsave(wlc_pwrsave_t *pwrsave,
+ #endif /* RXCHAIN_PWRSAVE or RADIO_PWRSAVE */
+ #endif /* BCMDBG */
+ 
++#define RXANYERROR_WAR_DB_PERIOD (5)    /* RXWAR debounce period in seconds */
++#define RXANYERROR_WAR_THRESHOLD (3)	/* Number of rxanyerror per second */
++/* It was observed the ucode might fall into some stuck condition that 
++ * the ccmpundec counter keeps increasing, reference RB: 179415.
++ */
++static bool
++wlc_anyerror_war(void *arg)
++{
++	wlc_ap_info_pvt_t *appvt = (wlc_ap_info_pvt_t *) arg;
++	wlc_info_t *wlc = appvt->wlc;
++	uint32	curr_rxanyerror = 0;
++	bool rc = FALSE;
++
++	if (!AP_ENAB(wlc->pub))
++		return FALSE;
++
++	if (appvt->rxwar_debounce > 0) {
++		appvt->rxwar_debounce--;
++		return FALSE;
++	}
++
++	curr_rxanyerror = wlc->pub->_cnt->ccmpundec;
++	if ((curr_rxanyerror - appvt->rxanyerr_snapshot) >= RXANYERROR_WAR_THRESHOLD) {
++		WL_ERROR(("wl%d: Fatal error: Big hammer due to increasing rxanyerror\n",
++		        wlc->pub->unit));
++		wlc_fatal_error(appvt->wlc);
++		appvt->rxwar_debounce = RXANYERROR_WAR_DB_PERIOD;
++		rc = TRUE;
++	}
++
++	appvt->rxanyerr_snapshot = curr_rxanyerror;
++
++	return rc;
++}
++
+ static void
+ wlc_ap_watchdog(void *arg)
+ {
+@@ -3829,6 +3867,10 @@ wlc_ap_watchdog(void *arg)
+ 		struct scb *scb;
+ 		struct scb_iter scbiter;
+ 
++		if (wlc_anyerror_war(arg)) {
++			return;
++		}
++
+ 		/* before checking for stuck tx beacons make sure atleast one
+ 		 * ap bss is up phy is not muted(for whatever reason) and beaconing.
+ 		 */

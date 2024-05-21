@@ -1,0 +1,4 @@
+# Novatel Wireless devices
+TargetVendor=0x1410
+TargetProduct=0x9022
+Configuration=4

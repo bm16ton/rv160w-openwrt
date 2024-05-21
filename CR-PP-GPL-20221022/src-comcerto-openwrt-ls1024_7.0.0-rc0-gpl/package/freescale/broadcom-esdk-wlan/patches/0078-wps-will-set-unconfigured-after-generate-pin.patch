@@ -1,0 +1,11 @@
+--- a/main/components/apps/wps/brcm_apps/apps/wps_ie.c	2017-09-19 09:04:35.146106425 +0800
++++ b/main/components/apps/wps/brcm_apps/apps/wps_ie.c	2017-09-19 09:04:40.059101469 +0800
+@@ -415,7 +415,7 @@
+ 	/* Simple Config State */
+ 	if (ssrmsg) {
+ 		sprintf(if_tmp, "%s_wps_oob", ifname);
+-		if (!strcmp(wps_safe_get_conf(if_tmp), "disabled"))
++		if (!strcmp(nvram_safe_get(if_tmp), "disabled"))
+ 			data8 = ssrmsg->scState.m_data;
+ 		else
+ 			data8 = WPS_SCSTATE_UNCONFIGURED;

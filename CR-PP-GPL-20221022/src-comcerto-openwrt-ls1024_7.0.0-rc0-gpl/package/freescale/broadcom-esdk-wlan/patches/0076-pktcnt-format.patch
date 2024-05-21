@@ -1,0 +1,45 @@
+--- a/sys/src/wl/exe/wlu.c	2017-08-07 16:40:13.778681043 +0800
++++ b/sys/src/wl/exe/wlu.c	2017-08-07 16:41:24.182681105 +0800
+@@ -17968,24 +17968,24 @@
+ 		return ret;
+ 
+ 	if (!*argv || (strcmp(argv[0], "0") == 0)) {
+-		printf("txframe %d txbyte %d txerror %d txnobuf %d txrunt %d txfail %d txretry %d txretrie %d txfrmsnt %d txmulti %d txmulti_type %d txfrag %d\n",
+-			   dtoh32(if_cnt.txframe), dtoh32(if_cnt.txbyte), dtoh32(if_cnt.txerror),
+-			   dtoh32(if_cnt.txnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.txfail),
+-			   dtoh32(if_cnt.txretry), dtoh32(if_cnt.txretrie), dtoh32(if_cnt.txfrmsnt),
+-			   dtoh32(if_cnt.txmulti), dtoh32(if_cnt.txmulti_byte), dtoh32(if_cnt.txfrag));
+-		printf("rxframe %d rxbyte %d rxerror %d rxnobuf %d rxrunt %d rxfragerr %d rxmulti %d rxmulti_byte %d\n",
+-			   dtoh32(if_cnt.rxframe), dtoh32(if_cnt.rxbyte), dtoh32(if_cnt.rxerror),
+-			   dtoh32(if_cnt.rxnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.rxfragerr),
+-			   dtoh32(if_cnt.rxmulti), dtoh32(if_cnt.rxmulti_byte));
+-	} else {
+-		printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+-			   dtoh32(if_cnt.txframe), dtoh32(if_cnt.txbyte), dtoh32(if_cnt.txerror),
+-			   dtoh32(if_cnt.txnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.txfail),
+-			   dtoh32(if_cnt.txretry), dtoh32(if_cnt.txretrie), dtoh32(if_cnt.txfrmsnt),
+-			   dtoh32(if_cnt.txmulti), dtoh32(if_cnt.txmulti_byte), dtoh32(if_cnt.txfrag),
+-			   dtoh32(if_cnt.rxframe), dtoh32(if_cnt.rxbyte), dtoh32(if_cnt.rxerror),
+-			   dtoh32(if_cnt.rxnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.rxfragerr),
+-			   dtoh32(if_cnt.rxmulti), dtoh32(if_cnt.rxmulti_byte));
++		printf("txframe %llu txbyte %llu txerror %llu txnobuf %llu txrunt %llu txfail %llu txretry %llu txretrie %llu txfrmsnt %llu txmulti %llu txmulti_type %llu txfrag %llu\n",
++			   dtoh64(if_cnt.txframe), dtoh64(if_cnt.txbyte), dtoh64(if_cnt.txerror),
++			   dtoh64(if_cnt.txnobuf), dtoh64(if_cnt.rxrunt), dtoh64(if_cnt.txfail),
++			   dtoh64(if_cnt.txretry), dtoh64(if_cnt.txretrie), dtoh64(if_cnt.txfrmsnt),
++			   dtoh64(if_cnt.txmulti), dtoh64(if_cnt.txmulti_byte), dtoh64(if_cnt.txfrag));
++		printf("rxframe %llu rxbyte %llu rxerror %llu rxnobuf %llu rxrunt %llu rxfragerr %llu rxmulti %llu rxmulti_byte %llu\n",
++			   dtoh64(if_cnt.rxframe), dtoh64(if_cnt.rxbyte), dtoh64(if_cnt.rxerror),
++			   dtoh64(if_cnt.rxnobuf), dtoh64(if_cnt.rxrunt), dtoh64(if_cnt.rxfragerr),
++			   dtoh64(if_cnt.rxmulti), dtoh64(if_cnt.rxmulti_byte));
++	} else {
++		printf("%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%llu\n",
++			   dtoh64(if_cnt.txframe), dtoh64(if_cnt.txbyte), dtoh64(if_cnt.txerror),
++			   dtoh64(if_cnt.txnobuf), dtoh64(if_cnt.rxrunt), dtoh64(if_cnt.txfail),
++			   dtoh64(if_cnt.txretry), dtoh64(if_cnt.txretrie), dtoh64(if_cnt.txfrmsnt),
++			   dtoh64(if_cnt.txmulti), dtoh64(if_cnt.txmulti_byte), dtoh64(if_cnt.txfrag),
++			   dtoh64(if_cnt.rxframe), dtoh64(if_cnt.rxbyte), dtoh64(if_cnt.rxerror),
++			   dtoh64(if_cnt.rxnobuf), dtoh64(if_cnt.rxrunt), dtoh64(if_cnt.rxfragerr),
++			   dtoh64(if_cnt.rxmulti), dtoh64(if_cnt.rxmulti_byte));
+ 	}
+ 	return ret;
+ }

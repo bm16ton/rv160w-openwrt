@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+# 2017-02-06: harry.lin <harry.lin@deltaww.com>
+# Add c2k_gpio_reset module support.
+# Copyright (C) 2008 OpenWrt.org
+
+START=10
+
+start() {
+        insmod c2krv16x_26x_gpio_reset
+}
+
+stop(){
+        rmmod c2krv16x_26x_gpio_reset
+}
+

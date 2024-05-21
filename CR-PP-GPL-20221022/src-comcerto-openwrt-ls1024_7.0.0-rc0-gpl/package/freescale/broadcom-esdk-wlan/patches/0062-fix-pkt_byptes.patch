@@ -1,0 +1,181 @@
+From 49d27f18240dab563eaec043b24473a1c60e243f Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Thu, 23 Mar 2017 18:40:16 +0800
+Subject: [PATCH 62/63] fix-pkt_byptes
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/include/wlioctl.h     |    4 ++++
+ main/src/wl/sys/wlc.c          |    7 +++++++
+ main/src/wl/sys/wlc_rx.c       |    1 +
+ sys/src/include/wlioctl.h      |    2 ++
+ sys/src/supp/include/wlioctl.h |    2 ++
+ sys/src/wl/exe/wlu.c           |   14 +++++++-------
+ 6 files changed, 23 insertions(+), 7 deletions(-)
+
+diff --git a/main/src/include/wlioctl.h b/main/src/include/wlioctl.h
+index b65c52f..dfd56c6 100755
+--- a/main/src/include/wlioctl.h
++++ b/main/src/include/wlioctl.h
+@@ -1371,6 +1371,7 @@ typedef struct get_if_cnt {
+ 	uint64	txretrie;		/* tx multiple retry frames */
+ 	uint64	txfrmsnt;		/* tx sent frames */
+ 	uint64	txmulti;		/* tx mulitcast sent frames */
++	uint64	txmulti_byte;
+ 	uint64	txfrag;			/* tx fragments sent */
+ 
+ 	/* receive stat counters */
+@@ -1381,6 +1382,7 @@ typedef struct get_if_cnt {
+ 	uint64  rxrunt;			/* rx runt frames */
+ 	uint64  rxfragerr;		/* rx fragment errors */
+ 	uint64	rxmulti;		/* rx multicast frames */
++	uint64	rxmulti_byte;
+ } get_if_cnt_t;
+ #endif
+ 
+@@ -7735,6 +7737,7 @@ typedef struct wl_if_stats {
+ 	uint64	txretrie;		/* tx multiple retry frames */
+ 	uint64	txfrmsnt;		/* tx sent frames */
+ 	uint64	txmulti;		/* tx mulitcast sent frames */
++	uint64	txmulti_byte;
+ 	uint64	txfrag;			/* tx fragments sent */
+ 
+ 	/* receive stat counters */
+@@ -7745,6 +7748,7 @@ typedef struct wl_if_stats {
+ 	uint64  rxrunt;			/* rx runt frames */
+ 	uint64  rxfragerr;		/* rx fragment errors */
+ 	uint64	rxmulti;		/* rx multicast frames */
++	uint64	rxmulti_byte;
+ }
+ wl_if_stats_t;
+ 
+diff --git a/main/src/wl/sys/wlc.c b/main/src/wl/sys/wlc.c
+index 2c7e27a..0516355 100755
+--- a/main/src/wl/sys/wlc.c
++++ b/main/src/wl/sys/wlc.c
+@@ -16107,6 +16107,7 @@ _wlc_ioctl(void *ctx, int cmd, void *arg, int len, struct wlc_if *wlcif)
+ 		if_cnt->txretrie = WLCNTVAL(wlcif->_cnt.txretrie);
+ 		if_cnt->txfrmsnt = WLCNTVAL(wlcif->_cnt.txfrmsnt);
+ 		if_cnt->txmulti = WLCNTVAL(wlcif->_cnt.txmulti);
++		if_cnt->txmulti_byte = WLCNTVAL(wlcif->_cnt.txmulti_byte);
+ 		if_cnt->txfrag = WLCNTVAL(wlcif->_cnt.txfrag);
+ 		if_cnt->rxframe = WLCNTVAL(wlcif->_cnt.rxframe);
+ 		if_cnt->rxbyte = WLCNTVAL(wlcif->_cnt.rxbyte);
+@@ -16115,6 +16116,7 @@ _wlc_ioctl(void *ctx, int cmd, void *arg, int len, struct wlc_if *wlcif)
+ 		if_cnt->rxrunt = WLCNTVAL(wlcif->_cnt.rxrunt);
+ 		if_cnt->rxfragerr = WLCNTVAL(wlcif->_cnt.rxfragerr);
+ 		if_cnt->rxmulti = WLCNTVAL(wlcif->_cnt.rxmulti);
++		if_cnt->rxmulti_byte = WLCNTVAL(wlcif->_cnt.rxmulti_byte);
+ 		break;
+ 	}
+ #endif
+@@ -30108,6 +30110,9 @@ wlc_dotxstatus(wlc_info_t *wlc, tx_status_t *txs, uint32 frm_tx2)
+ 			if (tx_frame_count) {
+ 				WLCNTINCR(wlc->pub->_cnt->txmulti);
+ 				WLCIFCNTINCR(scb, txmulti);
++				if (bsscfg != NULL)
++					WLCNTADD(bsscfg->wlcif->_cnt.txmulti_byte, pkttotlen(wlc->osh, p) - sizeof(d11txh_t) - DOT11_LLC_SNAP_HDR_LEN -
++							 DOT11_MAC_HDR_LEN - DOT11_QOS_LEN);
+ 			}
+ 		}
+ 		pkt_sent = TRUE;
+@@ -30129,6 +30134,8 @@ wlc_dotxstatus(wlc_info_t *wlc, tx_status_t *txs, uint32 frm_tx2)
+ 			if (tx_frame_count) {
+ 				WLCNTINCR(wlc->pub->_cnt->txmulti);
+ 				WLCIFCNTINCR(scb, txmulti);
++				WLCNTADD(bsscfg->wlcif->_cnt.txmulti_byte, pkttotlen(wlc->osh, p) - sizeof(d11txh_t) - DOT11_LLC_SNAP_HDR_LEN -
++						 DOT11_MAC_HDR_LEN - DOT11_QOS_LEN);
+ 				WLCNTSCB_COND_INCR(scb, scb->scb_stats.tx_mcast_pkts);
+ #ifdef WL11K
+ 				wlc_rrm_stat_bw_counter(wlc, scb, TRUE);
+diff --git a/main/src/wl/sys/wlc_rx.c b/main/src/wl/sys/wlc_rx.c
+index 6bfa799..f766966 100644
+--- a/main/src/wl/sys/wlc_rx.c
++++ b/main/src/wl/sys/wlc_rx.c
+@@ -2771,6 +2771,7 @@ skip_conv:
+ 		if (ETHER_ISMULTI(f->da)) {
+ 			WLCNTINCR(wlc->pub->_cnt->rxmulti);
+ 			WLCNTINCR(bsscfg->wlcif->_cnt.rxmulti);
++			WLCNTADD(bsscfg->wlcif->_cnt.rxmulti_byte, PKTLEN(osh, f->p));
+ 		}
+ 
+ 
+diff --git a/sys/src/include/wlioctl.h b/sys/src/include/wlioctl.h
+index a3814e8..9388415 100755
+--- a/sys/src/include/wlioctl.h
++++ b/sys/src/include/wlioctl.h
+@@ -1435,6 +1435,7 @@ typedef struct get_if_cnt {
+ 	uint64  txretrie;       /* tx multiple retry frames */
+ 	uint64  txfrmsnt;       /* tx sent frames */
+ 	uint64  txmulti;        /* tx mulitcast sent frames */
++	uint64	txmulti_byte;
+ 	uint64  txfrag;         /* tx fragments sent */
+ 
+ 	/* receive stat counters */
+@@ -1445,6 +1446,7 @@ typedef struct get_if_cnt {
+ 	uint64  rxrunt;         /* rx runt frames */
+ 	uint64  rxfragerr;      /* rx fragment errors */
+ 	uint64  rxmulti;        /* rx multicast frames */
++	uint64	rxmulti_byte;
+ } get_if_cnt_t;
+ #endif
+ 
+diff --git a/sys/src/supp/include/wlioctl.h b/sys/src/supp/include/wlioctl.h
+index 0df0e72..bdd18d5 100644
+--- a/sys/src/supp/include/wlioctl.h
++++ b/sys/src/supp/include/wlioctl.h
+@@ -881,6 +881,7 @@ typedef struct get_if_cnt {
+ 	uint64  txretrie;       /* tx multiple retry frames */
+ 	uint64  txfrmsnt;       /* tx sent frames */
+ 	uint64  txmulti;        /* tx mulitcast sent frames */
++	uint64	txmulti_byte;
+ 	uint64  txfrag;         /* tx fragments sent */
+ 
+ 	/* receive stat counters */
+@@ -891,6 +892,7 @@ typedef struct get_if_cnt {
+ 	uint64  rxrunt;         /* rx runt frames */
+ 	uint64  rxfragerr;      /* rx fragment errors */
+ 	uint64  rxmulti;        /* rx multicast frames */
++	uint64	rxmulti_byte;
+ } get_if_cnt_t;
+ #endif
+ 
+diff --git a/sys/src/wl/exe/wlu.c b/sys/src/wl/exe/wlu.c
+index 058e66d..cd0c907 100755
+--- a/sys/src/wl/exe/wlu.c
++++ b/sys/src/wl/exe/wlu.c
+@@ -17940,24 +17940,24 @@ wl_get_pktcnt(void *wl, cmd_t *cmd, char **argv)
+ 		return ret;
+ 
+ 	if (!*argv || (strcmp(argv[0], "0") == 0)) {
+-		printf("txframe %d txbyte %d txerror %d txnobuf %d txrunt %d txfail %d txretry %d txretrie %d txfrmsnt %d txmulti %d txfrag %d\n",
++		printf("txframe %d txbyte %d txerror %d txnobuf %d txrunt %d txfail %d txretry %d txretrie %d txfrmsnt %d txmulti %d txmulti_type %d txfrag %d\n",
+ 			   dtoh32(if_cnt.txframe), dtoh32(if_cnt.txbyte), dtoh32(if_cnt.txerror),
+ 			   dtoh32(if_cnt.txnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.txfail),
+ 			   dtoh32(if_cnt.txretry), dtoh32(if_cnt.txretrie), dtoh32(if_cnt.txfrmsnt),
+-			   dtoh32(if_cnt.txmulti), dtoh32(if_cnt.txfrag));
+-		printf("rxframe %d rxbyte %d rxerror %d rxnobuf %d rxrunt %d rxfragerr %d rxmulti %d\n",
++			   dtoh32(if_cnt.txmulti), dtoh32(if_cnt.txmulti_byte), dtoh32(if_cnt.txfrag));
++		printf("rxframe %d rxbyte %d rxerror %d rxnobuf %d rxrunt %d rxfragerr %d rxmulti %d rxmulti_byte %d\n",
+ 			   dtoh32(if_cnt.rxframe), dtoh32(if_cnt.rxbyte), dtoh32(if_cnt.rxerror),
+ 			   dtoh32(if_cnt.rxnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.rxfragerr),
+-			   dtoh32(if_cnt.rxmulti));
++			   dtoh32(if_cnt.rxmulti), dtoh32(if_cnt.rxmulti_byte));
+ 	} else {
+-		printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
++		printf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n",
+ 			   dtoh32(if_cnt.txframe), dtoh32(if_cnt.txbyte), dtoh32(if_cnt.txerror),
+ 			   dtoh32(if_cnt.txnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.txfail),
+ 			   dtoh32(if_cnt.txretry), dtoh32(if_cnt.txretrie), dtoh32(if_cnt.txfrmsnt),
+-			   dtoh32(if_cnt.txmulti), dtoh32(if_cnt.txfrag),
++			   dtoh32(if_cnt.txmulti), dtoh32(if_cnt.txmulti_byte), dtoh32(if_cnt.txfrag),
+ 			   dtoh32(if_cnt.rxframe), dtoh32(if_cnt.rxbyte), dtoh32(if_cnt.rxerror),
+ 			   dtoh32(if_cnt.rxnobuf), dtoh32(if_cnt.rxrunt), dtoh32(if_cnt.rxfragerr),
+-			   dtoh32(if_cnt.rxmulti));
++			   dtoh32(if_cnt.rxmulti), dtoh32(if_cnt.rxmulti_byte));
+ 	}
+ 	return ret;
+ }
+-- 
+1.7.10
+

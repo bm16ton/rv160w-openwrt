@@ -1,0 +1,13 @@
+Index: uqmi-2014-05-27/commands-wms.c
+===================================================================
+--- uqmi-2014-05-27.orig/commands-wms.c	2015-06-01 16:08:04.000000000 +0800
++++ uqmi-2014-05-27/commands-wms.c	2015-06-05 19:03:38.460667488 +0800
+@@ -189,7 +189,7 @@
+ 
+ static void decode_7bit_field(char *name, const unsigned char *data, int data_len, bool udh)
+ {
+-	const unsigned char *udh_start;
++	const unsigned char *udh_start = NULL;
+ 	char *dest;
+ 	int pos_offset = 0;
+ 

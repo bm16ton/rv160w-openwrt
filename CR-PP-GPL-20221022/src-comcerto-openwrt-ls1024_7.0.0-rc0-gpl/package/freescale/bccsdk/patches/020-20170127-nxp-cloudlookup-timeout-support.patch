@@ -1,0 +1,355 @@
+diff -aurN '--exclude-from=ex' a/Makefile b/Makefile
+--- a/Makefile	1970-01-01 05:30:00.000000000 +0530
++++ b/Makefile	2017-01-27 18:26:28.752333573 +0530
+@@ -0,0 +1,9 @@
++all:
++#	make -C tldgen
++	make -C src
++	make -C test
++
++clean:
++#	make -C tldgen clean
++	make -C src clean
++	make -C test clean
+diff -aurN '--exclude-from=ex' a/src/bccsdk.c b/src/bccsdk.c
+--- a/src/bccsdk.c	2017-01-25 11:56:41.000000000 +0530
++++ b/src/bccsdk.c	2017-01-27 18:26:28.680333574 +0530
+@@ -69,7 +69,7 @@
+ 	int sflags = 0;
+ 	if (params->log_stderr)
+ 		sflags = LOG_PERROR;
+-	openlog("bc-url", sflags, LOG_USER);
++	openlog("Webfilter", sflags, LOG_USER);
+ 
+ 	if (bc_lcp_init(params) == -1)
+ 		return -1;
+@@ -166,13 +166,25 @@
+ 		return -1;
+ 	}
+ 	req->callback = callback;
++
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++	wf_set_bcconn_bflag(0);
++#endif
++
+ 	if (bc_proto_getinfo(req, 0) == -1)
+ 	{
+ 		if (req->callback)
+ 			req->callback(req, -1);
+-		else
++		else {
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++			wf_set_bcconn_bflag(1);
++#endif
+ 			return -1;
+ 	}
++	}
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++	wf_set_bcconn_bflag(1);
++#endif
+ 	return 0;
+ }
+ 
+diff -aurN '--exclude-from=ex' a/src/bccsdk.h b/src/bccsdk.h
+--- a/src/bccsdk.h	2017-01-25 11:56:41.000000000 +0530
++++ b/src/bccsdk.h	2017-01-27 18:26:28.644333574 +0530
+@@ -79,6 +79,12 @@
+ 	char  cert[2048];          /*!< Path to CA certificate file for SSL */
+ };
+ 
++#define WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++void wf_set_bcconn_bflag(int x);
++#endif
++
+ /*! Sizes for arrays */
+ #define BCA_MAX_CATCONF 5
+ #define BCA_URL_LENGTH 1024
+diff -aurN '--exclude-from=ex' a/src/bc_net.c b/src/bc_net.c
+--- a/src/bc_net.c	2017-01-25 11:56:41.000000000 +0530
++++ b/src/bc_net.c	2017-01-31 18:18:05.298419574 +0530
+@@ -64,6 +64,12 @@
+ #include <openssl/ssl.h>
+ #include <openssl/err.h>
+ #endif
++
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++#include <pthread.h>
++pthread_mutex_t bc_connfdMutex;
++#endif
++
+ /* params */
+ static char Server[256] = { 0 };
+ static char DbServer[256] = { 0 };
+@@ -263,6 +269,10 @@
+ 		EVP_cleanup();
+ 	}
+ #endif
++
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++	pthread_mutex_destroy(&bc_connfdMutex);
++#endif
+ }
+ 
+ void bc_net_set_poller(void* val)
+@@ -295,6 +305,10 @@
+ 	UseProxy = params->proxy;
+ 	Timeout = params->timeout;
+ 	KeepAlive = params->keep_alive;
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++	pthread_mutex_init(&bc_connfdMutex, NULL);
++#endif
++
+ #ifdef HAS_OPENSSL
+ 	UseSSL = params->ssl;
+ #endif
+@@ -360,6 +374,22 @@
+ 	return UseSSL;
+ }
+ 
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++
++#define BLOCKING_TIMEOUT 2
++int  blockingflag_g = 1;
++
++void wf_set_bcconn_bflag(int x) {
++	/* 1 means blocking (default), 
++	0 means non-blocking/timeout based */
++	blockingflag_g = x;
++}
++
++int wf_get_bcconn_bflag() {
++	return blockingflag_g;
++}
++#endif
++
+ /* This will always block, need async dns client to fix */
+ static int resolve(struct bc_connection* conn)
+ {
+@@ -740,6 +770,11 @@
+ 	struct timeval tv = { Timeout, 0 };
+ 	/* NOTE: All bcap server connections are either to port 80 or port 443 */
+ 	uint16_t port = 80;
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++	int ii = 0;
++	int gflag = wf_get_bcconn_bflag();
++#endif
++
+ 	if (!conn)
+ 	{
+ 		assert(conn);
+@@ -785,16 +820,34 @@
+ 	{
+ 		set_non_blocking(conn->fd);
+ 	}
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++	if (gflag)
++		set_blocking(conn->fd);
++	else {
++		set_non_blocking(conn->fd);
++		pthread_mutex_lock(&bc_connfdMutex);
++	}
++#endif
+ 	if (connect(conn->fd, (struct sockaddr*) &server, sizeof(server)) == -1)
+ 	{
+ 		if (errno != EINPROGRESS)
+ 		{
+ 			++ConnectErrors;
+ 			bc_net_close(conn);
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++			if (!gflag)
++				pthread_mutex_unlock(&bc_connfdMutex);
++#endif
+ 			syslog(LOG_ERR, "Cannot connect to host %s: %s", Server, strerror(errno));
+ 			return -1;
+ 		}
+ 	}
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++	if (!gflag)
++		pthread_mutex_unlock(&bc_connfdMutex);
++	/* Revert back to blocking mode */
++	set_blocking(conn->fd);
++#endif
+ 	conn->time = bc_net_get_clock();
+ 	if (Poller != 0)
+ 	{
+@@ -826,6 +879,12 @@
+ 	int stat;
+ 	int e;
+ #endif
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++	int valopt;
++  	fd_set readFdSet;
++  	struct timeval tv;
++  	socklen_t lon;
++#endif
+ 	int r;
+ 	if (conn->ssl)
+ 	{
+@@ -848,9 +907,50 @@
+ 	}
+ 	else
+ 	{
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++//		int flag = MSG_NOSIGNAL;
++		int ii = 0;
++		int gflag = wf_get_bcconn_bflag();
++		if (gflag)
++			set_blocking(conn->fd);
++		else {
++			set_non_blocking(conn->fd);
++			pthread_mutex_lock(&bc_connfdMutex);
++		}
++
++		if ( (r=read(conn->fd, buf, len)) < 0) {
++			if (r == -1 && errno == EINTR)
++			    r = read(conn->fd, buf, len);
++			/* Set timeout infra for non blocking read */
++			if(!gflag && (errno == EAGAIN || errno == EWOULDBLOCK)) {
++				  tv.tv_sec = 1; 
++        			  tv.tv_usec = 0; 
++        			  FD_ZERO(&readFdSet); 
++        			  FD_SET(conn->fd, &readFdSet); 
++				  if (select((conn->fd)+1, &readFdSet, NULL, NULL, &tv) > 0) {
++					lon = sizeof(int);
++					getsockopt(conn->fd, SOL_SOCKET, SO_ERROR, (void*)(&valopt), &lon);
++					if (valopt) { 
++						syslog(LOG_ERR," %s:%d Error in connection()\r\n",__FUNCTION__,__LINE__);
++           				} else {
++						/* read now */
++						r=read(conn->fd, buf, len); 
++					}
++        			} 
++  			} else {
++			    if (r == -1 && errno == EINTR)
++			      r = read(conn->fd, buf, len);
++			}
++		}
++		if (!gflag)
++			pthread_mutex_unlock(&bc_connfdMutex);
++		/* Revert back to blocking mode */
++		set_blocking(conn->fd);
++#else
+ 		r = read(conn->fd, buf, len);
+ 		if (r == -1 && errno == EINTR)
+ 			r = read(conn->fd, buf, len);
++#endif
+ 	}
+ 	return r;
+ }
+@@ -990,6 +1090,13 @@
+ 	int stat;
+ 	int e;
+ #endif
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++        int valopt;
++        fd_set sendFdSet;
++        struct timeval tv;
++        socklen_t lon;
++#endif
++
+ 	int r = 0;
+ 	if (conn->ssl)
+ 	{
+@@ -1006,11 +1113,57 @@
+ 	}
+ 	else
+ 	{
++#ifdef WF_CLOUD_LOOKUP_TIMEOUT_SUPPORT
++		int flag = MSG_NOSIGNAL;
++		int ii = 0;
++		int gflag = wf_get_bcconn_bflag();
++
++		if (gflag)
++			set_blocking(conn->fd);
++		else {
++			set_non_blocking(conn->fd);
++			pthread_mutex_lock(&bc_connfdMutex);
++		}
++
++		if (!gflag)
++			flag |= MSG_DONTWAIT;
++
++		// Do not generate SIGPIPE
++		r = send(conn->fd, buf, len, flag);
++		
++		if (r < 0) {
++			// Retry once on interrupted system call
++			if (r == -1 && errno == EINTR)
++				r = send(conn->fd, buf, len, flag);
++			else if (!gflag && (errno == EAGAIN || errno == EWOULDBLOCK)) {
++				tv.tv_sec = 1;
++				tv.tv_usec = 0;
++				FD_ZERO(&sendFdSet);
++				FD_SET(conn->fd, &sendFdSet);
++				if (select((conn->fd)+1, NULL, &sendFdSet, NULL, &tv) > 0) {
++					lon = sizeof(int);
++                                        getsockopt(conn->fd, SOL_SOCKET, SO_ERROR, (void*)(&valopt), &lon);
++                                        if (valopt) {
++                                                syslog(LOG_ERR,"%s:%d Error in connection() \r\n",__FUNCTION__,__LINE__);
++                                        } else {
++                                                /* send now */
++						r = send(conn->fd, buf, len, flag);
++                                        }
++				}
++			}
++		}
++
++		if (!gflag)
++			pthread_mutex_unlock(&bc_connfdMutex);
++		/* Revert back to blocking mode */
++		set_blocking(conn->fd);
++#else
+ 		// Do not generate SIGPIPE
+ 		r = send(conn->fd, buf, len, MSG_NOSIGNAL);
+ 		// Retry once on interrupted system call
+ 		if (r == -1 && errno == EINTR)
+ 			r = send(conn->fd, buf, len, MSG_NOSIGNAL);
++#endif
+ 	}
+ 	return r;
+ }
+diff -aurN '--exclude-from=ex' a/src/bc_proto.c b/src/bc_proto.c
+--- a/src/bc_proto.c	2017-01-25 11:56:41.000000000 +0530
++++ b/src/bc_proto.c	2017-01-27 18:26:28.644333574 +0530
+@@ -860,6 +860,7 @@
+ 	if (!conn->error_handler)
+ 		conn->error_handler = db_error_handler;
+ 
++	syslog(LOG_INFO, "UID %s, Device %s OemId %s, curr maj %d, min %d\r\n", UID, Device, OemId, req->current_major, req->current_minor);
+ 	snprintf(request_buf, 4096, GetMd5UpdateRep, UID, Device, OemId,
+ 		req->current_major, req->current_minor);
+ 	p = request_buf;
+diff -aurN '--exclude-from=ex' a/src/Makefile b/src/Makefile
+--- a/src/Makefile	2017-01-25 11:56:41.000000000 +0530
++++ b/src/Makefile	2017-01-27 18:26:28.696333574 +0530
+@@ -9,13 +9,14 @@
+ CC = gcc
+ CFLAGS += -Wall
+ #CPPFLAGS += -DBYTE_SWAP_DB // for big endian
+-CPPFLAGS += -DHAS_OPENSSL
++#CPPFLAGS += -DHAS_OPENSSL
+ OUTPUT_OPTION = -MMD -MP -o $@
+ 
+ ifeq ($(BUILD_MODE),debug)
+ 	CFLAGS += -g
+ else
+-	CPPFLAGS += -O2 -DNDEBUG
++	#CPPFLAGS += -O2 -DNDEBUG
++	CFLAGS += -g
+ endif
+ 
+ SRCS = \
+diff -aurN '--exclude-from=ex' a/test/Makefile b/test/Makefile
+--- a/test/Makefile	2017-01-25 11:56:41.000000000 +0530
++++ b/test/Makefile	2017-01-27 18:26:28.748333573 +0530
+@@ -30,7 +30,7 @@
+ DEPS = $(OBJS:%o=%d)
+ 
+ bcap: $(OBJS) ../src/libbccsdk.a
+-	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LIBS)
++	$(CC) $(LDFLAGS) -o $@ $(OBJS) $(LIBS) -lssl -lcrypto
+ 
+ clean:
+ 	rm -rf bcap .obj

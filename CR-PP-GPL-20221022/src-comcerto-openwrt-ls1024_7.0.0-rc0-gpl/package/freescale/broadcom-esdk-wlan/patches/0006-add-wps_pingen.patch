@@ -1,0 +1,160 @@
+From 83b3d25e8b861bb33fd9a3e6ca7c489cde77102a Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 17:44:06 +0800
+Subject: [PATCH 06/63] add-wps_pingen
+Content-Type: text/plain; charset="utf-8"
+
+---
+ .../apps/wps/brcm_apps/linux/wps_linux_pingen.c    |   68 ++++++++++++++++++++
+ main/components/router/wps/Makefile                |   28 +++++++-
+ 2 files changed, 94 insertions(+), 2 deletions(-)
+ create mode 100644 main/components/apps/wps/brcm_apps/linux/wps_linux_pingen.c
+
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_pingen.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_pingen.c
+new file mode 100644
+index 0000000..126b9bd
+--- /dev/null
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_pingen.c
+@@ -0,0 +1,68 @@
++#include <typedefs.h>
++#include <bcmutils.h>
++#include <wlutils.h>
++#include <uci.h>
++
++extern void RAND_bytes(unsigned char *buf, int num);
++	
++static int
++wl_wpsPinGen(char *devPwd, int devPwd_len)
++{
++	unsigned long PIN;
++	unsigned long int accum = 0;
++	unsigned char rand_bytes[8];
++	int digit;
++	char local_devPwd[32];
++
++	/*
++	 * buffer size needs to big enough to hold 8 digits plus the string terminition
++	 * character '\0'
++	*/
++	if (devPwd_len < 9) {
++		printf("Generate WPS PIN error, buffer too small!\n");
++		return -1;
++	}
++
++	/* Generate random bytes and compute the checksum */
++	RAND_bytes(rand_bytes, 8);
++
++	snprintf(local_devPwd, sizeof(local_devPwd), "%08u", *(uint32 *)rand_bytes);
++	local_devPwd[7] = '\0';
++	PIN = strtoul(local_devPwd, NULL, 10);
++
++	PIN *= 10;
++	accum += 3 * ((PIN / 10000000) % 10);
++	accum += 1 * ((PIN / 1000000) % 10);
++	accum += 3 * ((PIN / 100000) % 10);
++	accum += 1 * ((PIN / 10000) % 10);
++	accum += 3 * ((PIN / 1000) % 10);
++	accum += 1 * ((PIN / 100) % 10);
++	accum += 3 * ((PIN / 10) % 10);
++
++	digit = (accum % 10);
++	accum = (10 - digit) % 10;
++
++	PIN += accum;
++	snprintf(local_devPwd, sizeof(local_devPwd), "%08u", (unsigned int)PIN);
++	local_devPwd[8] = '\0';
++
++	/* Output result */
++	strncpy_n(devPwd, local_devPwd, devPwd_len);
++	printf("Generate WPS PIN = %s\n", devPwd);
++
++	return 0;
++}
++
++int main(void)
++{
++	char devPwd[12] = {0};
++	int ret = -1;
++
++	ret = wl_wpsPinGen(devPwd, sizeof(devPwd));
++	if (ret == 0) {
++		nvram_set("wps_device_pin", devPwd);
++		nvram_commit();
++	}
++
++	return 0;
++}
+diff --git a/main/components/router/wps/Makefile b/main/components/router/wps/Makefile
+index cebecea..a7bf235 100644
+--- a/main/components/router/wps/Makefile
++++ b/main/components/router/wps/Makefile
+@@ -119,6 +119,14 @@ CFLAGS += -I$(BASEDIR)/components/apps/nfc/3rdparty/embedded/nsa_examples/linux/
+ CFLAGS += -include $(BASEDIR)/components/apps/nfc/3rdparty/embedded/nsa_examples/linux/libnsa/include/buildcfg.h
+ endif
+ 
++WPS_CLI := brcm_apps/linux/wps_linux_cmd.c
++WPS_CLIOBJS := $(foreach file, $(WPS_CLI), \
++	 $(patsubst %.c,obj/wps/%.o,$(file)))
++
++WPS_PINGEN := brcm_apps/linux/wps_linux_pingen.c
++WPS_PINGENOBJS := $(foreach file, $(WPS_PINGEN), \
++	 $(patsubst %.c,obj/wps/%.o,$(file)))
++
+ WPS_OSL := $(WPS_ROUTERHALFILES)
+ WPS_OSL += brcm_apps/linux/wps_linux_main.c
+ 
+@@ -136,9 +144,9 @@ WPS_DIRS := $(foreach file, $(WPS_OSLOBJS), \
+ WPS_DIRLIST = $(sort $(WPS_DIRS))
+ 
+  ifneq ($(wildcard ./prebuilt),)
+- all: osl wps_monitor
++ all: osl wps_monitor wps_cli wps_pingen
+  else
+- all: mkversion sta_build_check dirs variants_build osl wps_monitor
++ all: mkversion sta_build_check dirs variants_build osl wps_monitor wps_cli wps_pingen
+  endif
+ 
+  osl:
+@@ -151,9 +159,15 @@ WPS_DIRLIST = $(sort $(WPS_DIRS))
+  objs: variants_build | dirs
+  endif
+ 	+$(MAKE) parallel=true $(WPS_OSLOBJS)
++	+$(MAKE) parallel=true $(WPS_CLIOBJS)
++	+$(MAKE) parallel=true $(WPS_PINGENOBJS)
+ 
+ $(WPS_OSLOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
+ 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
++$(WPS_CLIOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
++	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
++$(WPS_PINGENOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
++	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
+ 
+ 
+ # Variants build rules
+@@ -186,6 +200,12 @@ mkversion :
+ wps_monitor : objs FORCE
+ 	$(CC) $(LIBPATH) $(WPS_OSLOBJS) -l$(WPS_LIB_FILE) $(WPSM_LIBS) $(LDFLAGS) -o $@
+ 
++wps_cli : objs FORCE
++	$(CC) $(LIBPATH) $(WPS_CLIOBJS) -l$(WPS_LIB_FILE) $(WPSM_LIBS) $(LDFLAGS) -o $@
++
++wps_pingen : objs FORCE
++	$(CC) $(LIBPATH) $(WPS_PINGENOBJS) -l$(WPS_LIB_FILE) $(WPSM_LIBS) $(LDFLAGS) -o $@
++
+ FORCE:
+ 
+ 
+@@ -199,6 +219,10 @@ clean:
+ install: all
+ 	install -d $(INSTALLDIR)/wps/bin
+ 	install wps_monitor $(INSTALLDIR)/wps/bin
++	install wps_cli $(INSTALLDIR)/wps/bin
++	install wps_pingen $(INSTALLDIR)/wps/bin
+ 	$(STRIP) $(INSTALLDIR)/wps/bin/wps_monitor
++	$(STRIP) $(INSTALLDIR)/wps/bin/wps_cli
++	$(STRIP) $(INSTALLDIR)/wps/bin/wps_pingen
+ 
+ .PHONY: all clean install libs dirs osl
+-- 
+1.7.10
+

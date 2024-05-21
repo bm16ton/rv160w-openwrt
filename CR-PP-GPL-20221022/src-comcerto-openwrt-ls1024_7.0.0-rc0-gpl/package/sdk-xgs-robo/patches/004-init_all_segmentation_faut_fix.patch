@@ -1,0 +1,24 @@
+# 2017-03-20: Manish Tiwari <mansh.tiwari@nxp.com>
+# Segmentation fault fixes while doing 'init all' on BCM53134M.
+
+diff -ruaN a/src/soc/robo/drv.c b/src/soc/robo/drv.c
+--- a/src/soc/robo/drv.c	2017-03-07 14:37:06.668602622 +0530
++++ b/src/soc/robo/drv.c	2017-03-07 14:38:52.540604610 +0530
+@@ -489,6 +489,9 @@
+         /* Port 4 & 7 is not present in BCM53134 */
+         SOC_PBMP_PORT_REMOVE(pbmp_valid, 4);
+         SOC_PBMP_PORT_REMOVE(pbmp_valid, 7);
++//Mannu segmentation falut fix
++        SOC_PBMP_PORT_REMOVE(pbmp_valid, 5);
++#if 0
+         SOC_PBMP_PORT_ADD(si->gmii_pbm, 5);
+         if (soc_property_port_get(unit, 5,
+                     spn_PHY_SYS_INTERFACE, 0) == SOC_PORT_IF_SGMII){
+@@ -496,6 +499,7 @@
+              si->port_init_speed[5]=1000;
+              si->port_speed_max[5]=2500;
+         }
++#endif
+         break;
+ #ifdef BCM_VO_SUPPORT
+     case BCM53600_DEVICE_ID:

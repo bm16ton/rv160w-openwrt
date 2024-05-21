@@ -1,0 +1,24 @@
+#!/bin/sh /etc/rc.common
+
+START=23
+STOP=80
+
+start() {
+	board=`uci get systeminfo.sysinfo.pid | cut -d'-' -f1`
+	if [ "$board" != "RV340W" -a "$board" != "RV160W" -a "$board" != "RV260W" ] ;then
+		return 0
+	fi
+
+	/usr/bin/wifi_bttn_init.sh
+
+	start-stop-daemon -S -b -m -p /var/run/wifi_daemon.pid -x /usr/bin/wifi_daemon
+}
+
+stop() {
+	board=`uci get systeminfo.sysinfo.pid | cut -d'-' -f1`
+	if [ "$board" != "RV340W" -a "$board" != "RV160W" -a "$board" != "RV260W" ] ;then
+		return 0
+	fi
+
+	start-stop-daemon -K -q -s SIGKILL -n wifi_daemon
+}

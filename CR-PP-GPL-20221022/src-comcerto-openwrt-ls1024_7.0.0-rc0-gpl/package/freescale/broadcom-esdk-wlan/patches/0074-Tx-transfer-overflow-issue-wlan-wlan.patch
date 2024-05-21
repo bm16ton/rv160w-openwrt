@@ -1,0 +1,134 @@
+From 6daa9787a3f7bd989c553897bd952c9c7b436cd8 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 28 Jun 2017 12:04:39 +0800
+Subject: [PATCH] Tx transfer overflow issue wlan wlan
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/src/include/linux_osl.h |    1 +
+ main/src/shared/hnddma.c     |   37 +++++++++++++++++++++++--------------
+ 2 files changed, 24 insertions(+), 14 deletions(-)
+
+diff --git a/main/src/include/linux_osl.h b/main/src/include/linux_osl.h
+index 5cc9387..99fb13b 100644
+--- a/main/src/include/linux_osl.h
++++ b/main/src/include/linux_osl.h
+@@ -622,6 +622,7 @@ extern void osl_writel(osl_t *osh, volatile uint32 *r, uint32 v);
+ #ifdef NCNB_CSKB
+ #define	EXTRA_COPY	28		// We can adjust this value to get high efficency
+ #define	MIN_OFST  (66) /* (6 + 24 + 8 + 28) D11_PHY_HDR_LEN + DOT11_A3_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN + EXTRA_COPY*/
++#define RX_PAD_SIZE  (58)  // kmalloc padding size
+ #define	TKIP_BODY_OFST 32  /* IS TKIP ENABLED BODY OFFSET */
+ #define	ETHER_TYPE_OFST 38 /* ETHERTYPE BODY OFFSET */
+ #define	PKTMSPDDATA(osh, skb)           ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_data);})
+diff --git a/main/src/shared/hnddma.c b/main/src/shared/hnddma.c
+index a805dcf..493f40a 100644
+--- a/main/src/shared/hnddma.c
++++ b/main/src/shared/hnddma.c
+@@ -1736,6 +1736,8 @@ static void * BCMFASTPATH BCMSPEEDOPT
+ _dma_rx(dma_info_t *di)
+ {
+ 	void *p, *head, *tail;
++	void *pData;
++	uint mPdu_Offset = 0;
+ 	uint len;
+ 	uint pkt_len;
+ 	int resid = 0;
+@@ -1772,7 +1774,9 @@ next_frame:
+ 	for (read_count = 200; read_count; read_count--) {
+ #ifdef NCNB_CSKB
+ 		if(likely(PKTMSPDDATA(di->osh, head))) {
+-	               len = ltoh16(*(volatile uint16 *)PKTMSPDDATA(di->osh, head));
++		       pData = (void*)((uchar*)PKTMSPDDATA(di->osh, head) + PKTMSPDOFST(di->osh, head));
++	               len = ltoh16(*(volatile uint16 *)pData);
++
+ 		} else {
+ 			len = ltoh16(*(volatile uint16 *)PKTDATA(di->osh, head));
+ 		}
+@@ -1789,7 +1793,7 @@ next_frame:
+ #endif /* BCM_GMAC3 */
+ #ifdef NCNB_CSKB
+ 			if(likely(PKTMSPDDATA(di->osh, head))) {
+-				DMA_MAP(di->osh, PKTMSPDDATA(di->osh, head), sizeof(uint16), DMA_RX, NULL, NULL);
++				DMA_MAP(di->osh, pData, sizeof(uint16), DMA_RX, NULL, NULL);
+ 			} else {
+ 				DMA_MAP(di->osh, PKTDATA(di->osh, head), sizeof(uint16), DMA_RX, NULL, NULL);
+ 			}
+@@ -1842,18 +1846,19 @@ next_frame:
+ #ifdef NCNB_CSKB
+ 	if(likely(PKTMSPDDATA(di->osh,head))) {
+ 		/* 40 Byte hdr + D11_PHY_HDR_LEN + DOT11_MAC_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN + 28 */
+-		PKTMSPDOFSTREF(head) = di->rxoffset + MIN_OFST;
++		mPdu_Offset = di->rxoffset + MIN_OFST;
+ 		/* MSPDOFST + A3/A4 HDR */
+ #ifdef CMEMCPY
+-		__memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + EXTRA_COPY);
++		__memcpy(PKTDATA(di->osh,head),pData,mPdu_Offset + EXTRA_COPY);
+ #else
+-		memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + EXTRA_COPY);
++		memcpy(PKTDATA(di->osh,head),pData, mPdu_Offset + EXTRA_COPY);
+ #endif
+-		PKTMSPDLENREF(head) = pkt_len - PKTMSPDOFSTREF(head);
+-		if(pkt_len < PKTMSPDOFSTREF(head))
++		PKTMSPDOFSTREF(head) = PKTMSPDOFSTREF(head) + mPdu_Offset;
++		PKTMSPDLENREF(head) = pkt_len - mPdu_Offset;
++		if(pkt_len < mPdu_Offset)
+ 		{
+-			printk("%s: ERROR mspd buf overflow mspdlen = %d mspdoffset= %d pkt_len = %d  \n",  
+-				__func__, PKTMSPDLENREF(head), PKTMSPDOFSTREF(head) , pkt_len);
++			printk("%s: mspd buf overflow mspdlen = %d mspdoffset= %d pkt_len = %d  mPdu_Offset = %d\n",  
++				__func__, PKTMSPDLENREF(head), PKTMSPDOFSTREF(head) , pkt_len, mPdu_Offset);
+ 		}
+ 	}
+ #endif
+@@ -1941,6 +1946,7 @@ static bool BCMFASTPATH BCMSPEEDOPT
+ _dma_rxfill(dma_info_t *di)
+ {
+ 	void *p;
++	void *pData;
+ 	uint16 rxin, rxout;
+ 	uint16 rxactive;
+ 	uint32 flags = 0;
+@@ -2056,7 +2062,9 @@ _dma_rxfill(dma_info_t *di)
+ 		}
+ 
+ #ifdef NCNB_CSKB
+-		PKTMSPDDATAREF(p) = kmalloc(di->rxbufsize, GFP_ATOMIC | GFP_DMA_NCNB);
++		PKTMSPDDATAREF(p) = kmalloc(di->rxbufsize +extra_offset , GFP_ATOMIC | GFP_DMA_NCNB);
++		PKTMSPDOFSTREF(p) = extra_offset - MIN_OFST - RX_PAD_SIZE;		
++		pData = (void*)((uchar*)PKTMSPDDATAREF(p) + PKTMSPDOFSTREF(p));
+ #endif
+ 
+ 		/* reserve an extra headroom, if applicable */
+@@ -2087,7 +2095,7 @@ _dma_rxfill(dma_info_t *di)
+ 		*/
+ #ifdef NCNB_CSKB
+ 		if(likely(PKTMSPDDATA(di->osh, p))) {
+-			*(uint32 *)(PKTMSPDDATA(di->osh, p)) = 0;
++			*(uint32 *)pData = 0;
+ 		} else {
+ 			*(uint32 *)(PKTDATA(di->osh, p)) = 0;
+ 		}
+@@ -2128,7 +2136,7 @@ _dma_rxfill(dma_info_t *di)
+ #if defined(linux) && (defined(BCM47XX_CA9) || defined(__mips__))
+ #ifdef NCNB_CSKB
+ 		if(likely(PKTMSPDDATA(di->osh, p))) {
+-			DMA_MAP(di->osh, PKTMSPDDATA(di->osh, p), sizeof(uint32), DMA_TX, NULL, NULL);
++			DMA_MAP(di->osh, pData, sizeof(uint32), DMA_TX, NULL, NULL);
+ 		} else {
+ 			DMA_MAP(di->osh, PKTDATA(di->osh, p), sizeof(uint32), DMA_TX, NULL, NULL);
+ 		}
+@@ -2147,8 +2155,8 @@ _dma_rxfill(dma_info_t *di)
+ #ifdef NCNB_CSKB
+ 			if(likely(PKTMSPDDATA(di->osh,p))) {
+ 				PKTMSPDLENREF(p) = di->rxbufsize;
+-				pa = DMA_MAP(di->osh, PKTMSPDDATAREF(p),
+-							 di->rxbufsize, DMA_RX, p, NULL);
++				pa = DMA_MAP(di->osh, pData,  di->rxbufsize, DMA_RX, p, NULL);
++
+ 			} else {
+ 				pa = DMA_MAP(di->osh, PKTDATA(di->osh, p),
+ 							 di->rxbufsize, DMA_RX, p, NULL);
+-- 
+1.7.10
+

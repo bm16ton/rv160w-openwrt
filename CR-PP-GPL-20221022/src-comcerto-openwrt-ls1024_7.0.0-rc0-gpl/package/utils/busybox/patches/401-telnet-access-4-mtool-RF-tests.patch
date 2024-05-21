@@ -1,0 +1,65 @@
+diff -urN a/loginutils/login.c b/loginutils/login.c
+--- a/loginutils/login.c	2015-03-23 11:07:19.000000000 +0800
++++ b/loginutils/login.c	2018-04-25 17:40:12.982803841 +0800
+@@ -263,6 +263,7 @@
+ #if ENABLE_LOGIN_SESSION_AS_CHILD
+ 	pid_t child_pid;
+ #endif
++	bool is_telnet = FALSE;
+ 
+ 	INIT_G();
+ 
+@@ -283,7 +284,14 @@
+ 			bb_error_msg_and_die("-f is for root only");
+ 		safe_strncpy(username, opt_user, sizeof(username));
+ 	}
+-	argv += optind;
++
++	if (optind == 1 && argv[1] && strcmp(argv[1], "telnet") == 0)
++	{
++		argv += 2;
++		is_telnet = TRUE;
++	}
++	else
++		argv += optind;
+ 	if (argv[0]) /* user from command line (getty) */
+ 		safe_strncpy(username, argv[0], sizeof(username));
+ 
+@@ -440,6 +448,15 @@
+ 		username[0] = '\0';
+ 	} /* while (1) */
+ 
++	/*differentiate the access right for Telnet and Console. 
++	let user to be logged in via telnet with root permissions*/
++	if (is_telnet)
++	{
++		printf("\r\nLogin modify pw_uid & pw_gid for telnet user %s\r\n", pw->pw_name);
++		pw->pw_uid = 0;
++		pw->pw_gid = 0;
++	}
++
+ 	alarm(0);
+ 	/* We can ignore /etc/nologin if we are logging in as root,
+ 	 * it doesn't matter whether we are run by root or not */
+diff -urN a/networking/telnetd.c b/networking/telnetd.c
+--- a/networking/telnetd.c	2018-04-25 16:46:18.244722600 +0800
++++ b/networking/telnetd.c	2018-04-25 16:48:49.970673900 +0800
+@@ -247,7 +247,7 @@
+ #if !ENABLE_FEATURE_TELNETD_STANDALONE
+ 	enum { sock = 0 };
+ #endif
+-	const char *login_argv[2];
++	const char *login_argv[3];
+ 	struct termios termbuf;
+ 	int fd, pid;
+ 	char tty_name[GETPTY_BUFSIZE];
+@@ -378,7 +378,8 @@
+ 
+ 	/* Exec shell / login / whatever */
+ 	login_argv[0] = G.loginpath;
+-	login_argv[1] = NULL;
++	login_argv[1] = "telnet";
++	login_argv[2] = NULL;
+ 	/* exec busybox applet (if PREFER_APPLETS=y), if that fails,
+ 	 * exec external program.
+ 	 * NB: sock is either 0 or has CLOEXEC set on it.

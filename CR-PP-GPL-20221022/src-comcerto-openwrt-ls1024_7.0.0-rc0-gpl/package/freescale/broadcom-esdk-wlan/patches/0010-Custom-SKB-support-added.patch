@@ -1,0 +1,411 @@
+From 721833ed2288c6938052b3777f3b3f48d7dcf978 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:08:40 +0800
+Subject: [PATCH 10/63] Custom-SKB-support-added
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/driver/wl_common.mk |    2 +-
+ main/src/include/linux_osl.h        |   15 ++++
+ main/src/shared/hnddma.c            |  130 +++++++++++++++++++++++++++++++++--
+ main/src/shared/linux_osl.c         |   14 ++++
+ main/src/wl/sys/wl_linux.c          |   12 ++++
+ main/src/wl/sys/wlc_amsdu.c         |    6 ++
+ main/src/wl/sys/wlc_bmac.c          |   12 +++-
+ main/src/wl/sys/wlc_rx.c            |   12 ++++
+ 8 files changed, 194 insertions(+), 9 deletions(-)
+
+diff --git a/main/components/driver/wl_common.mk b/main/components/driver/wl_common.mk
+index bbcf046..573187e 100644
+--- a/main/components/driver/wl_common.mk
++++ b/main/components/driver/wl_common.mk
+@@ -7,7 +7,7 @@ else ifeq ($(PLT),rv160w_260w)
+ ROUTER_COMA=0
+ KBUILD_CFLAGS += -DBCMDBG
+ ifeq ($(CONFIG_BRCM_CPKTC),y)
+-KBUILD_CFLAGS += -DPPFE_FASTPATH
++KBUILD_CFLAGS += -DPPFE_FASTPATH -DCMEMCPY -DNCNB_CSKB
+ endif
+ else ifeq ($(PLT),ls1021)
+ KBUILD_CFLAGS += -D__LS1024__ -DBCMPHY64OSL
+diff --git a/main/src/include/linux_osl.h b/main/src/include/linux_osl.h
+index 5304253..f5401e3 100644
+--- a/main/src/include/linux_osl.h
++++ b/main/src/include/linux_osl.h
+@@ -617,7 +617,22 @@ extern void osl_writel(osl_t *osh, volatile uint32 *r, uint32 v);
+ #define	PKTFREE_STATIC	PKTFREE
+ #endif /* CONFIG_DHD_USE_STATIC_BUF */
+ #define	PKTDATA(osh, skb)		({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->data);})
++
++#ifdef NCNB_CSKB
++#define        PKTMSPDDATA(osh, skb)           ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_data);})
++#define        PKTMSPDDATAREF(skb)             (((struct sk_buff*)(skb))->mspd_data)
++#define        PKTMSPDDATAREFCHAR(skb)         ((void *)(((struct sk_buff*)(skb))->mspd_data))
++#endif
++
+ #define	PKTLEN(osh, skb)		({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->len);})
++
++#ifdef NCNB_CSKB
++#define        PKTMSPDLEN(osh, skb)            ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_len);})
++#define        PKTMSPDLENREF(skb)              (((struct sk_buff*)(skb))->mspd_len)
++#define        PKTMSPDOFST(osh, skb)           ({BCM_REFERENCE(osh); (((struct sk_buff*)(skb))->mspd_ofst);})
++#define        PKTMSPDOFSTREF(skb)             (((struct sk_buff*)(skb))->mspd_ofst)
++#endif
++
+ #define PKTHEADROOM(osh, skb)		(PKTDATA(osh, skb)-(((struct sk_buff*)(skb))->head))
+ #define PKTEXPHEADROOM(osh, skb, b)	\
+ 	({ \
+diff --git a/main/src/shared/hnddma.c b/main/src/shared/hnddma.c
+index b99b2ee..ff74273 100644
+--- a/main/src/shared/hnddma.c
++++ b/main/src/shared/hnddma.c
+@@ -105,6 +105,34 @@ static uint dma_msg_level =
+ #define dma64_txd64(di, ix) (void *)((uint)(&((dma64dd_t *)((di)->txd64))[ix]))
+ #endif /* BULK_DESCR_FLUSH */
+ 
++#ifdef CMEMCPY
++static inline void __memcpy(void *dst, void *src, unsigned int len)
++{
++	void *end = src + len;
++
++	dst = (void *)((unsigned long)dst & ~0x3);
++	src = (void *)((unsigned long)src & ~0x3);
++
++	while (src < end) {
++#ifdef CONFIG_THUMB2_KERNEL
++		asm volatile (	"ldm %1!, {r3, r4, r5, r6, r8, r9, r10, r11}\n\t"
++						"stm %0!, {r3, r4, r5, r6, r8, r9, r10, r11}\n\t"
++						: "+r"(dst), "+r"(src)
++						:
++						: "r3", "r4", "r5", "r6", "r8", "r9", "r10", "r11", "memory"
++					 );
++#else
++		asm volatile (	"ldm %1!, {r3, r4, r5, r6, r7, r8, r9, r10}\n\t"
++						"stm %0!, {r3, r4, r5, r6, r7, r8, r9, r10}\n\t"
++						: "+r"(dst), "+r"(src)
++						:
++						: "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "memory"
++					 );
++#endif
++	}
++}
++#endif
++
+ #define D11RX_WAR_MAX_BUF_SIZE 492
+ #define MAXRXBUFSZ 2048
+ /* Structure for global DMA states and for storing information needed by all
+@@ -1740,7 +1768,16 @@ next_frame:
+ 	{
+ 	int read_count = 0;
+ 	for (read_count = 200; read_count; read_count--) {
+-		len = ltoh16(*(uint16 *)(data));
++#ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(di->osh, head))) {
++	               len = ltoh16(*(volatile uint16 *)PKTMSPDDATA(di->osh, head));
++		} else {
++			len = ltoh16(*(volatile uint16 *)PKTDATA(di->osh, head));
++		}
++#else
++ 		len = ltoh16(*(uint16 *)(data));
++#endif
++	
+ 		if (len != 0)
+ 			break;
+ #if defined(BCM_GMAC3)
+@@ -1748,7 +1785,15 @@ next_frame:
+ 			OSL_CACHE_INV_LINE(data);
+ 		} else
+ #endif /* BCM_GMAC3 */
+-			DMA_MAP(di->osh, data, sizeof(uint16), DMA_RX, NULL, NULL);
++#ifdef NCNB_CSKB
++			if(likely(PKTMSPDDATA(di->osh, head))) {
++				DMA_MAP(di->osh, PKTMSPDDATA(di->osh, head), sizeof(uint16), DMA_RX, NULL, NULL);
++			} else {
++				DMA_MAP(di->osh, PKTDATA(di->osh, head), sizeof(uint16), DMA_RX, NULL, NULL);
++			}
++#else
++ 			DMA_MAP(di->osh, data, sizeof(uint16), DMA_RX, NULL, NULL);
++#endif
+ 		OSL_DELAY(1);
+ 	}
+ 
+@@ -1789,6 +1834,20 @@ next_frame:
+ 		PKTSETLEN(di->osh, head, pkt_len);
+ 	}
+ 
++#ifdef NCNB_CSKB
++	if(likely(PKTMSPDDATA(di->osh,head))) {
++		/* 40 Byte hdr + D11_PHY_HDR_LEN + DOT11_MAC_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN */
++		PKTMSPDOFSTREF(head) = di->rxoffset + 6 + 24 + 8;
++		/* MSPDOFST + A3/A4 HDR */
++#ifdef CMEMCPY
++		__memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + 30);
++#else
++		memcpy(PKTDATA(di->osh,head),PKTMSPDDATA(di->osh,head),PKTMSPDOFST(di->osh,head) + 30);
++#endif
++		PKTMSPDLENREF(head) = pkt_len;
++	}
++#endif
++
+ 	resid = len - (di->rxbufsize - di->rxoffset);
+ 
+ 	if (resid <= 0) {
+@@ -1985,6 +2044,11 @@ _dma_rxfill(dma_info_t *di)
+ 			di->hnddma.rxnobuf += (n - i);
+ 			break;
+ 		}
++
++#ifdef NCNB_CSKB
++		PKTMSPDDATAREF(p) = kmalloc(di->rxbufsize, GFP_ATOMIC | GFP_DMA_NCNB);
++#endif
++
+ 		/* reserve an extra headroom, if applicable */
+ 		if (di->hnddma.dmactrlflags & DMA_CTRL_USB_BOUNDRY4KB_WAR) {
+ 			extra_pad = ((alignment_req - (uint)(((unsigned long)PKTDATA(di->osh, p) -
+@@ -2011,7 +2075,15 @@ _dma_rxfill(dma_info_t *di)
+ 		/* Do a cached write instead of uncached write since DMA_MAP
+ 		 * will flush the cache.
+ 		*/
+-		*(uint32 *)(PKTDATA(di->osh, p)) = 0;
++#ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(di->osh, p))) {
++			*(uint32 *)(PKTMSPDDATA(di->osh, p)) = 0;
++		} else {
++			*(uint32 *)(PKTDATA(di->osh, p)) = 0;
++		}
++#else
++ 		*(uint32 *)(PKTDATA(di->osh, p)) = 0;
++#endif
+ 
+ #if defined(CONFIG_MACH_NSP) /* WLENT */
+         if (arch_is_coherent()) 
+@@ -2044,7 +2116,15 @@ _dma_rxfill(dma_info_t *di)
+ #else /* !BCM_GMAC3 based FWDER_BUF optimization */
+ 
+ #if defined(linux) && (defined(BCM47XX_CA9) || defined(__mips__))
+-    		DMA_MAP(di->osh, PKTDATA(di->osh, p), sizeof(uint32), DMA_TX, NULL, NULL);
++#ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(di->osh, p))) {
++			DMA_MAP(di->osh, PKTMSPDDATA(di->osh, p), sizeof(uint32), DMA_TX, NULL, NULL);
++		} else {
++			DMA_MAP(di->osh, PKTDATA(di->osh, p), sizeof(uint32), DMA_TX, NULL, NULL);
++		}
++#else
++		DMA_MAP(di->osh, PKTDATA(di->osh, p), sizeof(uint32), DMA_TX, NULL, NULL);
++#endif
+ #endif
+ #if defined(SGLIST_RX_SUPPORT)
+     		if (DMASGLIST_ENAB)
+@@ -2054,8 +2134,19 @@ _dma_rxfill(dma_info_t *di)
+     		              di->rxbufsize, DMA_RX, p,
+     		              &di->rxp_dmah[rxout]);
+ #else  /* !SGLIST_RX_SUPPORT */
+-    		pa = DMA_MAP(di->osh, PKTDATA(di->osh, p),
+-    		             di->rxbufsize, DMA_RX, p, NULL);
++#ifdef NCNB_CSKB
++			if(likely(PKTMSPDDATA(di->osh,p))) {
++				PKTMSPDLENREF(p) = di->rxbufsize;
++				pa = DMA_MAP(di->osh, PKTMSPDDATAREF(p),
++							 di->rxbufsize, DMA_RX, p, NULL);
++			} else {
++				pa = DMA_MAP(di->osh, PKTDATA(di->osh, p),
++							 di->rxbufsize, DMA_RX, p, NULL);
++			}
++#else
++			pa = DMA_MAP(di->osh, PKTDATA(di->osh, p),
++     		             di->rxbufsize, DMA_RX, p, NULL);
++#endif
+ #endif /* !SGLIST_RX_SUPPORT */
+ 
+ #endif /* !(linux && (BCM47XX_CA9 || __mips__) && BCM_GMAC3) */
+@@ -3140,8 +3231,20 @@ dma32_txfast(dma_info_t *di, void *p0, bool commit)
+ 		if (DMASGLIST_ENAB)
+ 			bzero(&di->txp_dmah[txout], sizeof(hnddma_seg_map_t));
+ 
++#ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(di->osh, p))) {
++			int ofstlen = len - PKTMSPDLEN(di->osh, p);
++			int mspd_ofst = PKTMSPDOFST((di->osh),p) - ofstlen;
++
++			memcpy(PKTMSPDDATAREFCHAR(p) + mspd_ofst, data, ofstlen);
++			pa = DMA_MAP(di->osh, PKTMSPDDATAREFCHAR(p) + mspd_ofst, len , DMA_TX, p, &di->txp_dmah[txout]);
++		} else {
++			pa = DMA_MAP(di->osh, data, len, DMA_TX, p, &di->txp_dmah[txout]);
++		}
++#else
+ 		/* get physical address of buffer start */
+ 		pa = DMA_MAP(di->osh, data, len, DMA_TX, p, &di->txp_dmah[txout]);
++#endif
+ 
+ 		if (DMASGLIST_ENAB) {
+ 			map = &di->txp_dmah[txout];
+@@ -4287,7 +4390,20 @@ dma64_txfast(dma_info_t *di, void *p0, bool commit)
+ 		DMA_TRACE(("dma64_txfast data %x pa %x\n", data, pa));
+     } else
+ #else
++#ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(di->osh, p))) {
++			int ofstlen = len - PKTMSPDLEN(di->osh, p);
++			int mspd_ofst = PKTMSPDOFST((di->osh),p) - ofstlen;
++
++			memcpy(PKTMSPDDATAREFCHAR(p) + mspd_ofst, data, ofstlen);
++			pa = DMA_MAP(di->osh, PKTMSPDDATAREFCHAR(p) + mspd_ofst, len , DMA_TX, p, &di->txp_dmah[txout]);
++		} else {
++			pa = DMA_MAP(di->osh, data, len, DMA_TX, p, &di->txp_dmah[txout]);
++		}
++#else
+ 		pa = DMA_MAP(di->osh, data, len, DMA_TX, p, &di->txp_dmah[txout]);
++#endif
++
+ #endif 
+ 
+ 		if (DMASGLIST_ENAB) {
+@@ -5842,4 +5958,4 @@ dmatx_map_pkts(hnddma_t *dmah, map_pkts_cb_fn cb, void *ctx)
+ 	}
+ 	return BCME_OK;
+ }
+-#endif /* #ifndef WLENT_CONVERGED_PKG */
+\ No newline at end of file
++#endif /* #ifndef WLENT_CONVERGED_PKG */
+diff --git a/main/src/shared/linux_osl.c b/main/src/shared/linux_osl.c
+index d44bfd6..78b74af 100644
+--- a/main/src/shared/linux_osl.c
++++ b/main/src/shared/linux_osl.c
+@@ -635,6 +635,13 @@ static struct sk_buff *osl_alloc_skb(osl_t *osh, unsigned int len)
+ #else
+ 	skb = dev_alloc_skb(len);
+ #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 25) */
++#ifdef NCNB_CSKB
++	if(skb) {
++		skb->mspd_data = NULL;
++		skb->mspd_len = 0;
++		skb->mspd_ofst = 0;
++	}
++#endif
+ #ifdef CTFMAP
+ 	if (skb) {
+ 		_DMA_MAP(osh, PKTDATA(osh, skb), len, DMA_RX, NULL, NULL);
+@@ -1104,6 +1111,13 @@ osl_pktfree(osl_t *osh, void *p, bool send)
+ 	while (skb) {
+ 		nskb = skb->next;
+ 		skb->next = NULL;
++       
++#ifdef NCNB_CSKB 
++		if(skb->mspd_data) {
++			kfree(skb->mspd_data);
++			skb->mspd_data = NULL;
++		}
++#endif
+ 
+ #ifdef BCMDBG_CTRACE
+ 		DEL_CTRACE(osh, skb);
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index 555fe38..c66ec9a 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -5078,12 +5078,24 @@ wl_sendup(wl_info_t *wl, wl_if_t *wlif, void *p, int numpkt)
+ #endif /* ! BCM_GMAC3 */
+ 
+ #ifdef PPFE_FASTPATH 
++#ifdef NCNB_CSKB
++       /* MSPD data length = entire packet length - (ethernet header length - ethernet type length)) */
++       PKTMSPDLENREF(skb)  = PKTLEN(wl->osh,skb) - (ETHER_HDR_LEN - ETHER_TYPE_LEN);
++#endif
+     /* If packet could be fast forwarded, then offload the packet to ethernet vwd driver */
+     if (likely(!comcerto_wifi_rx_fastpath(skb))) {
+         return;
+     }	
+ #endif
+ 
++#ifdef NCNB_CSKB
++       if(likely(PKTMSPDDATA(wl->osh,skb))) {
++               int datalen = PKTLEN(wl->osh,skb) - (ETHER_HDR_LEN - ETHER_TYPE_LEN);
++               memcpy(PKTDATA(wl->osh,skb) + (ETHER_HDR_LEN - ETHER_TYPE_LEN), PKTMSPDDATA(wl->osh,skb) + PKTMSPDOFST((wl->osh),skb) , datalen);
++               PKTMSPDLENREF(skb) = 0;
++       }
++#endif
++
+ #ifdef HNDCTF
+ #ifdef WLENT_VLAN
+     /* Skip CTF when WLENT_VLAN is enabled */
+diff --git a/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+index 742c7a9..6de8db3 100755
+--- a/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -2425,6 +2425,9 @@ wlc_amsdu_agg_close(amsdu_info_t *ami, struct scb *scb, uint tid)
+ 			PKTLEN(osh, amsduprio->amsdu_agg_ptail) -
+ 			amsduprio->amsdu_agg_padlast);
+ 		amsduprio->amsdu_agg_bytes -= amsduprio->amsdu_agg_padlast;
++#ifdef NCNB_CSKB
++		PKTMSPDLENREF(amsduprio->amsdu_agg_ptail) -= amsduprio->amsdu_agg_padlast;
++#endif
+ 		WL_AMSDU(("wlc_amsdu_agg_close: strip off padlast %d\n",
+ 			amsduprio->amsdu_agg_padlast));
+ #ifdef WLCNT
+@@ -2787,6 +2790,9 @@ wlc_amsdu_agg_append(amsdu_info_t *ami, struct scb *scb, void *p, uint tid,
+ 			PKTSETLEN(osh, amsduprio->amsdu_agg_ptail,
+ 				PKTLEN(osh, amsduprio->amsdu_agg_ptail) + pad);
+ 			totlen += pad;
++#ifdef NCNB_CSKB
++			PKTMSPDLENREF(amsduprio->amsdu_agg_ptail) += pad;
++#endif
+ #ifdef WLCNT
+ 			WLCNTINCR(ami->cnt->tx_padding_in_tail);
+ #endif /* WLCNT */
+diff --git a/main/src/wl/sys/wlc_bmac.c b/main/src/wl/sys/wlc_bmac.c
+index 5ba42f9..a9ffd6d 100644
+--- a/main/src/wl/sys/wlc_bmac.c
++++ b/main/src/wl/sys/wlc_bmac.c
+@@ -1955,8 +1955,18 @@ wlc_bmac_recv(wlc_hw_info_t *wlc_hw, uint fifo, bool bound, wlc_dpc_info_t *dpc)
+ #endif /*  defined(BCMPCIEDEV) */
+ 
+ #if defined(BCM47XX_CA9)
+-		DMA_MAP(wlc_hw->osh, PKTDATA(wlc_hw->osh, p),
++#ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(wlc_hw->osh, p))) {
++			DMA_MAP(wlc_hw->osh, PKTMSPDDATA(wlc_hw->osh, p),
++					PKTMSPDLEN(wlc_hw->osh, p), DMA_RX, p, NULL);
++		} else {
++			DMA_MAP(wlc_hw->osh, PKTDATA(wlc_hw->osh, p),
++					PKTLEN(wlc_hw->osh, p), DMA_RX, p, NULL);
++		}
++#else
++ 		DMA_MAP(wlc_hw->osh, PKTDATA(wlc_hw->osh, p),
+ 			PKTLEN(wlc_hw->osh, p), DMA_RX, p, NULL);
++#endif
+ #endif /* defined(BCM47XX_CA9) */
+ 
+ 		/* record the rxfifo in wlc_rxd11hdr */
+diff --git a/main/src/wl/sys/wlc_rx.c b/main/src/wl/sys/wlc_rx.c
+index df99cea..d615d83 100644
+--- a/main/src/wl/sys/wlc_rx.c
++++ b/main/src/wl/sys/wlc_rx.c
+@@ -974,6 +974,9 @@ wlc_recv(wlc_info_t *wlc, void *p)
+ 		 * Call common receive, dispatch, and sendup code.
+ 		 * The latter drops the perimeter lock and anything can happen!
+ 		 */
++#ifdef NCNB_CSKB
++		PKTMSPDLENREF(p) = 0;
++#endif
+ 		wlc_recvdata(wlc, osh, wrxh, p);
+ 	} else if ((FC_TYPE(fc) == FC_TYPE_MNG) || (FC_TYPE(fc) == FC_TYPE_CTL)) {
+ 
+@@ -982,6 +985,15 @@ wlc_recv(wlc_info_t *wlc, void *p)
+ 		 */
+ 		PKTCTFMAP(osh, p);
+ 
++#ifdef NCNB_CSKB
++		if(likely(PKTMSPDDATA(osh,p))) {
++			int datalen = PKTMSPDLEN(osh,p) - PKTMSPDOFST(osh,p);
++			int ofstlen = D11_PHY_HDR_LEN + DOT11_A3_HDR_LEN + DOT11_LLC_SNAP_HDR_LEN - (pad_present ? 2 : 0);
++			memcpy(PKTDATA(osh,p) + ofstlen , PKTMSPDDATA(osh,p) + PKTMSPDOFST(osh,p),datalen);
++			PKTMSPDLENREF(p) = 0;
++		}
++#endif
++
+ 		wlc_recv_mgmt_ctl(wlc, osh, wrxh, p);
+ 
+ 	} else {
+-- 
+1.7.10
+

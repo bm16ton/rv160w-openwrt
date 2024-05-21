@@ -1,0 +1,307 @@
+diff --git a/main/components/router/nas/nas.c b/main/components/router/nas/nas.c
+index 8c43dc1..dfcb534 100644
+--- a/main/components/router/nas/nas.c
++++ b/main/components/router/nas/nas.c
+@@ -66,6 +66,7 @@
+ #include "global.h"
+ #include <bcmcrypto/md5.h>
+ #include <bcmcrypto/rc4.h>
++#include <syslog.h>
+ 
+ #define CHECK_EAPOL_KEY(key) (((key) == EAPOL_WPA_KEY) || ((key) == EAPOL_WPA2_KEY))
+ 
+@@ -128,6 +129,7 @@ cleanup_sta(nas_t *nas, nas_sta_t *sta, int reason, int driver_signal)
+ 	 */
+ 	if (!driver_signal) {
+ 		dbg(nas, "deauthenticating %s", ether_etoa((uchar *)&sta->ea, eabuf));
++		syslog(LOG_NOTICE, "deauthenticating %s", ether_etoa((uchar *)&sta->ea, eabuf));
+ 		nas_deauthenticate(nas, &sta->ea, reason);
+ 	}
+ 	/* Be careful not to leak timer descriptors. */
+@@ -162,6 +164,7 @@ toss_sta(nas_t *nas, nas_sta_t *sta, int reason, int driver_signal)
+ 	 */
+ 	if (!driver_signal) {
+ 		dbg(nas, "deauthenticating %s", ether_etoa((uchar *)&sta->ea, eabuf));
++		syslog(LOG_NOTICE, "deauthenticating %s", ether_etoa((uchar *)&sta->ea, eabuf));
+ 		nas_deauthenticate(nas, &sta->ea, reason);
+ 	}
+ 	/* Be careful not to leak timer descriptors. */
+@@ -302,6 +305,7 @@ pae_state(nas_t *nas, nas_sta_t *sta, int state)
+ 
+ 	case AUTHENTICATED:
+ 		dbg(nas, "Authenticated %s", ether_etoa((uchar *)&sta->ea, eabuf));
++		syslog(LOG_NOTICE, "Authenticated %s", ether_etoa((uchar *)&sta->ea, eabuf));
+ 		eapol_canned(nas, sta, EAP_SUCCESS, 0);
+ 		sta->pae.id++;
+ 		sta->rxauths = 0;
+@@ -309,6 +313,7 @@ pae_state(nas_t *nas, nas_sta_t *sta, int state)
+ 
+ 	case HELD:
+ 		dbg(nas, "Held %s", ether_etoa((uchar *)&sta->ea, eabuf));
++		syslog(LOG_NOTICE, "Held %s", ether_etoa((uchar *)&sta->ea, eabuf));
+ 		eapol_canned(nas, sta, EAP_FAILURE, 0);
+ 		sta->pae.id++;
+ 		/* hold off for the quiet period */
+@@ -318,6 +323,7 @@ pae_state(nas_t *nas, nas_sta_t *sta, int state)
+ 
+ 	case ABORTING:
+ 		dbg(nas, "Aborting %s", ether_etoa((uchar *)&sta->ea, eabuf));
++		syslog(LOG_NOTICE, "Aborting %s", ether_etoa((uchar *)&sta->ea, eabuf));
+ 		if (sta->pae.radius.username.data)
+ 			free(sta->pae.radius.username.data);
+ 		memset(&sta->pae.radius.username, 0,
+@@ -335,6 +341,7 @@ pae_state(nas_t *nas, nas_sta_t *sta, int state)
+ 
+ 	case DISCONNECTED:
+ 		dbg(nas, "Disconnected %s", ether_etoa((uchar *)&sta->ea, eabuf));
++		syslog(LOG_NOTICE, "Supplicant Disconnected %s", ether_etoa((uchar *)&sta->ea, eabuf));
+ 		eapol_canned(nas, sta, EAP_FAILURE, 0);
+ 		sta->pae.id++;
+ 		sta->pae.state = CONNECTING;
+@@ -344,6 +351,7 @@ pae_state(nas_t *nas, nas_sta_t *sta, int state)
+ 
+ 	case CONNECTING:
+ 		dbg(nas, "Connecting %s", ether_etoa((uchar *)&sta->ea, eabuf));
++		syslog(LOG_NOTICE, "Connecting %s", ether_etoa((uchar *)&sta->ea, eabuf));
+ 		sta->pae.flags = 0;	/* reset flags */
+ 		sta->pae.ssnto = 0;	/* session timeout */
+ 		eapol_canned(nas, sta, EAP_REQUEST, EAP_IDENTITY);
+@@ -353,6 +361,7 @@ pae_state(nas_t *nas, nas_sta_t *sta, int state)
+ 
+ 	case AUTHENTICATING:
+ 		dbg(nas, "Authenticating %s", ether_etoa((uchar *)&sta->ea, eabuf));
++		syslog(LOG_NOTICE, "Authenticating %s", ether_etoa((uchar *)&sta->ea, eabuf));
+ 		sta->auth_while = STA_AUTHWHILE_MAX;
+ 		break;
+ 
+@@ -633,6 +642,8 @@ eapol_dispatch_ex(nas_t *nas, eapol_header_t *eapol, int preauth, int bytes)
+ 	}
+ 	dbg(nas, "%s message from %s", eapol_msg_type_name(eapol->type),
+ 	    ether_etoa((uchar *)&sta->ea, eabuf));
++	syslog(LOG_NOTICE, "%s message from %s", eapol_msg_type_name(eapol->type),
++	    ether_etoa((uchar *)&sta->ea, eabuf));
+ 	if (eapol->version < sta->eapol_version) {
+ 		dbg(nas, "EAPOL version %d packet received, current version is %d", eapol->version,
+ 		    sta->eapol_version);
+@@ -701,6 +712,8 @@ eapol_dispatch_ex(nas_t *nas, eapol_header_t *eapol, int preauth, int bytes)
+ 					dbg(nas, "NAS currently authenticating STA. "
+ 					    "Tossing packet id=%d code=%d.",
+ 					    eap->id, eap->code);
++					syslog(LOG_NOTICE, "NAS currently authenticating STA");
++
+ 
+ 					break;
+ 				}
+@@ -778,6 +791,7 @@ eapol_dispatch_ex(nas_t *nas, eapol_header_t *eapol, int preauth, int bytes)
+ 		case AUTHENTICATED:
+ 			pae_state(nas, sta, DISCONNECTED);
+ 			dbg(nas, "deauthenticating %s", ether_etoa((uchar *)&sta->ea, eabuf));
++			syslog(LOG_NOTICE, "Deauthenticating %s", ether_etoa((uchar *)&sta->ea, eabuf));
+ 			nas_deauthorize(nas, &sta->ea);
+ 			break;
+ 		}
+@@ -922,6 +936,8 @@ driver_message_dispatch(nas_t *nas, bcm_event_t *dpkt)
+ 
+ 	dbg(nas, "driver %s message received for %s", driver_msg_name(type),
+ 	    ether_etoa(addr, eabuf));
++	syslog(LOG_NOTICE, "Driver %s Message received for %s", driver_msg_name(type),
++	    ether_etoa(addr, eabuf));
+ 
+ 	/* Look for the STA struct, but don't create one if the goal is
+ 	 *  to remove it.
+diff --git a/main/components/router/nas/nas_radius.c b/main/components/router/nas/nas_radius.c
+index 078e832..9fafa34 100644
+--- a/main/components/router/nas/nas_radius.c
++++ b/main/components/router/nas/nas_radius.c
+@@ -21,9 +21,11 @@
+ 
+ #include <nas.h>
+ #include <nas_wksp.h>
++
+ #include <nas_radius.h>
+ #include <nas_wksp_radius.h>
+ #include <mppe.h>
++#include <syslog.h>
+ 
+ static void radius_add(radius_header_t *radius, unsigned char type,
+                        unsigned char *buf, unsigned char length);
+@@ -288,6 +290,8 @@ radius_dispatch(nas_t *nas, radius_header_t *response)
+ 					if (response->code == RADIUS_ACCESS_ACCEPT) {
+ 						dbg(nas, "Access Accept and "
+ 							"Deauthentication Request");
++						syslog(LOG_NOTICE, "Access Accept and"
++							"Deauthentication Request");
+ 
+ 						nas->m_deauth_params.reason_code = *cur++;
+ 						dbg(nas, "code attribute for "
+@@ -349,6 +353,8 @@ radius_dispatch(nas_t *nas, radius_header_t *response)
+ 
+ 						dbg(nas, "Access Accept and "
+ 								"BSS Transition Request");
++						syslog(LOG_NOTICE, "Access Accept and "
++								"BSS Transition Request");
+ 
+ 						nas->m_bsstran_params.bsstran_swt = *cur++;
+ 						dbg(nas, "Session Warning Time attribute"
+@@ -463,13 +469,16 @@ radius_dispatch(nas_t *nas, radius_header_t *response)
+ 		/* Check for EAP-Success before allowing complete access */
+ 		if (!(sta->pae.flags & PAE_FLAG_EAP_SUCCESS)) {
+ 			dbg(nas, "Radius success without EAP success?!");
++			syslog(LOG_NOTICE, "Radius success without EAP success?!");
+ 			pae_state(nas, sta, HELD);
+ 			dbg(nas, "deauthenticating %s", ether_etoa((uint8 *)&sta->ea, eabuf));
++			syslog(LOG_NOTICE, "Deauthenticating %s", ether_etoa((uint8 *)&sta->ea, eabuf));
+ 			nas_deauthorize(nas, &sta->ea);
+ 			goto done;
+ 		}
+ 
+ 		dbg(nas, "Access Accept");
++		syslog(LOG_NOTICE, "Access Accept: Station %s authenticated", ether_etoa((uint8 *)&sta->ea, eabuf));
+ 		pae_state(nas, sta, AUTHENTICATED);
+ 
+ 		/* overwrite session timeout with global setting */
+@@ -538,12 +547,14 @@ radius_dispatch(nas_t *nas, radius_header_t *response)
+ 		dbg(nas, "Access Reject");
+ 		pae_state(nas, sta, HELD);
+ 		dbg(nas, "deauthenticating %s", ether_etoa((uint8 *)&sta->ea, eabuf));
++		syslog(LOG_NOTICE, "Access Reject: Station %s not authenticated", ether_etoa((uint8 *)&sta->ea, eabuf));
+ 		nas_deauthorize(nas, &sta->ea);
+ 		sta->pae.ssnto = 0;
+ 		break;
+ 
+ 	case RADIUS_ACCESS_CHALLENGE:
+ 		dbg(nas, "Access Challenge");
++		syslog(LOG_NOTICE, "Access Challenge for station %s", ether_etoa((uint8 *)&sta->ea, eabuf));
+ 		break;
+ 
+ 	default:
+diff --git a/main/components/router/nas/nas_wksp.c b/main/components/router/nas/nas_wksp.c
+index cb6439a..db7d0ea 100644
+--- a/main/components/router/nas/nas_wksp.c
++++ b/main/components/router/nas/nas_wksp.c
+@@ -46,6 +46,7 @@
+ #include <nvparse.h>
+ #include <eapd.h>
+ #include <security_ipc.h>
++#include <syslog.h>
+ 
+ /* debug stuff */
+ #ifdef BCMDBG
+@@ -1100,6 +1101,7 @@ nas_get_wsec(nas_wksp_t *nwksp, uint8 *mac, char *osifname, nas_wpa_cb_t *nwcb_r
+ 	/* interface name */
+ 	strncpy(nwcb->nas.interface, info.osifname, IFNAMSIZ);
+ 	NASDBG("new nwcb's nas interface %s\n", nwcb->nas.interface);
++	syslog(LOG_NOTICE, "NAS interface : %s", nwcb->nas.interface);
+ 	/* interface address */
+ 	memcpy(nwcb->nas.ea.octet, info.ea, ETHER_ADDR_LEN);
+ 	NASDBG("new nwcb's nas hwaddr %02x:%02x:%02x:%02x:%02x:%02x\n",
+@@ -1109,6 +1111,7 @@ nas_get_wsec(nas_wksp_t *nwksp, uint8 *mac, char *osifname, nas_wpa_cb_t *nwcb_r
+ 	/* ssid info */
+ 	strncpy(nwcb->nas.ssid, info.ssid, DOT11_MAX_SSID_LEN);
+ 	NASDBG("new nwcb's nas ssid %s\n", nwcb->nas.ssid);
++	syslog(LOG_NOTICE, "\tNAS ssid : %s\n", nwcb->nas.ssid);
+ 	/* nas auth mode */
+ 	nwcb->nas.mode = info.akm;
+ 	NASDBG("new nwcb's nas auth mode %d\n", nwcb->nas.mode);
+@@ -1188,6 +1191,8 @@ nas_get_wsec(nas_wksp_t *nwksp, uint8 *mac, char *osifname, nas_wpa_cb_t *nwcb_r
+ 		nwcb->nas.server.sin_port = info.radius_port;
+ 		NASDBG("new nwcb's nas radius server address %s, port %d\n",
+ 			info.radius_addr, nwcb->nas.server.sin_port);
++		syslog(LOG_NOTICE, "NAS Radius server address : %s, port : %d\n",
++			info.radius_addr, nwcb->nas.server.sin_port);
+ 	}
+ #endif /* NAS_RADIUS */
+ 	/* 802.1x session timeout/pmk cache duration */
+@@ -1239,6 +1244,7 @@ nas_wksp_add_nwcb(nas_wksp_t *nwksp, uint8 *mac, char *osifname, nas_wpa_cb_t *n
+ 			/* open connection to radius server */
+ 			if (NAS_RADIUS_OPEN(nwksp, nwcb) != 0)
+ 				NASMSG("%s: open radius connection failed\n", nwcb->nas.interface);
++				syslog(LOG_NOTICE, "%s: Open Radius Connection Failed\n", nwcb->nas.interface);
+ 		}
+ #endif	/* #ifdef NAS_WKSP_BUILD_NAS_AUTH */
+ 
+diff --git a/main/components/router/nas/nas_wksp_radius.c b/main/components/router/nas/nas_wksp_radius.c
+index d88a474..1165450 100644
+--- a/main/components/router/nas/nas_wksp_radius.c
++++ b/main/components/router/nas/nas_wksp_radius.c
+@@ -20,6 +20,7 @@
+ #include "nas_wksp.h"
+ #include "nas_radius.h"
+ #include "nas_wksp_radius.h"
++#include <syslog.h>
+ 
+ #ifdef NAS_WKSP_BUILD_NAS_AUTH
+ /*
+@@ -45,6 +46,7 @@ nas_radius_open(nas_wksp_t *nwksp, nas_wpa_cb_t *nwcb)
+ 	*/
+ 	if (nas->wan != NAS_WKSP_UNK_FILE_DESC) {
+ 		NASDBG("%s: close radius socket %d\n", nas->interface, nas->wan);
++		syslog(LOG_NOTICE, "%s: Close Radius Socket %d\n", nas->interface, nas->wan);
+ 		close(nas->wan);
+ 		nas->wan = NAS_WKSP_UNK_FILE_DESC;
+ 	}
+@@ -52,6 +54,7 @@ nas_radius_open(nas_wksp_t *nwksp, nas_wpa_cb_t *nwcb)
+ 	/* Connect to server */
+ 	if ((nas->wan = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP)) < 0) {
+ 		NASDBG("%s: Unable to create radius socket\n", nas->interface);
++		syslog(LOG_NOTICE, "%s: Unable to Create Radius Socket\n", nas->interface);
+ 		goto exit0;
+ 	}
+ 
+@@ -63,6 +66,7 @@ nas_radius_open(nas_wksp_t *nwksp, nas_wpa_cb_t *nwcb)
+ 		if (connect(nas->wan, (struct sockaddr *)&nas->server, sizeof(nas->server)) < 0) {
+ 			NASDBG("%s: Unable to connect radius socket %d\n", nas->interface,
+ 			       nas->wan);
++			syslog(LOG_NOTICE, "%s: Unable to connect Radius Socket %d\n", nas->interface, nas->wan);
+ 			nas_sleep_ms(NAS_WKSP_RADIUS_SLEEP*1000);
+ 			continue;
+ 		}
+@@ -70,6 +74,7 @@ nas_radius_open(nas_wksp_t *nwksp, nas_wpa_cb_t *nwcb)
+ 		if (getsockname(nas->wan, (struct sockaddr *)&nas->client, (socklen_t *)&n) < 0)
+ 			break;
+ 		NASDBG("%s: opened radius socket %d\n", nas->interface, nas->wan);
++		syslog(LOG_NOTICE, "%s: Opened Radius Socket %d\n", nas->interface, nas->wan);
+ 		return 0;
+ 	}
+ 
+@@ -77,6 +82,7 @@ nas_radius_open(nas_wksp_t *nwksp, nas_wpa_cb_t *nwcb)
+ 	close(nas->wan);
+ exit0:
+ 	NASDBG("%s: failed to open radius socket\n", nas->interface);
++	syslog(LOG_NOTICE, "%s: Failed to open Radius Socket\n", nas->interface);
+ 	nas->wan = NAS_WKSP_UNK_FILE_DESC;
+ 	return errno;
+ }
+@@ -88,6 +94,7 @@ nas_radius_close(nas_wksp_t *nwksp, nas_wpa_cb_t *nwcb)
+ 	nas_t *nas = &nwcb->nas;
+ 	if (nas->wan != NAS_WKSP_UNK_FILE_DESC) {
+ 		NASDBG("%s: close radius socket %d\n", nas->interface, nas->wan);
++		syslog(LOG_NOTICE, "%s: Close Radius Socket %d\n", nas->interface, nas->wan);
+ 		close(nas->wan);
+ 		nas->wan = NAS_WKSP_UNK_FILE_DESC;
+ 	}
+@@ -135,18 +142,24 @@ nas_radius_send_packet(nas_t *nas, radius_header_t *radius, int length)
+ 	int ret;
+ 	nas_wpa_cb_t *nwcb = (nas_wpa_cb_t *)nas->appl;
+ 	NASDBG("%s: sending packet to radius socket %d\n", nas->interface, nas->wan);
++	syslog(LOG_NOTICE, "%s: Sending pkt to Radius Socket %d\n", nas->interface, nas->wan);
+ 	if ((ret = send(nas->wan, (char *)radius, length, 0)) < 0) {
+ 		NASDBG("%s: send error %d to radius socket %d\n", nas->interface, errno, nas->wan);
++		syslog(LOG_NOTICE, "%s: Send Error %d to Radius Socket %d\n", nas->interface, errno, nas->wan);
+ 		/* Try re-opening it once before giving up. */
+ 		/* This could happen if the peer has been reset */
+ 		if (errno == EBADF) {
+ 			if (!nas_radius_open(nwcb->nwksp, nwcb)) {
+ 				NASDBG("%s: resending packet to radius socket %d\n", nas->interface,
+ 				       nas->wan);
++				syslog(LOG_NOTICE, "%s: Resending pkt to Radius Socket %d\n", nas->interface,
++				       nas->wan);
+ 				ret = send(nas->wan, (char *)radius, length, 0);
+ 				if (ret < 0)
+ 					NASDBG("%s: resend error %d to radius socket %d\n",
+ 					       nas->interface, errno, nas->wan);
++					syslog(LOG_NOTICE, "%s: Send Error %d to Radius Socket %d\n",
++						nas->interface, errno, nas->wan);
+ 			}
+ 		}
+ 	}

@@ -1,0 +1,236 @@
+From 8f809f583ecd5144347130c0035c1009ccb9e9cc Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 18:12:09 +0800
+Subject: [PATCH 11/63] Packet-chaining-support-added
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/driver/wl_common.mk |    2 +-
+ main/src/include/linux_osl.h        |    9 +++++----
+ main/src/include/osl.h              |    2 ++
+ main/src/shared/linux_osl.c         |    3 +++
+ main/src/wl/sys/wl_linux.c          |   15 +++++++++++++--
+ main/src/wl/sys/wlc.c               |    3 +++
+ main/src/wl/sys/wlc_amsdu.c         |   22 ++++++++++++++++++++++
+ main/src/wl/sys/wlc_bmac.c          |    3 +++
+ 8 files changed, 52 insertions(+), 7 deletions(-)
+
+diff --git a/main/components/driver/wl_common.mk b/main/components/driver/wl_common.mk
+index 573187e..44b4567 100644
+--- a/main/components/driver/wl_common.mk
++++ b/main/components/driver/wl_common.mk
+@@ -7,7 +7,7 @@ else ifeq ($(PLT),rv160w_260w)
+ ROUTER_COMA=0
+ KBUILD_CFLAGS += -DBCMDBG
+ ifeq ($(CONFIG_BRCM_CPKTC),y)
+-KBUILD_CFLAGS += -DPPFE_FASTPATH -DCMEMCPY -DNCNB_CSKB
++KBUILD_CFLAGS += -DPPFE_FASTPATH -DCMEMCPY -DNCNB_CSKB -DPKTC -DCPKTC
+ endif
+ else ifeq ($(PLT),ls1021)
+ KBUILD_CFLAGS += -D__LS1024__ -DBCMPHY64OSL
+diff --git a/main/src/include/linux_osl.h b/main/src/include/linux_osl.h
+index f5401e3..66171c8 100644
+--- a/main/src/include/linux_osl.h
++++ b/main/src/include/linux_osl.h
+@@ -739,7 +739,9 @@ typedef struct ctfpool {
+ 	uint 		fast_frees;
+ 	uint 		slow_allocs;
+ } ctfpool_t;
+-
+++#endif
++ 
+++#if defined(CTFPOOL) || defined(CPKTC)
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
+ #define	FASTBUF	(1 << 0)
+ #define	PKTSETFAST(osh, skb)	\
+@@ -907,7 +909,7 @@ do { \
+ #define	PKTISCTF(osh, skb)	({BCM_REFERENCE(osh); BCM_REFERENCE(skb); FALSE;})
+ #endif /* CTFMAP */
+ 
+-#if defined(HNDCTF) || defined (PKTC)
++#if defined(HNDCTF) || defined (CPKTC)
+ 
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
+ #define	SKIPCT	(1 << 2)
+@@ -1121,8 +1123,7 @@ extern void osl_pkt_frmfwder(osl_t *osh, void *skbs, int skb_cnt);
+ 
+ #endif /* ! BCM_GMAC3 */
+ 
+-
+-#ifdef HNDCTF
++#if defined(HNDCTF) || defined (CPKTC)
+ /* For broadstream iqos */
+ 
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
+diff --git a/main/src/include/osl.h b/main/src/include/osl.h
+index b959603..f8c874e 100644
+--- a/main/src/include/osl.h
++++ b/main/src/include/osl.h
+@@ -171,12 +171,14 @@ do { \
+ } while (0)
+ #endif /* !linux || !PKTC */
+ 
++#ifndef PKTC
+ #if !defined(HNDCTF) && !defined(PKTC_TX_DONGLE) && !(defined(__NetBSD__) && \
+ 	defined(PKTC)) && !(defined(linux) && (defined(PKTC) || defined(PKTC_TBL)))
+ #define PKTSETCHAINED(osh, skb)		BCM_REFERENCE(osh)
+ #define PKTCLRCHAINED(osh, skb)		BCM_REFERENCE(osh)
+ #define PKTISCHAINED(skb)		FALSE
+ #endif
++#endif
+ 
+ #ifndef _RTE_
+ /* Lbuf with fraglist */
+diff --git a/main/src/shared/linux_osl.c b/main/src/shared/linux_osl.c
+index 78b74af..48c5dd1 100644
+--- a/main/src/shared/linux_osl.c
++++ b/main/src/shared/linux_osl.c
+@@ -647,6 +647,9 @@ static struct sk_buff *osl_alloc_skb(osl_t *osh, unsigned int len)
+ 		_DMA_MAP(osh, PKTDATA(osh, skb), len, DMA_RX, NULL, NULL);
+ 	}
+ #endif /* CTFMAP */
++#ifdef PKTC
++       memset(skb->pktc_cb, 0, sizeof(skb->pktc_cb));
++#endif
+ 	return skb;
+ }
+ 
+diff --git a/main/src/wl/sys/wl_linux.c b/main/src/wl/sys/wl_linux.c
+index c66ec9a..d621c97 100644
+--- a/main/src/wl/sys/wl_linux.c
++++ b/main/src/wl/sys/wl_linux.c
+@@ -4952,7 +4952,7 @@ void BCMFASTPATH
+ wl_sendup(wl_info_t *wl, wl_if_t *wlif, void *p, int numpkt)
+ {
+ 	struct sk_buff *skb;
+-#ifdef HNDCTF
++#if defined(HNDCTF) || defined(CPKTC)
+ 	struct sk_buff *nskb;
+ #endif /* HNDCTF */
+ 	bool brcm_specialpkt;
+@@ -5088,6 +5088,17 @@ wl_sendup(wl_info_t *wl, wl_if_t *wlif, void *p, int numpkt)
+     }	
+ #endif
+ 
++#if defined(CPKTC)
++sendup_next:
++       /* clear fast buf flag before sending up */
++       PKTCLRFAST(wl->osh, skb);
++
++       nskb = (PKTISCHAINED(skb) ? PKTCLINK(skb) : NULL);
++       PKTSETCLINK(skb, NULL);
++       PKTCLRCHAINED(wl->osh, skb);
++       PKTCCLRFLAGS(skb);
++#endif
++
+ #ifdef NCNB_CSKB
+        if(likely(PKTMSPDDATA(wl->osh,skb))) {
+                int datalen = PKTLEN(wl->osh,skb) - (ETHER_HDR_LEN - ETHER_TYPE_LEN);
+@@ -5214,7 +5225,7 @@ sendup_next:
+ 	netif_rx(skb);
+ #endif /* NAPI_POLL */
+ 
+-#ifdef HNDCTF
++#if defined(HNDCTF) || defined(CPKTC)
+ 	if (nskb != NULL) {
+ 		nskb->dev = skb->dev;
+ 		skb = nskb;
+diff --git a/main/src/wl/sys/wlc.c b/main/src/wl/sys/wlc.c
+index 4f4a4ae..bd5797b 100755
+--- a/main/src/wl/sys/wlc.c
++++ b/main/src/wl/sys/wlc.c
+@@ -33255,6 +33255,9 @@ skip_conv:
+ 			} else
+ #endif /* PKTC_INTRABSS */
+ 			{
++#if defined(CPKTC) && defined(NCNB_CSKB)
++				PKTMSPDLENREF(head) = 0;
++#endif
+ 				wlc_recvdata_sendup(wlc, WLPKTTAGSCBGET(head), FALSE,
+ 					(struct ether_addr *)PKTDATA(wlc->osh, head), head);
+ 			}
+diff --git a/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+index 6de8db3..1ade7b1 100755
+--- a/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -2116,6 +2116,9 @@ wlc_amsdu_pktc_agg(amsdu_info_t *ami, struct scb *scb, void *p, void *n,
+ 		} else {
+ 			PKTSETLEN(wlc->osh, p, pkttotlen(wlc->osh, p) + pad);
+ 			totlen += pad;
++#if defined(NCNB_CSKB) && defined(CPKTC)
++			PKTMSPDLENREF(p) += pad;
++#endif
+ #ifdef WLCNT
+ 			WLCNTINCR(ami->cnt->tx_padding_in_tail);
+ #endif /* WLCNT */
+@@ -2147,6 +2150,10 @@ wlc_amsdu_pktc_agg(amsdu_info_t *ami, struct scb *scb, void *p, void *n,
+ 			PKTPUSH(wlc->osh, p1, pad);
+ 			totlen += pad;
+ 			pad_at_head = FALSE;
++#if defined(NCNB_CSKB) && defined(CPKTC)
++			PKTMSPDOFSTREF(p1) -= pad;
++			PKTMSPDLENREF(p1) += pad;
++#endif
+ 		}
+ 		p = p1;
+ 	}
+@@ -2159,6 +2166,10 @@ wlc_amsdu_pktc_agg(amsdu_info_t *ami, struct scb *scb, void *p, void *n,
+ 		PKTPUSH(wlc->osh, p1, pad);
+ 		totlen += pad;
+ 		pad_at_head = FALSE;
++#if defined(NCNB_CSKB) && defined(CPKTC)
++		PKTMSPDOFSTREF(p1) -= pad;
++		PKTMSPDLENREF(p1) += pad;
++#endif
+ 	}
+ 
+ #ifdef WL11K
+@@ -3172,6 +3183,10 @@ wlc_recvamsdu(amsdu_info_t *ami, wlc_d11rxhdr_t *wrxh, void *p, uint16 *padp, bo
+ 			goto abort;
+ 		}
+ 
++#if defined(NCNB_CSKB) && defined(CPKTC)
++		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) + pad + ETHER_HDR_LEN;
++#endif
++
+ 		WL_AMSDU(("wlc_recvamsdu: first A-MSDU buffer\n"));
+ 		break;
+ 
+@@ -3205,6 +3220,10 @@ wlc_recvamsdu(amsdu_info_t *ami, wlc_d11rxhdr_t *wrxh, void *p, uint16 *padp, bo
+ 			goto abort;
+ 		}
+ 
++#if defined(NCNB_CSKB) && defined(CPKTC)
++		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) - ( ETHER_HDR_LEN + pad);
++#endif
++
+ 		ASSERT(deagg->amsdu_deagg_ptail);
+ 		PKTSETNEXT(osh, deagg->amsdu_deagg_ptail, p);
+ 		deagg->amsdu_deagg_ptail = p;
+@@ -3238,6 +3257,9 @@ wlc_recvamsdu(amsdu_info_t *ami, wlc_d11rxhdr_t *wrxh, void *p, uint16 *padp, bo
+ 			goto abort;
+ 		}
+ 
++#if defined(NCNB_CSKB) && defined(CPKTC)
++		PKTMSPDOFSTREF(p) = PKTMSPDOFSTREF(p) - (ETHER_HDR_LEN + pad);
++#endif
+ 		ASSERT(deagg->amsdu_deagg_ptail);
+ 		PKTSETNEXT(osh, deagg->amsdu_deagg_ptail, p);
+ 		deagg->amsdu_deagg_ptail = p;
+diff --git a/main/src/wl/sys/wlc_bmac.c b/main/src/wl/sys/wlc_bmac.c
+index a9ffd6d..aaedd79 100644
+--- a/main/src/wl/sys/wlc_bmac.c
++++ b/main/src/wl/sys/wlc_bmac.c
+@@ -5657,6 +5657,9 @@ BCMATTACHFN(wlc_bmac_attach)(wlc_info_t *wlc, uint16 vendor, uint16 device, uint
+ #if defined(PKTC_DONGLE)
+ 	wlc->pub->_pktc = TRUE;
+ #endif
++#ifdef CPKTC
++	wlc->pub->_pktc = TRUE;
++#endif
+ 
+ 	wlc_hw->physhim = wlc_phy_shim_attach(wlc_hw, wlc->wl, wlc);
+ 
+-- 
+1.7.10
+

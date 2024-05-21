@@ -1,0 +1,54 @@
+From 1b54e45632fdc7c5034810cb73fdc496f821694a Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:08:56 +0800
+Subject: [PATCH 30/63] enable-upnp
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/router/.config          |    2 +-
+ main/components/router/libupnp/Makefile |    2 +-
+ main/components/router/wps/Makefile     |    2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/main/components/router/.config b/main/components/router/.config
+index cc96f8d..40565d9 100644
+--- a/main/components/router/.config
++++ b/main/components/router/.config
+@@ -46,7 +46,7 @@ CONFIG_SQUASHFS=y
+ CONFIG_VENDOR=broadcom
+ CONFIG_UDHCPD=y
+ CONFIG_PPP=y
+-CONFIG_LIBUPNP=n
++CONFIG_LIBUPNP=y
+ CONFIG_IGD=y
+ # CONFIG_SAMBA is not set
+ CONFIG_TASKSET=y
+diff --git a/main/components/router/libupnp/Makefile b/main/components/router/libupnp/Makefile
+index 4f14da8..d69bc5c 100644
+--- a/main/components/router/libupnp/Makefile
++++ b/main/components/router/libupnp/Makefile
+@@ -13,7 +13,7 @@
+ # $Id: Makefile 520342 2014-12-11 05:39:44Z $
+ #
+ 
+-UPNPLIB_NAME = libupnp.so
++UPNPLIB_NAME = libbcmupnp.so
+ UPNPLIB = $(SRCBASE_ROUTER)/libupnp
+ SRCPATH = $(UPNPLIB)/upnp
+ 
+diff --git a/main/components/router/wps/Makefile b/main/components/router/wps/Makefile
+index a7bf235..d5fbb02 100644
+--- a/main/components/router/wps/Makefile
++++ b/main/components/router/wps/Makefile
+@@ -107,7 +107,7 @@ export LIBPATH += -L$(SRCBASE_ROUTER)/wps/prebuilt
+ ifeq ($(WPS_UPNP_DEVICE),1)
+ # Always use LIBUPNP
+ export LIBPATH += -L$(TOP)/libupnp -L$(INSTALLDIR)/libupnp/usr/lib
+-WPSM_LIBS += -lupnp
++WPSM_LIBS += -lbcmupnp
+ CFLAGS += -I$(SRCBASE_ROUTER)/libupnp/include -I$(WPSSRC)/brcm_apps/upnp/WFADevice
+ endif
+ 
+-- 
+1.7.10
+

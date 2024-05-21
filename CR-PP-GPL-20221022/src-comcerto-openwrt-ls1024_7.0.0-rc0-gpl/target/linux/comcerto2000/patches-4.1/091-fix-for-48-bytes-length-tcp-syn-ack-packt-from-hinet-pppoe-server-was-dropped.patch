@@ -1,0 +1,33 @@
+--- linux-4.1.8-old/drivers/net/ppp/pppoe.c	2020-02-20 09:56:32.305085516 +0800
++++ linux-4.1.8/drivers/net/ppp/pppoe.c	2020-02-20 10:50:20.489215919 +0800
+@@ -437,8 +437,28 @@
+ 
+ 	skb_pull_rcsum(skb, sizeof(*ph));
+ 	if (skb->len < len)
+-		goto drop;
+-
++	{
++	    /*20200217, Lily add begin for Work around for hinet access fubon website fail. 
++	     The reason is that TCP[SYN,ACK] packet lost the last 2 bytes padding,
++	     lead to the payload length less than length feild.*/
++		int is_tcp_syn_ack = 0;
++	    if (skb->len == 46 && len == 48 )
++	    {
++			//11: 2 bytes pppoe type feild +  9 bytes protocol feild offset in ip header;
++			//0x06: tcp 
++			//35: 2 bytes pppoe type feild + 20 bytes ip header + 13 bytes flag feild offset in tcp header;
++			//0x12: syn ack flag set
++			if ((*(skb->data + 11) == 0x06) && (*(skb->data + 35) == 0x12))
++			{
++			    is_tcp_syn_ack = 1;
++			}
++	    }
++		if (is_tcp_syn_ack == 0)
++		{
++			goto drop;
++		}
++		/*20200217, Lily, add end*/
++	}
+ 	if (pskb_trim_rcsum(skb, len))
+ 		goto drop;
+ 

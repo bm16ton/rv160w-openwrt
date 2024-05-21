@@ -1,0 +1,132 @@
+From f77f5a59d7596cb49947a2eee89fc1f47bef55d7 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 20:02:47 +0800
+Subject: [PATCH 48/63] fix-upnp-reload-failed
+Content-Type: text/plain; charset="utf-8"
+
+---
+ .../apps/wps/brcm_apps/linux/wps_daemon.c           |   19 +++++++++++++++++++
+ .../apps/wps/brcm_apps/linux/wps_linux_main.c       |    6 +++---
+ main/components/router/wps/Makefile                 |   16 ++++++++++++++--
+ 3 files changed, 36 insertions(+), 5 deletions(-)
+ create mode 100644 main/components/apps/wps/brcm_apps/linux/wps_daemon.c
+
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_daemon.c b/main/components/apps/wps/brcm_apps/linux/wps_daemon.c
+new file mode 100644
+index 0000000..ccf4e98
+--- /dev/null
++++ b/main/components/apps/wps/brcm_apps/linux/wps_daemon.c
+@@ -0,0 +1,19 @@
++#include <stdio.h>
++#include <stdlib.h>
++#include <signal.h>
++
++void wps_restart(int sig)
++{
++	sleep(1);
++	system("/usr/bin/wps_reload.sh");
++}
++
++int main(void)
++{
++	signal(SIGUSR2, wps_restart);
++
++	while (1)
++		sleep(1);
++
++	return 0;
++}
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index 367c081..8da6f1a 100755
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -78,7 +78,7 @@ wps_osl_restart_wl()
+ 	WpsSleep(1);
+ 
+ 	/* restart all process */
+-	system("kill -1 1");
++	system("pkill -12 wps_daemon");
+ }
+ 
+ int
+@@ -1531,8 +1531,8 @@ wps_monitor_restart:
+ 		WpsSleep(1);
+ 		eapd_restart();
+ 		nas_restart();	
+-		goto wps_monitor_restart;
+-	//	wps_osl_restart_wl();
++//		goto wps_monitor_restart;
++		wps_osl_restart_wl();
+ 	}
+ 
+ 	/* Destroy pid file */
+diff --git a/main/components/router/wps/Makefile b/main/components/router/wps/Makefile
+index 669a35b..f5e0893 100644
+--- a/main/components/router/wps/Makefile
++++ b/main/components/router/wps/Makefile
+@@ -127,6 +127,10 @@ WPS_PINGEN := brcm_apps/linux/wps_linux_pingen.c
+ WPS_PINGENOBJS := $(foreach file, $(WPS_PINGEN), \
+ 	 $(patsubst %.c,obj/wps/%.o,$(file)))
+ 
++WPS_DAEMON := brcm_apps/linux/wps_daemon.c
++WPS_DAEMONOBJS := $(foreach file, $(WPS_DAEMON), \
++	 $(patsubst %.c,obj/wps/%.o,$(file)))
++
+ WPS_PINCHECK := brcm_apps/linux/wps_linux_pincheck.c
+ WPS_PINCHECKOBJS := $(foreach file, $(WPS_PINCHECK), \
+ 	 $(patsubst %.c,obj/wps/%.o,$(file)))
+@@ -148,9 +152,9 @@ WPS_DIRS := $(foreach file, $(WPS_OSLOBJS), \
+ WPS_DIRLIST = $(sort $(WPS_DIRS))
+ 
+  ifneq ($(wildcard ./prebuilt),)
+- all: osl wps_monitor wps_cli wps_pingen wps_pin_check
++ all: osl wps_monitor wps_cli wps_pingen wps_pin_check wps_daemon
+  else
+- all: mkversion sta_build_check dirs variants_build osl wps_monitor wps_cli wps_pingen wps_pin_check
++ all: mkversion sta_build_check dirs variants_build osl wps_monitor wps_cli wps_pingen wps_pin_check wps_daemon
+  endif
+ 
+  osl:
+@@ -165,6 +169,7 @@ WPS_DIRLIST = $(sort $(WPS_DIRS))
+ 	+$(MAKE) parallel=true $(WPS_OSLOBJS)
+ 	+$(MAKE) parallel=true $(WPS_CLIOBJS)
+ 	+$(MAKE) parallel=true $(WPS_PINGENOBJS)
++	+$(MAKE) parallel=true $(WPS_DAEMONOBJS)
+ 	+$(MAKE) parallel=true $(WPS_PINCHECKOBJS)
+ 
+ $(WPS_OSLOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
+@@ -173,6 +178,8 @@ $(WPS_CLIOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
+ 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
+ $(WPS_PINGENOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
+ 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
++$(WPS_DAEMONOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
++	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
+ $(WPS_PINCHECKOBJS) : obj/wps%.o: $(addprefix $(WPSSRC),%.c)
+ 	$(CC) -c $(CFLAGS) $(EXTRA_CFLAGS) -o $@ $<
+ 
+@@ -213,6 +220,9 @@ wps_cli : objs FORCE
+ wps_pingen : objs FORCE
+ 	$(CC) $(LIBPATH) $(WPS_PINGENOBJS) -l$(WPS_LIB_FILE) $(WPSM_LIBS) $(LDFLAGS) -o $@
+ 
++wps_daemon : objs FORCE
++	$(CC) $(LIBPATH) $(WPS_DAEMONOBJS) -l$(WPS_LIB_FILE) $(WPSM_LIBS) $(LDFLAGS) -o $@
++
+ wps_pin_check : objs FORCE
+ 	$(CC) $(LIBPATH) $(WPS_PINCHECKOBJS) -l$(WPS_LIB_FILE) $(WPSM_LIBS) $(LDFLAGS) -o $@
+ 
+@@ -231,10 +241,12 @@ install: all
+ 	install wps_monitor $(INSTALLDIR)/wps/bin
+ 	install wps_cli $(INSTALLDIR)/wps/bin
+ 	install wps_pingen $(INSTALLDIR)/wps/bin
++	install wps_daemon $(INSTALLDIR)/wps/bin
+ 	install wps_pin_check $(INSTALLDIR)/wps/bin
+ 	$(STRIP) $(INSTALLDIR)/wps/bin/wps_monitor
+ 	$(STRIP) $(INSTALLDIR)/wps/bin/wps_cli
+ 	$(STRIP) $(INSTALLDIR)/wps/bin/wps_pingen
++	$(STRIP) $(INSTALLDIR)/wps/bin/wps_daemon
+ 	$(STRIP) $(INSTALLDIR)/wps/bin/wps_pin_check
+ 
+ .PHONY: all clean install libs dirs osl
+-- 
+1.7.10
+

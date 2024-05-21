@@ -1,0 +1,29 @@
+BUILD steps for RV16X/26X
+==================================================
+
+1) Download the tar ball "CR-PP-GPL-20221022.tar.bz2" from the mentioned location.  After untar, It creates CR/ folder with SDK src, dl tar files
+
+ CR
+ |-- dl-comcerto-openwrt-ls1024_7.0.0-rc0-gpl-20221022.tar.bz2
+ `-- src-comcerto-openwrt-ls1024_7.0.0-rc0-gpl-20221022.tar.bz2
+
+2) Create a folder for installing SDK. Untar the  tar files in it. Adjust "Download_path" accordingly.
+                $ mkdir sdk7.0.0-gpl
+                $ cd sdk7.0.0-gpl
+                $ tar jxf <Download_path>/CR/src-comcerto-openwrt-ls1024_7.0.0-rc0-gpl-20221022.tar.bz2        << This creates src-comcerto-openwrt-ls1024_7.0.0-rc0-gpl folder
+                $ cd src-comcerto-openwrt-ls1024_7.0.0-rc0-gpl
+                $ tar jxf <Download_path>/CR/dl-comcerto-openwrt-ls1024_7.0.0-rc0-gpl-20221022.tar.bz2  << This creates dl/ folder
+ 
+3) Copy the config file(RV16X/RV26X)
+                $ cp config/config-ciscosbr-c2krv16x-26x  .config
+
+4) To proceed for build, tools packages are required. For these packages, need to do the following 
+
+	-> Untar tools.tar.bz2  and copy them in "dl" folder.
+			(OR)
+	->  Host Sould have internet connectivity, so they will be downloaded automatically.
+
+5) Issue build command 
+ 
+	$ make V=99
+

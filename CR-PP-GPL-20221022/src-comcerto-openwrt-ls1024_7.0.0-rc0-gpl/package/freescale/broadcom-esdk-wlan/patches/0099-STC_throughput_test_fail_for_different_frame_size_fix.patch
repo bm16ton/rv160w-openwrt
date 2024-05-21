@@ -1,0 +1,37 @@
+diff -u b/main/src/wl/sys/wlc_amsdu.c b/main/src/wl/sys/wlc_amsdu.c
+--- b/main/src/wl/sys/wlc_amsdu.c
++++ b/main/src/wl/sys/wlc_amsdu.c
+@@ -3709,7 +3709,7 @@
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+ 			if(likely(PKTMSPDDATA(osh,newpkt))) {
+ 				int roundoff_diff = PKTLEN(osh,newpkt) - sflen;
+-				PKTMSPDLENREF(newpkt) -= roundoff_diff ? (ROUNDUP(roundoff_diff,4)-roundoff_diff) : 0;
++				PKTMSPDLENREF(newpkt) -= roundoff_diff;
+ 				if(scb && WSEC_ENABLED(scb->bsscfg->wsec)) {
+ 					if((num_sf == 0) && PKTNEXT(osh, newpkt) != NULL) {  /* Adjusting mspd_len for first and last frame */
+ 						PKTMSPDLENREF(newpkt) += 8;
+@@ -3910,13 +3910,14 @@
+ 	/* insert MSDUs in to current packet chain */
+ 	while (newpkt != NULL) {
+ 		/* strip off FCS in last MSDU */
+-		if (PKTNEXT(osh, newpkt) == NULL)
++		if (PKTNEXT(osh, newpkt) == NULL) {
+ 			PKTFRAG_TRIM_TAILBYTES(osh, newpkt, DOT11_FCS_LEN, TAIL_BYTES_TYPE_FCS);
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+ 			if(likely(PKTMSPDDATA(osh,newpkt))) {
+                         	PKTMSPDLENREF(newpkt) -= 4;
+                 	}
+ #endif
++		}
+ 		/* there must be a limit to stop in order to prevent memory/stack overflow */
+ 		if (num_sf >= MAX_RX_SUBFRAMES) {
+ 			WL_ERROR(("%s: more than %d MSDUs !\n", __FUNCTION__, num_sf));
+@@ -3970,7 +3971,7 @@
+ #if defined(NCNB_CSKB) && defined(CPKTC)
+ 			if(likely(PKTMSPDDATA(osh,newpkt))) {
+ 				int roundoff_diff = PKTLEN(osh,newpkt) - sflen;
+-				PKTMSPDLENREF(newpkt) += roundoff_diff ? (ROUNDUP(roundoff_diff,4)-roundoff_diff) : 0;
++				PKTMSPDLENREF(newpkt) -= roundoff_diff;
+ 				if(scb && WSEC_ENABLED(scb->bsscfg->wsec)) {
+ 					if(PKTNEXT(osh, newpkt) != NULL) {
+ 						PKTMSPDLENREF(newpkt) += 8;

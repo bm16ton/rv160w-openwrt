@@ -1,0 +1,259 @@
+#!/bin/sh
+# 03-03-2017: harry.lin <harry.lin@deltaww.com>
+# Add burn in test for facotry test require
+
+TMP_IF_STATUS_RESULT=/tmp/if_status_result
+IF_STATUS_RESULT=/mnt/packages/burn_in/test_result/if_status_result
+
+rm -rf $TMP_IF_STATUS_RESULT
+rm -rf $IF_STATUS_RESULT
+
+PID=`uci get systeminfo.sysinfo.pid|cut -d "-" -f 1`
+
+case "$PID" in
+	"RV160W"*)
+		eth0txold=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $10}'`
+		eth2txold=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $10}'`
+		eth0rxold=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $2}'`
+		eth2rxold=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $2}'`
+		wlan0txold=`cat /proc/net/dev |grep "wl0:" | sed -n '$p' |awk '{print $10}'`
+		wlan1txold=`cat /proc/net/dev |grep "wl1:" | sed -n '$p' |awk '{print $10}'`
+		;;
+	"RV160"*)
+		eth0txold=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $10}'`
+		eth2txold=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $10}'`
+		eth0rxold=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $2}'`
+		eth2rxold=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $2}'`
+		;;
+	"RV260W"*)
+		eth0txold=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $10}'`
+		eth2txold=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $10}'`
+		eth0rxold=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $2}'`
+		eth2rxold=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $2}'`
+		wlan0txold=`cat /proc/net/dev |grep "wl0:" | sed -n '$p' |awk '{print $10}'`
+		wlan1txold=`cat /proc/net/dev |grep "wl1:" | sed -n '$p' |awk '{print $10}'`
+		;;
+	"RV260"*)
+		eth0txold=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $10}'`
+		eth2txold=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $10}'`
+		eth0rxold=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $2}'`
+		eth2rxold=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $2}'`
+		;;
+esac
+
+while [ true ]; do
+	echo "--------------------" > $TMP_IF_STATUS_RESULT
+	time=`cat /proc/uptime | cut -f1 -d' '`
+	echo "Check time: $time" >> $TMP_IF_STATUS_RESULT
+
+	case "$PID" in
+		"RV160W"*)
+			if [ ! -z "$eth0txold" ]; then
+				eth0txnew=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$eth0txnew" != "$eth0txold" ]; then
+					echo "WAN TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "WAN TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth0txold=$eth0txnew
+			fi
+
+			if [ ! -z "$eth2txold" ]; then
+				eth2txnew=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$eth2txnew" != "$eth2txold" ]; then
+					echo "LAN TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "LAN TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth2txold=$eth2txnew
+			fi
+
+			if [ ! -z "$eth0rxold" ]; then
+				eth0rxnew=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $2}'`
+				if [ "$eth0rxnew" != "$eth0rxold" ]; then
+					echo "WAN RX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "WAN RX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth0rxold=$eth0rxnew
+			fi
+
+			if [ ! -z "$eth2rxold" ]; then
+				eth2rxnew=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $2}'`
+				if [ "$eth2rxnew" != "$eth2rxold" ]; then
+					echo "LAN RX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "LAN RX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth2rxold=$eth2rxnew
+			fi
+
+			if [ ! -z "$wlan0txold" ]; then
+				wlan0txnew=`cat /proc/net/dev |grep "wl0:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$wlan0txnew" != "$wlan0txold" ]; then
+					echo "5G TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "5G TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				wlan0txold=$wlan0txnew
+			fi
+
+			if [ ! -z "$wlan1txold" ]; then
+				wlan1txnew=`cat /proc/net/dev |grep "wl1:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$wlan1txnew" != "$wlan1txold" ]; then
+					echo "2.4G TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "2.4G TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				wlan1txold=$wlan1txnew
+			fi
+			;;
+		"RV160"*)
+			if [ ! -z "$eth0txold" ]; then
+				eth0txnew=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$eth0txnew" != "$eth0txold" ]; then
+					echo "WAN TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "WAN TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth0txold=$eth0txnew
+			fi
+
+			if [ ! -z "$eth2txold" ]; then
+				eth2txnew=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$eth2txnew" != "$eth2txold" ]; then
+					echo "LAN TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "LAN TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth2txold=$eth2txnew
+			fi
+
+			if [ ! -z "$eth0rxold" ]; then
+				eth0rxnew=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $2}'`
+				if [ "$eth0rxnew" != "$eth0rxold" ]; then
+					echo "WAN RX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "WAN RX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth0rxold=$eth0rxnew
+			fi
+
+			if [ ! -z "$eth2rxold" ]; then
+				eth2rxnew=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $2}'`
+				if [ "$eth2rxnew" != "$eth2rxold" ]; then
+					echo "LAN RX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "LAN RX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth2rxold=$eth2rxnew
+			fi
+			;;
+		"RV260W"*)
+			if [ ! -z "$eth0txold" ]; then
+				eth0txnew=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$eth0txnew" != "$eth0txold" ]; then
+					echo "WAN TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "WAN TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth0txold=$eth0txnew
+			fi
+
+			if [ ! -z "$eth2txold" ]; then
+				eth2txnew=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$eth2txnew" != "$eth2txold" ]; then
+					echo "LAN TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "LAN TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth2txold=$eth2txnew
+			fi
+
+			if [ ! -z "$eth0rxold" ]; then
+				eth0rxnew=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $2}'`
+				if [ "$eth0rxnew" != "$eth0rxold" ]; then
+					echo "WAN RX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "WAN RX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth0rxold=$eth0rxnew
+			fi
+
+			if [ ! -z "$eth2rxold" ]; then
+				eth2rxnew=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $2}'`
+				if [ "$eth2rxnew" != "$eth2rxold" ]; then
+					echo "LAN RX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "LAN RX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth2rxold=$eth2rxnew
+			fi
+
+			if [ ! -z "$wlan0txold" ]; then
+				wlan0txnew=`cat /proc/net/dev |grep "wl0:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$wlan0txnew" != "$wlan0txold" ]; then
+					echo "2.4G TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "2.4G TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				wlan0txold=$wlan0txnew
+			fi
+
+			if [ ! -z "$wlan1txold" ]; then
+				wlan1txnew=`cat /proc/net/dev |grep "wl1:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$wlan1txnew" != "$wlan1txold" ]; then
+					echo "5G TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "5G TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				wlan1txold=$wlan1txnew
+			fi
+			;;
+		"RV260"*)
+			if [ ! -z "$eth0txold" ]; then
+				eth0txnew=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$eth0txnew" != "$eth0txold" ]; then
+					echo "WAN TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "WAN TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth0txold=$eth0txnew
+			fi
+
+			if [ ! -z "$eth2txold" ]; then
+				eth2txnew=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $10}'`
+				if [ "$eth2txnew" != "$eth2txold" ]; then
+					echo "LAN TX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "LAN TX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth2txold=$eth2txnew
+			fi
+
+			if [ ! -z "$eth0rxold" ]; then
+				eth0rxnew=`cat /proc/net/dev |grep "eth0:" | sed -n '$p' |awk '{print $2}'`
+				if [ "$eth0rxnew" != "$eth0rxold" ]; then
+					echo "WAN RX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "WAN RX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth0rxold=$eth0rxnew
+			fi
+
+			if [ ! -z "$eth2rxold" ]; then
+				eth2rxnew=`cat /proc/net/dev |grep "eth2:" | sed -n '$p' |awk '{print $2}'`
+				if [ "$eth2rxnew" != "$eth2rxold" ]; then
+					echo "LAN RX:		OK" >> $TMP_IF_STATUS_RESULT
+				else
+					echo "LAN RX:		Fail" >> $TMP_IF_STATUS_RESULT
+				fi
+				eth2rxold=$eth2rxnew
+			fi
+			;;
+	esac
+
+	cp -rf $TMP_IF_STATUS_RESULT $IF_STATUS_RESULT && sync
+	sleep 30
+done
+

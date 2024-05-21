@@ -1,0 +1,49 @@
+From b5681e2fe516aee2520400b61897332618a767a9 Mon Sep 17 00:00:00 2001
+From: "ding.wei" <ding.wei@nxp.com>
+Date: Wed, 22 Mar 2017 19:32:59 +0800
+Subject: [PATCH 37/63] optimize-for-unconfigured-to-configured
+Content-Type: text/plain; charset="utf-8"
+
+---
+ main/components/apps/wps/brcm_apps/linux/wps_linux_main.c |    8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+index 3944db1..b18456e 100644
+--- a/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
++++ b/main/components/apps/wps/brcm_apps/linux/wps_linux_main.c
+@@ -349,7 +349,6 @@ set_wsec(char *ifname, void *credential, int mode)
+ 		both_mark = 1;
+ 		memset(both_ifname, 0, sizeof(both_ifname));
+ 		strcpy(both_ifname, both_ssid_result);
+-		wps_osl_set_conf(strcat_r(both_prefix, "wps_oob", tmp), "disabled");
+ 	}
+ 
+ 	/* convert os name to wl name */
+@@ -365,6 +364,8 @@ set_wsec(char *ifname, void *credential, int mode)
+ 			return 0;
+ 		}
+ 		strcat(both_prefix, "_");
++		
++		wps_osl_set_conf(strcat_r(both_prefix, "wps_oob", tmp), "disabled");
+ 	}
+ 
+ 	/* Check credential */
+@@ -540,11 +541,12 @@ set_wsec(char *ifname, void *credential, int mode)
+ 		wl_ioctl(both_ifname, WLC_UP, NULL, 0);
+ 	}
+ 
++	/* save the changes to CDB */
+ 	if (both_mark)
+-		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 1 %s %s %d %s",
++		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 1 %s %s %d %s &",
+ 				ifname, cur_ssid.SSID, cred->ssid, psk_mode, temp_key);
+ 	else
+-		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 0 %s %s %d %s",
++		sprintf(update_ssid_profile, "/usr/bin/wps_profile.sh %s 0 %s %s %d %s &",
+ 				ifname, cur_ssid.SSID, cred->ssid, psk_mode, temp_key);
+ 
+ 	system(update_ssid_profile);
+-- 
+1.7.10
+

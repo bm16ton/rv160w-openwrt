@@ -1,0 +1,38 @@
+diff -Nur uqmi-2014-12-03.bak/commands-wds.c uqmi-2014-12-03/commands-wds.c
+--- uqmi-2014-12-03.bak/commands-wds.c	2015-10-09 21:29:30.000000000 +0800
++++ uqmi-2014-12-03/commands-wds.c	2016-11-18 13:33:12.915865933 +0800
+@@ -18,8 +18,10 @@
+ 	} modes[] = {
+ 		{ "pap", QMI_WDS_AUTHENTICATION_PAP },
+ 		{ "chap", QMI_WDS_AUTHENTICATION_CHAP },
+-		{ "both", QMI_WDS_AUTHENTICATION_PAP | QMI_WDS_AUTHENTICATION_CHAP },
++		{ "auto", QMI_WDS_AUTHENTICATION_PAP | QMI_WDS_AUTHENTICATION_CHAP | QMI_WDS_AUTHENTICATION_MSCHAP |QMI_WDS_AUTHENTICATION_MSCHAP2 },
+ 		{ "none", QMI_WDS_AUTHENTICATION_NONE },
++		{ "mschap", QMI_WDS_AUTHENTICATION_MSCHAP },
++		{ "mschap2", QMI_WDS_AUTHENTICATION_MSCHAP2 },
+ 	};
+ 	int i;
+ 
+@@ -31,7 +33,7 @@
+ 		return QMI_CMD_DONE;
+ 	}
+ 
+-	uqmi_add_error("Invalid auth mode (valid: pap, chap, both, none)");
++	uqmi_add_error("Invalid auth mode (valid: pap, chap, auth, none, mschap ,mschap2)");
+ 	return QMI_CMD_EXIT;
+ }
+ 
+diff -Nur uqmi-2014-12-03.bak/qmi-enums-wds.h uqmi-2014-12-03/qmi-enums-wds.h
+--- uqmi-2014-12-03.bak/qmi-enums-wds.h	2015-10-09 21:29:30.000000000 +0800
++++ uqmi-2014-12-03/qmi-enums-wds.h	2016-11-18 13:31:23.198365245 +0800
+@@ -905,7 +905,9 @@
+ typedef enum { /*< underscore_name=qmi_wds_authentication >*/
+     QMI_WDS_AUTHENTICATION_NONE = 0,
+     QMI_WDS_AUTHENTICATION_PAP  = 1 << 0,
+-    QMI_WDS_AUTHENTICATION_CHAP = 1 << 1
++    QMI_WDS_AUTHENTICATION_CHAP = 1 << 1,
++	QMI_WDS_AUTHENTICATION_MSCHAP = 1 << 2,
++	QMI_WDS_AUTHENTICATION_MSCHAP2 = 1 << 3,
+ } QmiWdsAuthentication;
+ 
+ /**
